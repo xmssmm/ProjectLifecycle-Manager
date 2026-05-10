@@ -2,6 +2,7 @@
 from app.models.audit_logs import AuditLog
 from app.models.base import Base
 from app.models.departments import Department
+from app.models.documents import Document
 from app.models.main_projects import (
     MainProject,
     MainProjectStatus,
@@ -31,6 +32,7 @@ __all__ = [
     "Base",
     "AuditLog",
     "Department",
+    "Document",
     "MainProject",
     "MainProjectStatus",
     "ProjectReview",

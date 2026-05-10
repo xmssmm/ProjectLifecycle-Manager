@@ -10,6 +10,7 @@ from fastapi.openapi.utils import get_openapi
 from app.api.v1.auth import get_auth_failure_store
 from app.api.v1.auth import router as auth_router
 from app.api.v1.departments import router as departments_router
+from app.api.v1.documents import router as documents_router
 from app.api.v1.main_projects import router as main_projects_router
 from app.api.v1.phases import router as phases_router
 from app.api.v1.sub_projects import router as sub_projects_router
@@ -134,6 +135,7 @@ def create_app(
             {"name": "main-projects", "description": "主项目管理接口。"},
             {"name": "sub-projects", "description": "子项目管理接口。"},
             {"name": "phases", "description": "环节查询与流转接口。"},
+            {"name": "documents", "description": "文档上传、版本与归档接口。"},
             {"name": "system", "description": "系统健康、版本与基础能力。"},
         ],
     )
@@ -160,6 +162,7 @@ def create_app(
     app.dependency_overrides[get_auth_token_store] = lambda: resolved_auth_token_store
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
+    app.include_router(documents_router, prefix="/api/v1")
     app.include_router(main_projects_router, prefix="/api/v1")
     app.include_router(phases_router, prefix="/api/v1")
     app.include_router(sub_projects_router, prefix="/api/v1")
