@@ -10,7 +10,7 @@ from app.models.main_projects import (
     ProjectReview,
     ProjectReviewDecision,
 )
-from app.models.notifications import Notification
+from app.models.notifications import Notification, NotificationPreference
 from app.models.payments import Payment, PaymentType, PaymentVoucher
 from app.models.phases import (
     Phase,
@@ -67,6 +67,7 @@ __all__ = [
     "ReportJobStatus",
     "ReportType",
     "Notification",
+    "NotificationPreference",
     "Phase",
     "PhaseDocRequirement",
     "PhaseDocTemplate",

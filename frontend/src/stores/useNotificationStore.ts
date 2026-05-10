@@ -3,14 +3,24 @@ import { defineStore } from 'pinia';
 import {
   getUnreadNotificationCount,
   listNotifications,
+  listNotificationPreferences,
   markAllNotificationsRead,
   markNotificationRead,
+  updateNotificationPreferences,
 } from '@/api/notifications';
-import type { NotificationListQuery, NotificationRead } from '@/types/notifications';
+import type {
+  NotificationListQuery,
+  NotificationPreferenceRead,
+  NotificationPreferenceUpdateItem,
+  NotificationRead,
+} from '@/types/notifications';
 
 interface NotificationState {
   loading: boolean;
   notifications: NotificationRead[];
+  preferences: NotificationPreferenceRead[];
+  preferencesLoading: boolean;
+  preferencesSaving: boolean;
   pollingTimer: number | null;
   total: number;
   unreadCount: number;
@@ -20,6 +30,9 @@ export const useNotificationStore = defineStore('notifications', {
   state: (): NotificationState => ({
     loading: false,
     notifications: [],
+    preferences: [],
+    preferencesLoading: false,
+    preferencesSaving: false,
     pollingTimer: null,
     total: 0,
     unreadCount: 0,
@@ -40,6 +53,26 @@ export const useNotificationStore = defineStore('notifications', {
       const result = await getUnreadNotificationCount();
       this.unreadCount = result.count;
       return result;
+    },
+    async fetchPreferences() {
+      this.preferencesLoading = true;
+      try {
+        const result = await listNotificationPreferences();
+        this.preferences = result.items;
+        return result;
+      } finally {
+        this.preferencesLoading = false;
+      }
+    },
+    async savePreferences(preferences: NotificationPreferenceUpdateItem[]) {
+      this.preferencesSaving = true;
+      try {
+        const result = await updateNotificationPreferences({ preferences });
+        this.preferences = result.items;
+        return result;
+      } finally {
+        this.preferencesSaving = false;
+      }
     },
     async markRead(notificationId: string) {
       const existing = this.notifications.find((item) => item.id === notificationId);

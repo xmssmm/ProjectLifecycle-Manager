@@ -6,6 +6,7 @@ import { changeOwnPassword, getUser, updateUser } from '@/api/users';
 import ChangePassword from '@/views/ChangePassword.vue';
 import Profile from '@/views/Profile.vue';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { listNotificationPreferences, updateNotificationPreferences } from '@/api/notifications';
 
 vi.mock('@/api/auth', () => ({
   getCurrentUser: vi.fn().mockResolvedValue({
@@ -27,6 +28,11 @@ vi.mock('@/api/users', () => ({
   updateUser: vi.fn(),
 }));
 
+vi.mock('@/api/notifications', () => ({
+  listNotificationPreferences: vi.fn(),
+  updateNotificationPreferences: vi.fn(),
+}));
+
 vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: vi.fn() }),
 }));
@@ -38,6 +44,12 @@ describe('profile and password pages', () => {
     vi.mocked(getUser).mockResolvedValue(sampleUser);
     vi.mocked(updateUser).mockResolvedValue(sampleUser);
     vi.mocked(changeOwnPassword).mockResolvedValue(sampleUser);
+    vi.mocked(listNotificationPreferences).mockResolvedValue({
+      items: [taskPreference, overduePreference],
+    });
+    vi.mocked(updateNotificationPreferences).mockResolvedValue({
+      items: [{ ...taskPreference, enabled: false }, overduePreference],
+    });
     const authStore = useAuthStore();
     authStore.setAccessToken('token');
     authStore.setUser({
@@ -60,6 +72,29 @@ describe('profile and password pages', () => {
     await flushPromises();
 
     expect(updateUser).toHaveBeenCalledWith('user-1', { email: 'next@example.com' });
+  });
+
+  it('loads and saves notification preferences from the profile page', async () => {
+    const wrapper = mount(Profile, { global: { stubs } });
+    await flushPromises();
+
+    expect(listNotificationPreferences).toHaveBeenCalled();
+    expect(wrapper.find('[data-test="notification-preference-task_assigned"]').exists()).toBe(
+      true,
+    );
+
+    await wrapper
+      .find('[data-test="notification-preference-task_assigned"] input')
+      .setValue(false);
+    await wrapper.find('[data-test="notification-preferences-save"]').trigger('click');
+    await flushPromises();
+
+    expect(updateNotificationPreferences).toHaveBeenCalledWith({
+      preferences: [
+        { enabled: false, scenario: 'task_assigned' },
+        { enabled: false, scenario: 'task_overdue_escalation' },
+      ],
+    });
   });
 
   it('validates confirmation before changing password', async () => {
@@ -88,6 +123,22 @@ const sampleUser = {
   username: 'admin',
 } as const;
 
+const taskPreference = {
+  description: '任务执行人收到任务分配提醒',
+  direct_related: true,
+  enabled: true,
+  label: '任务分配',
+  scenario: 'task_assigned',
+} as const;
+
+const overduePreference = {
+  description: '项目管理人员收到逾期升级提醒',
+  direct_related: false,
+  enabled: false,
+  label: '逾期升级',
+  scenario: 'task_overdue_escalation',
+} as const;
+
 const stubs = {
   ElAlert: { props: ['title'], template: '<section>{{ title }}<slot /></section>' },
   ElButton: { template: '<button type="button" @click="$emit(\'click\')"><slot /></button>' },
@@ -99,5 +150,18 @@ const stubs = {
     props: ['modelValue'],
     template:
       '<span><input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" /></span>',
+  },
+  ElRadioButton: {
+    props: ['label', 'value'],
+    template: '<button type="button" @click="$emit(\'change\', value ?? label)"><slot /></button>',
+  },
+  ElRadioGroup: {
+    props: ['modelValue'],
+    template: '<div><slot /></div>',
+  },
+  ElSwitch: {
+    props: ['modelValue'],
+    template:
+      '<span><input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" /></span>',
   },
 };

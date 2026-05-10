@@ -4,6 +4,8 @@ import { apiClient } from '@/api/client';
 import type {
   NotificationListQuery,
   NotificationListRead,
+  NotificationPreferenceListRead,
+  NotificationPreferenceUpdate,
   NotificationRead,
   NotificationReadAllResult,
   NotificationUnreadCountRead,
@@ -53,5 +55,24 @@ export async function markAllNotificationsRead(
 ): Promise<NotificationReadAllResult> {
   const response =
     await client.post<ApiResponse<NotificationReadAllResult>>('/notifications/read-all');
+  return response.data.data;
+}
+
+export async function listNotificationPreferences(
+  client: AxiosInstance = apiClient,
+): Promise<NotificationPreferenceListRead> {
+  const response =
+    await client.get<ApiResponse<NotificationPreferenceListRead>>('/notifications/preferences');
+  return response.data.data;
+}
+
+export async function updateNotificationPreferences(
+  payload: NotificationPreferenceUpdate,
+  client: AxiosInstance = apiClient,
+): Promise<NotificationPreferenceListRead> {
+  const response = await client.put<ApiResponse<NotificationPreferenceListRead>>(
+    '/notifications/preferences',
+    payload,
+  );
   return response.data.data;
 }

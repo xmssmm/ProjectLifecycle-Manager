@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -42,3 +42,27 @@ class Notification(UuidPrimaryKeyMixin, TimestampMixin, Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     receiver: Mapped[User] = relationship()
+
+
+class NotificationPreference(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "user_notification_preferences"
+    __table_args__ = (
+        UniqueConstraint("user_id", "scenario", name="uq_notification_preferences_user_scenario"),
+        Index("ix_notification_preferences_user_id", "user_id"),
+        Index("ix_notification_preferences_scenario", "scenario"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    scenario: Mapped[str] = mapped_column(String(64), nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+
+    user: Mapped[User] = relationship()
