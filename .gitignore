@@ -37,6 +37,7 @@ Thumbs.db
 /uploads/
 /logs/
 /tmp/
+/output/
 
 # Local worktrees
 .worktrees/

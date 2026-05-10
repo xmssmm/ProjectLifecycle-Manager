@@ -1,6 +1,22 @@
 <template>
   <section class="workspace-panel">
-    <h2>工作台</h2>
-    <p>当前为仓库初始化占位页，后续任务会按计划逐步接入认证、项目、文档、付款、通知与审计模块。</p>
+    <div>
+      <h2>工作台</h2>
+      <p>后续模块会在这里接入项目、文档、付款、通知和审计流程。</p>
+    </div>
+    <dl class="workspace-metrics">
+      <div>
+        <dt>待处理</dt>
+        <dd>0</dd>
+      </div>
+      <div>
+        <dt>进行中项目</dt>
+        <dd>0</dd>
+      </div>
+      <div>
+        <dt>待归档资料</dt>
+        <dd>0</dd>
+      </div>
+    </dl>
   </section>
 </template>

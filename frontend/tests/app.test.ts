@@ -22,6 +22,7 @@ describe('App', () => {
           ElAside: { template: '<aside><slot /></aside>' },
           ElContainer: { template: '<section><slot /></section>' },
           ElHeader: { template: '<header><slot /></header>' },
+          ElIcon: { template: '<i><slot /></i>' },
           ElMain: { template: '<main><slot /></main>' },
           ElMenu: { template: '<nav><slot /></nav>' },
           ElMenuItem: { template: '<a><slot /></a>' },
