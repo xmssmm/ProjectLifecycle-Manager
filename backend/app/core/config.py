@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     oauth_generic_bind_redirect_uri: str = ""
     oauth_generic_scope: str = "openid email profile"
 
+    smtp_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_address: str = ""
+    smtp_use_tls: bool = True
+
     storage_backend: str = "local"
     storage_root: str = Field(default="/app/storage")
     storage_public_url_prefix: str = "/storage"

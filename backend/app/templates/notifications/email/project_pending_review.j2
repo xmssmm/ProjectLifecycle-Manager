@@ -1,0 +1,7 @@
+Subject: 项目 {{ project_no | default(source_id) }} 待审核
+
+项目 {{ project_no | default(source_id) }} 正在等待审核。
+名称：{{ project_name | default("未命名项目") }}
+{% if url is defined and url %}
+链接：{{ url }}
+{% endif %}
