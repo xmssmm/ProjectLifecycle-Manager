@@ -65,3 +65,13 @@ export async function downloadDocument(
   });
   return response.data;
 }
+
+export async function previewDocument(
+  documentId: string,
+  client: AxiosInstance = apiClient,
+): Promise<Blob> {
+  const response = await client.get<Blob>(`/documents/${documentId}/preview`, {
+    responseType: 'blob',
+  });
+  return response.data;
+}

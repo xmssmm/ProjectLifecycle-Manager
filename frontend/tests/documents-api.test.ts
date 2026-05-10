@@ -2,7 +2,12 @@ import type { AxiosAdapter, AxiosRequestConfig } from 'axios';
 import { describe, expect, it } from 'vitest';
 
 import { createApiClient } from '../src/api/client';
-import { downloadDocument, listDocuments, uploadDocument } from '../src/api/documents';
+import {
+  downloadDocument,
+  listDocuments,
+  previewDocument,
+  uploadDocument,
+} from '../src/api/documents';
 
 describe('documents api', () => {
   it('supports listing, multipart upload, and download endpoints', async () => {
@@ -41,6 +46,7 @@ describe('documents api', () => {
 
     client.defaults.adapter = recordingAdapter(calls, new Blob(['pdf']));
     await downloadDocument('doc-1', client);
+    await previewDocument('doc-1', client);
 
     expect(calls[0]).toMatchObject({
       method: 'get',
@@ -58,6 +64,11 @@ describe('documents api', () => {
       method: 'get',
       responseType: 'blob',
       url: '/documents/doc-1/download',
+    });
+    expect(calls[3]).toMatchObject({
+      method: 'get',
+      responseType: 'blob',
+      url: '/documents/doc-1/preview',
     });
   });
 });

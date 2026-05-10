@@ -1,14 +1,50 @@
 import { flushPromises, mount } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { uploadDocument } from '@/api/documents';
+import { previewDocument, uploadDocument } from '@/api/documents';
 import DocumentList from '@/components/document/DocumentList.vue';
+import PdfPreview from '@/components/document/PdfPreview.vue';
 import DocumentUploader from '@/components/document/DocumentUploader.vue';
 import type { DocumentRead } from '@/types/documents';
 
 vi.mock('@/api/documents', () => ({
+  previewDocument: vi.fn(),
   uploadDocument: vi.fn(),
 }));
+
+const pdfMocks = vi.hoisted(() => {
+  const page = {
+    getViewport: vi.fn((options: { scale: number }) => ({
+      height: 900 * options.scale,
+      width: 600 * options.scale,
+    })),
+    render: vi.fn(() => ({ promise: Promise.resolve() })),
+  };
+  return {
+    document: {
+      destroy: vi.fn(),
+      getPage: vi.fn(async () => page),
+      numPages: 3,
+    },
+    page,
+  };
+});
+
+vi.mock('pdfjs-dist', () => ({
+  GlobalWorkerOptions: {},
+  getDocument: vi.fn(() => ({ promise: Promise.resolve(pdfMocks.document) })),
+}));
+
+vi.mock('pdfjs-dist/build/pdf.mjs', () => ({
+  GlobalWorkerOptions: {},
+  getDocument: vi.fn(() => ({ promise: Promise.resolve(pdfMocks.document) })),
+}));
+
+vi.mock('pdfjs-dist/build/pdf.worker.mjs?url', () => ({ default: 'worker-url' }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('DocumentUploader', () => {
   it('prevalidates the 50MB limit before uploading', async () => {
@@ -92,6 +128,67 @@ describe('DocumentList', () => {
     expect(wrapper.text()).toContain('v1');
     expect(wrapper.text()).toContain('v2');
   });
+
+  it('shows preview only for PDF documents and opens the preview panel', async () => {
+    const wrapper = mount(DocumentList, {
+      global: {
+        stubs: {
+          ...stubs,
+          PdfPreview: {
+            props: ['document', 'modelValue'],
+            template:
+              '<section v-if="modelValue" data-test="pdf-preview">{{ document?.file_name }}</section>',
+          },
+        },
+      },
+      props: {
+        documents: previewDocuments,
+      },
+    });
+
+    expect(wrapper.find('[data-test="preview-contract"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="preview-meeting_minutes"]').exists()).toBe(false);
+
+    await wrapper.find('[data-test="preview-contract"]').trigger('click');
+
+    expect(wrapper.find('[data-test="pdf-preview"]').text()).toContain('contract-v2.pdf');
+  });
+});
+
+describe('PdfPreview', () => {
+  it('loads PDF preview, supports paging, zooming, and exposes download link', async () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockImplementation(() => ({}) as CanvasRenderingContext2D);
+    vi.mocked(previewDocument).mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }));
+    const wrapper = mount(PdfPreview, {
+      global: { stubs },
+      props: {
+        document: sampleDocuments[0],
+        loadPdf: async () => pdfMocks.document,
+        modelValue: true,
+      },
+    });
+
+    await flushPromises();
+
+    expect(previewDocument).toHaveBeenCalledWith('doc-2');
+    expect(wrapper.text()).toContain('1 / 3');
+    expect(wrapper.text()).toContain('100%');
+
+    await wrapper.find('[data-test="next-page"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('2 / 3');
+
+    await wrapper.find('[data-test="zoom-in"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('125%');
+
+    const download = wrapper.find('[data-test="preview-download"]');
+    expect(download.attributes('download')).toBe('contract-v2.pdf');
+    expect(download.attributes('href')).toContain('blob:');
+    getContext.mockRestore();
+  });
 });
 
 const sampleDocuments: DocumentRead[] = [
@@ -145,6 +242,15 @@ const sampleDocuments: DocumentRead[] = [
   },
 ];
 
+const previewDocuments: DocumentRead[] = [
+  sampleDocuments[0],
+  {
+    ...sampleDocuments[2],
+    doc_type: 'meeting_minutes',
+    file_name: 'meeting-v1.docx',
+  },
+];
+
 const stubs = {
   ElAlert: {
     props: ['description', 'title'],
@@ -156,6 +262,11 @@ const stubs = {
       '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
   },
   ElEmpty: { props: ['description'], template: '<section>{{ description }}</section>' },
+  ElDialog: {
+    props: ['modelValue'],
+    template:
+      '<section v-if="modelValue"><slot name="header" /><slot /><slot name="footer" /></section>',
+  },
   ElProgress: { props: ['percentage'], template: '<span>{{ percentage }}%</span>' },
   ElTag: { props: ['type'], template: '<span><slot /></span>' },
 };

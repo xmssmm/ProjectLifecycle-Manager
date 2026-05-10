@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { Clock, Collection, Download } from '@element-plus/icons-vue';
+import { Clock, Collection, Download, View } from '@element-plus/icons-vue';
 import { computed, reactive, ref, watch } from 'vue';
 
 import DocumentVersionDiff from '@/components/document/DocumentVersionDiff.vue';
+import PdfPreview from '@/components/document/PdfPreview.vue';
 import type { DocumentRead } from '@/types/documents';
 
 interface DocumentGroup {
@@ -21,6 +22,8 @@ const emit = defineEmits<{
 }>();
 
 const expandedTypes = ref<Set<string>>(new Set());
+const previewTarget = ref<DocumentRead | null>(null);
+const previewVisible = ref(false);
 const selectedDocumentIds = reactive<Record<string, string>>({});
 
 const groups = computed<DocumentGroup[]>(() => {
@@ -69,6 +72,17 @@ function toggleHistory(docType: string): void {
 
 function selectVersion(group: DocumentGroup, document: DocumentRead): void {
   selectedDocumentIds[group.docType] = document.id;
+}
+
+function openPreview(document: DocumentRead): void {
+  previewTarget.value = document;
+  previewVisible.value = true;
+}
+
+function isPdfDocument(document: DocumentRead): boolean {
+  return (
+    document.file_name.toLowerCase().endsWith('.pdf') || document.doc_type.toLowerCase() === 'pdf'
+  );
 }
 
 function formatFileSize(bytes: number): string {
@@ -127,6 +141,16 @@ function formatDate(value: string): string {
         </dl>
         <div class="document-list__actions">
           <button
+            v-if="isPdfDocument(selectedDocument(group))"
+            class="document-list__button"
+            :data-test="`preview-${group.docType}`"
+            type="button"
+            @click="openPreview(selectedDocument(group))"
+          >
+            <View class="document-list__button-icon" />
+            预览
+          </button>
+          <button
             class="document-list__button"
             type="button"
             @click="emit('download', selectedDocument(group))"
@@ -169,6 +193,8 @@ function formatDate(value: string): string {
         :current="selectedDocument(group)"
       />
     </section>
+
+    <PdfPreview v-model="previewVisible" :document="previewTarget" />
   </div>
 </template>
 
