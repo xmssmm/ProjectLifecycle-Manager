@@ -2,6 +2,13 @@ import type { AxiosInstance } from 'axios';
 
 import { apiClient } from '@/api/client';
 import type {
+  SubProjectBatchHandoverItem,
+  SubProjectBatchHandoverRead,
+  SubProjectHandoverListRead,
+  SubProjectHandoverQuery,
+  SubProjectListRead,
+} from '@/types/projects';
+import type {
   PasswordResetPayload,
   PasswordChangePayload,
   UserCreatePayload,
@@ -81,5 +88,43 @@ export async function changeOwnPassword(
   client: AxiosInstance = apiClient,
 ): Promise<UserRead> {
   const response = await client.post<ApiResponse<UserRead>>('/users/me/change-password', payload);
+  return response.data.data;
+}
+
+export async function listActiveSubProjectsForLeader(
+  userId: string,
+  client: AxiosInstance = apiClient,
+): Promise<SubProjectListRead> {
+  const response = await client.get<ApiResponse<SubProjectListRead>>(
+    `/users/${userId}/active-sub-projects`,
+  );
+  return response.data.data;
+}
+
+export async function listSubProjectHandovers(
+  query: SubProjectHandoverQuery,
+  client: AxiosInstance = apiClient,
+): Promise<SubProjectHandoverListRead> {
+  const response = await client.get<ApiResponse<SubProjectHandoverListRead>>('/users/handovers', {
+    params: {
+      from_user_id: query.fromUserId,
+      page: query.page,
+      page_size: query.pageSize,
+      sub_project_id: query.subProjectId,
+      to_user_id: query.toUserId,
+    },
+  });
+  return response.data.data;
+}
+
+export async function batchHandoverSubProjects(
+  userId: string,
+  payload: SubProjectBatchHandoverItem[],
+  client: AxiosInstance = apiClient,
+): Promise<SubProjectBatchHandoverRead> {
+  const response = await client.post<ApiResponse<SubProjectBatchHandoverRead>>(
+    `/users/${userId}/batch-handover`,
+    payload,
+  );
   return response.data.data;
 }

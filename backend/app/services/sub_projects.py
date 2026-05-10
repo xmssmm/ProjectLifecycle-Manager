@@ -94,6 +94,17 @@ class SubProjectRepository(Protocol):
     async def list_active_sub_projects_for_leader(self, user_id: UUID) -> list[SubProject]:
         ...
 
+    async def list_sub_project_handovers(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        sub_project_id: UUID | None = None,
+        from_user_id: UUID | None = None,
+        to_user_id: UUID | None = None,
+    ) -> tuple[list[SubProjectHandover], int]:
+        ...
+
     async def get_member(
         self,
         *,
@@ -215,6 +226,35 @@ class SqlAlchemySubProjectRepository:
             .order_by(SubProject.created_at.desc()),
         )
         return list(result.all())
+
+    async def list_sub_project_handovers(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        sub_project_id: UUID | None = None,
+        from_user_id: UUID | None = None,
+        to_user_id: UUID | None = None,
+    ) -> tuple[list[SubProjectHandover], int]:
+        conditions = []
+        if sub_project_id is not None:
+            conditions.append(SubProjectHandover.sub_project_id == sub_project_id)
+        if from_user_id is not None:
+            conditions.append(SubProjectHandover.from_user_id == from_user_id)
+        if to_user_id is not None:
+            conditions.append(SubProjectHandover.to_user_id == to_user_id)
+
+        total = await self._session.scalar(
+            select(func.count()).select_from(SubProjectHandover).where(*conditions),
+        )
+        result = await self._session.scalars(
+            select(SubProjectHandover)
+            .where(*conditions)
+            .order_by(SubProjectHandover.operated_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size),
+        )
+        return list(result.all()), int(total or 0)
 
     async def get_member(
         self,
@@ -385,6 +425,26 @@ class InMemorySubProjectRepository:
             if sub_project.manager_id == user_id and sub_project.status in ACTIVE_HANDOVER_STATUSES
         ]
         return sorted(active, key=lambda sub_project: sub_project.created_at, reverse=True)
+
+    async def list_sub_project_handovers(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        sub_project_id: UUID | None = None,
+        from_user_id: UUID | None = None,
+        to_user_id: UUID | None = None,
+    ) -> tuple[list[SubProjectHandover], int]:
+        filtered = [
+            handover
+            for handover in self.handovers
+            if (sub_project_id is None or handover.sub_project_id == sub_project_id)
+            and (from_user_id is None or handover.from_user_id == from_user_id)
+            and (to_user_id is None or handover.to_user_id == to_user_id)
+        ]
+        ordered = sorted(filtered, key=lambda handover: handover.operated_at, reverse=True)
+        start = (page - 1) * page_size
+        return ordered[start : start + page_size], len(ordered)
 
     async def get_member(
         self,
@@ -619,6 +679,26 @@ class SubProjectService:
         if actor.role != UserRole.admin:
             raise PermissionDeniedError()
         return await self._repository.list_active_sub_projects_for_leader(user_id)
+
+    async def list_sub_project_handovers(
+        self,
+        *,
+        actor: User,
+        page: int = 1,
+        page_size: int = 20,
+        sub_project_id: UUID | None = None,
+        from_user_id: UUID | None = None,
+        to_user_id: UUID | None = None,
+    ) -> tuple[list[SubProjectHandover], int]:
+        if actor.role != UserRole.admin:
+            raise PermissionDeniedError()
+        return await self._repository.list_sub_project_handovers(
+            page=page,
+            page_size=page_size,
+            sub_project_id=sub_project_id,
+            from_user_id=from_user_id,
+            to_user_id=to_user_id,
+        )
 
     async def handover_sub_project(
         self,

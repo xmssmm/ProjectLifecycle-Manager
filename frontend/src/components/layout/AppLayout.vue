@@ -26,6 +26,7 @@ const navItems: NavItem[] = [
   { disabled: true, icon: Bell, index: '/notifications', label: '通知' },
   { icon: User, index: '/admin/users', label: '用户', requireRole: ['admin'] },
   { icon: Setting, index: '/admin/departments', label: '部门', requireRole: ['admin'] },
+  { icon: User, index: '/admin/handover', label: '转交', requireRole: ['admin'] },
   { icon: Box, index: '/component-demo', label: '组件', requireRole: ['admin'] },
   { disabled: true, icon: Setting, index: '/admin', label: '管理', requireRole: ['admin'] },
 ];

@@ -4,6 +4,8 @@ import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import ComponentDemoView from '@/views/admin/ComponentDemoView.vue';
 import DepartmentListView from '@/views/admin/DepartmentList.vue';
+import HandoverHistoryView from '@/views/admin/HandoverHistory.vue';
+import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
@@ -43,6 +45,18 @@ const router = createRouter({
       path: '/admin/departments',
       name: 'admin-departments',
       component: DepartmentListView,
+      meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/handover',
+      name: 'admin-handover',
+      component: UserHandoverView,
+      meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/handover/history',
+      name: 'admin-handover-history',
+      component: HandoverHistoryView,
       meta: { requireRole: ['admin'], requiresAuth: true },
     },
     {

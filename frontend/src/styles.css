@@ -362,6 +362,24 @@ body {
   margin-top: 24px;
 }
 
+.handover-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.handover-confirm-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #344054;
+  line-height: 1.7;
+}
+
+.form-error {
+  margin: 0;
+  color: #b42318;
+  font-size: 13px;
+}
+
 .profile-page {
   max-width: 920px;
 }

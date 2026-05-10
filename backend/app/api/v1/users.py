@@ -12,6 +12,8 @@ from app.core.responses import success_response
 from app.models.users import User, UserRole
 from app.schemas.sub_projects import (
     SubProjectBatchHandoverItem,
+    SubProjectHandoverListRead,
+    SubProjectHandoverRead,
     SubProjectListRead,
     SubProjectRead,
 )
@@ -109,6 +111,33 @@ async def change_own_password(
 ) -> dict[str, object]:
     user = await service.change_own_password(actor=current_user, payload=payload)
     return success_response(serialize_user(user))
+
+
+@router.get("/handovers")
+async def list_sub_project_handovers(
+    service: Annotated[SubProjectService, Depends(get_project_handover_service)],
+    current_user: Annotated[User, Depends(require_role(UserRole.admin))],
+    sub_project_id: Annotated[UUID | None, Query()] = None,
+    from_user_id: Annotated[UUID | None, Query()] = None,
+    to_user_id: Annotated[UUID | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> dict[str, object]:
+    handovers, total = await service.list_sub_project_handovers(
+        actor=current_user,
+        page=page,
+        page_size=page_size,
+        sub_project_id=sub_project_id,
+        from_user_id=from_user_id,
+        to_user_id=to_user_id,
+    )
+    payload = SubProjectHandoverListRead(
+        items=[SubProjectHandoverRead.model_validate(handover) for handover in handovers],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+    return success_response(payload.model_dump(mode="json"))
 
 
 @router.get("/{user_id}/active-sub-projects")

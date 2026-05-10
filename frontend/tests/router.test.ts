@@ -15,6 +15,10 @@ describe('router', () => {
     const componentDemoRoute = router.getRoutes().find((route) => route.name === 'component-demo');
     const userManagementRoute = router.getRoutes().find((route) => route.name === 'admin-users');
     const departmentRoute = router.getRoutes().find((route) => route.name === 'admin-departments');
+    const handoverRoute = router.getRoutes().find((route) => route.name === 'admin-handover');
+    const handoverHistoryRoute = router
+      .getRoutes()
+      .find((route) => route.name === 'admin-handover-history');
     const mainProjectRoute = router.getRoutes().find((route) => route.name === 'main-projects');
     const mainProjectDetailRoute = router
       .getRoutes()
@@ -49,6 +53,8 @@ describe('router', () => {
     expect(componentDemoRoute?.path).toBe('/component-demo');
     expect(userManagementRoute?.path).toBe('/admin/users');
     expect(departmentRoute?.path).toBe('/admin/departments');
+    expect(handoverRoute?.path).toBe('/admin/handover');
+    expect(handoverHistoryRoute?.path).toBe('/admin/handover/history');
     expect(mainProjectRoute?.path).toBe('/main-projects');
     expect(mainProjectDetailRoute?.path).toBe('/main-projects/:id');
     expect(mainProjectCreateRoute?.path).toBe('/main-projects/new');

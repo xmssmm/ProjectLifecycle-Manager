@@ -317,14 +317,89 @@ async def test_list_active_projects_and_batch_handover_skip_closed_projects() ->
     assert closed.manager_id == old_leader.id
 
 
+@pytest.mark.asyncio
+async def test_admin_lists_handover_history_with_filters() -> None:
+    admin = make_user(UserRole.admin, username="admin")
+    old_leader = make_user(UserRole.proj_leader, username="old")
+    new_leader = make_user(UserRole.proj_leader, username="new")
+    main_project = make_main_project()
+    sub_project = make_sub_project(main_project, new_leader)
+    now = datetime.now(UTC)
+    handover = SubProjectHandover(
+        id=uuid4(),
+        sub_project_id=sub_project.id,
+        from_user_id=old_leader.id,
+        to_user_id=new_leader.id,
+        reason="负责人离职",
+        operator_id=admin.id,
+        operated_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+    repository = InMemorySubProjectRepository(
+        main_projects=[main_project],
+        sub_projects=[sub_project],
+        handovers=[handover],
+        users=[admin, old_leader, new_leader],
+    )
+    service = SubProjectService(repository=repository)
+
+    items, total = await service.list_sub_project_handovers(
+        actor=admin,
+        page=1,
+        page_size=20,
+        from_user_id=old_leader.id,
+    )
+
+    assert total == 1
+    assert items[0].reason == "负责人离职"
+
+    with pytest.raises(PermissionDeniedError):
+        await service.list_sub_project_handovers(
+            actor=old_leader,
+            page=1,
+            page_size=20,
+        )
+
+
 def test_handover_endpoints_return_standard_payloads() -> None:
     admin = make_user(UserRole.admin, username="admin")
     old_leader = make_user(UserRole.proj_leader, username="old")
     new_leader = make_user(UserRole.proj_leader, username="new")
     main_project = make_main_project()
     sub_project = make_sub_project(main_project, old_leader)
+    now = datetime.now(UTC)
+    handover = SubProjectHandover(
+        id=uuid4(),
+        sub_project_id=sub_project.id,
+        from_user_id=old_leader.id,
+        to_user_id=new_leader.id,
+        reason="负责人离职",
+        operator_id=admin.id,
+        operated_at=now,
+        created_at=now,
+        updated_at=now,
+    )
 
     class FakeProjectHandoverService:
+        async def list_sub_project_handovers(
+            self,
+            *,
+            actor: User,
+            page: int,
+            page_size: int,
+            sub_project_id: UUID | None = None,
+            from_user_id: UUID | None = None,
+            to_user_id: UUID | None = None,
+        ) -> tuple[list[SubProjectHandover], int]:
+            assert actor.id == admin.id
+            assert page == 1
+            assert page_size == 20
+            assert from_user_id == old_leader.id
+            assert sub_project_id is None
+            assert to_user_id is None
+            return [handover], 1
+
         async def list_active_sub_projects_for_leader(
             self,
             *,
@@ -387,6 +462,10 @@ def test_handover_endpoints_return_standard_payloads() -> None:
     app.dependency_overrides[get_sub_project_service] = fake_sub_project_service
     client = TestClient(app)
 
+    history_response = client.get(
+        "/api/v1/users/handovers",
+        params={"from_user_id": str(old_leader.id)},
+    )
     active_response = client.get(f"/api/v1/users/{old_leader.id}/active-sub-projects")
     handover_response = client.post(
         f"/api/v1/sub-projects/{sub_project.id}/handover",
@@ -403,6 +482,8 @@ def test_handover_endpoints_return_standard_payloads() -> None:
         ],
     )
 
+    assert history_response.status_code == 200
+    assert history_response.json()["data"]["items"][0]["reason"] == "负责人离职"
     assert active_response.status_code == 200
     assert active_response.json()["data"]["total"] == 1
     assert handover_response.json()["data"]["manager_id"] == str(new_leader.id)

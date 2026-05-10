@@ -127,6 +127,44 @@ export interface SubProjectMemberCreatePayload {
   user_id: string;
 }
 
+export interface SubProjectBatchHandoverItem {
+  reason: string;
+  sub_project_id: string;
+  to_user_id: string;
+}
+
+export interface SubProjectBatchHandoverRead {
+  items: SubProjectRead[];
+  total: number;
+}
+
+export interface SubProjectHandoverRead {
+  created_at: string;
+  from_user_id: string;
+  id: string;
+  operated_at: string;
+  operator_id: string;
+  reason: string;
+  sub_project_id: string;
+  to_user_id: string;
+  updated_at: string;
+}
+
+export interface SubProjectHandoverListRead {
+  items: SubProjectHandoverRead[];
+  page: number;
+  page_size: number;
+  total: number;
+}
+
+export interface SubProjectHandoverQuery {
+  fromUserId?: string;
+  page: number;
+  pageSize: number;
+  subProjectId?: string;
+  toUserId?: string;
+}
+
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   pending_review: '待审核',
   reviewing: '审核中',

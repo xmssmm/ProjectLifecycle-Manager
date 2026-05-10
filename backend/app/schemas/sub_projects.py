@@ -131,3 +131,24 @@ class SubProjectMemberRead(BaseModel):
 class SubProjectMemberListRead(BaseModel):
     items: list[SubProjectMemberRead]
     total: int
+
+
+class SubProjectHandoverRead(BaseModel):
+    id: UUID
+    sub_project_id: UUID
+    from_user_id: UUID
+    to_user_id: UUID
+    reason: str
+    operator_id: UUID
+    operated_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SubProjectHandoverListRead(BaseModel):
+    items: list[SubProjectHandoverRead]
+    total: int
+    page: int
+    page_size: int

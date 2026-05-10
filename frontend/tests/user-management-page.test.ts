@@ -6,8 +6,11 @@ import { listUsers } from '@/api/users';
 import UserList from '@/views/admin/UserList.vue';
 
 vi.mock('@/api/users', () => ({
+  batchHandoverSubProjects: vi.fn(),
   createUser: vi.fn(),
   disableUser: vi.fn(),
+  listActiveSubProjectsForLeader: vi.fn(),
+  listSubProjectHandovers: vi.fn(),
   listUsers: vi.fn(),
   resetUserPassword: vi.fn(),
   updateUser: vi.fn(),
