@@ -42,6 +42,28 @@ class ValidationFailedError(BusinessException):
         super().__init__(code=2003, message=message, status_code=422, data=data)
 
 
+class PasswordStrengthError(BusinessException):
+    def __init__(self, message: str = "密码强度不足", data: Any = None) -> None:
+        super().__init__(code=2004, message=message, status_code=422, data=data)
+
+
+class InFlightProjectsBlockDisableError(BusinessException):
+    def __init__(
+        self,
+        in_flight_count: int,
+        sample_projects: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(
+            code=3010,
+            message="停用前需要先转交在途子项目",
+            status_code=409,
+            data={
+                "in_flight_count": in_flight_count,
+                "sample_projects": sample_projects or [],
+            },
+        )
+
+
 class ResourceNotFoundError(BusinessException):
     def __init__(self, message: str = "资源不存在", data: Any = None) -> None:
         super().__init__(code=4001, message=message, status_code=404, data=data)

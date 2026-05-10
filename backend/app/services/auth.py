@@ -19,6 +19,7 @@ from app.models.users import User, UserStatus
 
 AUTH_FAILURE_LIMIT = 5
 AUTH_FAILURE_TTL_SECONDS = 30 * 60
+LOGIN_ALLOWED_STATUSES = frozenset({UserStatus.active, UserStatus.password_reset_required})
 
 
 class AuthFailureStore(Protocol):
@@ -293,7 +294,7 @@ async def validate_token_claims(
 
 async def get_active_user_by_id(session: AsyncSession, user_id: UUID) -> User:
     user = await session.get(User, user_id)
-    if not isinstance(user, User) or user.status != UserStatus.active:
+    if not isinstance(user, User) or user.status not in LOGIN_ALLOWED_STATUSES:
         raise AuthenticationError("Invalid user")
     return user
 
@@ -305,7 +306,7 @@ async def authenticate_user(
     failure_store: AuthFailureStore,
     settings: Settings,
 ) -> AuthTokens:
-    if user is None or user.status != UserStatus.active:
+    if user is None or user.status not in LOGIN_ALLOWED_STATUSES:
         raise AuthenticationError("Invalid username or password")
 
     failure_key = get_auth_failure_key(user.id)

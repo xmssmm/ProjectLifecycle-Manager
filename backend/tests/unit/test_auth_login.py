@@ -27,7 +27,11 @@ def make_settings() -> Settings:
     )
 
 
-def make_user(*, password: str = "StrongPass1!") -> User:
+def make_user(
+    *,
+    password: str = "StrongPass1!",
+    status: UserStatus = UserStatus.active,
+) -> User:
     now = datetime.now(UTC)
     return User(
         id=uuid4(),
@@ -36,7 +40,7 @@ def make_user(*, password: str = "StrongPass1!") -> User:
         password_hash=hash_password(password),
         role=UserRole.admin,
         dept_id=None,
-        status=UserStatus.active,
+        status=status,
         password_changed_at=now,
         last_login_at=None,
         created_at=now,
@@ -81,6 +85,23 @@ async def test_authenticate_user_success_returns_access_and_refresh_tokens() -> 
     assert claims["type"] == "access"
     assert claims["role"] == UserRole.admin.value
     assert await store.get_fail_count(f"auth:fail:{user.id}") == 0
+    assert user.last_login_at is not None
+
+
+@pytest.mark.asyncio
+async def test_authenticate_user_allows_password_reset_required_users_to_login() -> None:
+    settings = make_settings()
+    user = make_user(status=UserStatus.password_reset_required)
+    store = InMemoryAuthFailureStore()
+
+    tokens = await authenticate_user(
+        user=user,
+        password="StrongPass1!",
+        failure_store=store,
+        settings=settings,
+    )
+
+    assert tokens.access_token
     assert user.last_login_at is not None
 
 
