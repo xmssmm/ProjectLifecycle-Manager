@@ -61,6 +61,8 @@ npm.cmd run typecheck
 - 部署手册：`docs/deployment-manual.md`
 - 使用手册：`docs/user-manual.md`
 - Phase 2 发布说明：`docs/RELEASE_NOTES_PHASE_2.md`
+- Phase 3 实施计划：`docs/PHASE_3_PLAN.md`
+- Phase 3 默认决策：`docs/PHASE_3_OPEN_QUESTIONS.md`
 - Office 在线预览部署与使用：`docs/office-preview.md`
 - 日常运维：`docs/operations.md`
 - 上线检查清单：`docs/release-checklist.md`
