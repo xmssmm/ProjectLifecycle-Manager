@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -21,11 +22,20 @@ VIEW_ALL_DOCUMENT_ROLES = frozenset(
 )
 
 
+@dataclass(frozen=True)
+class DocumentDownload:
+    document: Document
+    content: bytes
+
+
 class DocumentRepository(Protocol):
     async def get_sub_project(self, sub_project_id: UUID) -> SubProject | None:
         ...
 
     async def get_phase(self, phase_id: UUID) -> Phase | None:
+        ...
+
+    async def get_document(self, document_id: UUID) -> Document | None:
         ...
 
     async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
@@ -50,6 +60,9 @@ class DocumentRepository(Protocol):
     ) -> list[Document]:
         ...
 
+    async def list_latest_phase_documents_for_update(self, phase_id: UUID) -> list[Document]:
+        ...
+
     def add(self, document: Document) -> None:
         ...
 
@@ -71,6 +84,10 @@ class SqlAlchemyDocumentRepository:
     async def get_phase(self, phase_id: UUID) -> Phase | None:
         phase = await self._session.get(Phase, phase_id)
         return phase if isinstance(phase, Phase) else None
+
+    async def get_document(self, document_id: UUID) -> Document | None:
+        document = await self._session.get(Document, document_id)
+        return document if isinstance(document, Document) else None
 
     async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
         member = await self._session.scalar(
@@ -123,6 +140,18 @@ class SqlAlchemyDocumentRepository:
         )
         return list(result.all())
 
+    async def list_latest_phase_documents_for_update(self, phase_id: UUID) -> list[Document]:
+        result = await self._session.scalars(
+            select(Document)
+            .where(
+                Document.phase_id == phase_id,
+                Document.is_latest.is_(True),
+            )
+            .order_by(Document.doc_type.asc(), Document.version.desc())
+            .with_for_update(),
+        )
+        return list(result.all())
+
     def add(self, document: Document) -> None:
         self._session.add(document)
 
@@ -155,6 +184,9 @@ class InMemoryDocumentRepository:
 
     async def get_phase(self, phase_id: UUID) -> Phase | None:
         return next((phase for phase in self.phases if phase.id == phase_id), None)
+
+    async def get_document(self, document_id: UUID) -> Document | None:
+        return next((document for document in self.documents if document.id == document_id), None)
 
     async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
         return next(
@@ -203,6 +235,14 @@ class InMemoryDocumentRepository:
                 for document in documents
                 if document.is_latest and not document.is_deleted
             ]
+        return sorted(documents, key=lambda document: (document.doc_type, -document.version))
+
+    async def list_latest_phase_documents_for_update(self, phase_id: UUID) -> list[Document]:
+        documents = [
+            document
+            for document in self.documents
+            if document.phase_id == phase_id and document.is_latest
+        ]
         return sorted(documents, key=lambda document: (document.doc_type, -document.version))
 
     def add(self, document: Document) -> None:
@@ -328,6 +368,33 @@ class DocumentService:
             doc_type=cleaned_doc_type,
             include_history=include_history,
         )
+
+    async def download_document(self, *, actor: User, document_id: UUID) -> DocumentDownload:
+        document = await self._repository.get_document(document_id)
+        if document is None:
+            raise ResourceNotFoundError("Document does not exist")
+        sub_project = await self._repository.get_sub_project(document.sub_project_id)
+        if sub_project is None:
+            raise ResourceNotFoundError("Sub project does not exist")
+        await self._ensure_visible(actor, sub_project)
+        return DocumentDownload(
+            document=document,
+            content=self._storage.read(document.file_path),
+        )
+
+    async def soft_delete_phase_documents(self, phase_id: UUID) -> list[Document]:
+        phase = await self._repository.get_phase(phase_id)
+        if phase is None:
+            raise ResourceNotFoundError("Phase does not exist")
+        documents = await self._repository.list_latest_phase_documents_for_update(phase_id)
+        now = datetime.now(UTC)
+        for document in documents:
+            document.is_deleted = True
+            document.updated_at = now
+        await self._repository.commit()
+        for document in documents:
+            await self._repository.refresh(document)
+        return documents
 
     async def _get_existing_scope(
         self,

@@ -1,7 +1,9 @@
 from typing import Annotated
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -90,3 +92,20 @@ async def list_documents(
         total=len(documents),
     )
     return success_response(payload.model_dump(mode="json"))
+
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: UUID,
+    service: Annotated[DocumentService, Depends(get_document_service)],
+    current_user: Annotated[User, Depends(require_permission("document.download"))],
+) -> StreamingResponse:
+    download = await service.download_document(actor=current_user, document_id=document_id)
+    encoded_filename = quote(download.document.file_name)
+    return StreamingResponse(
+        iter([download.content]),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+        },
+    )
