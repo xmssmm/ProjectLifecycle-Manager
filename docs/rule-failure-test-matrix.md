@@ -1,0 +1,20 @@
+# 关键规则失败路径测试矩阵
+
+本矩阵对应 `DEVELOPMENT_PLAN_FULL.md` 的 `T-1-TEST-03`。每条 `KR-*` 必测场景至少绑定一个可执行测试节点，后续修改业务规则时必须同步更新本表和测试。
+
+| ID | 规则/场景 | 失败路径断言 | 自动化测试 |
+| --- | --- | --- | --- |
+| KR-01 | BR-REVIEW-01：`dept_manager` 自审被拒 | 创建人本人审核主项目时返回 1010；`admin` 兜底审核会记录 `admin_override=true` | `backend/tests/unit/test_main_project_review_flow.py::test_review_rejects_self_review_and_admin_records_override_diff` |
+| KR-02 | BR-ROLE-01：`dept_manager < 2` 健康告警 | 角色数量不足时 health warning 返回 `dept_manager_minimum_not_met`，补足后告警消失 | `backend/tests/unit/test_system_health_warnings.py::test_health_warnings_report_and_clear_dept_manager_shortage` |
+| KR-03 | BR-PHASE-02：验收未完成前禁止推进后评价 | 环节 6 推进时，如果验收环节未完成则拒绝并返回状态不允许 | `backend/tests/unit/test_phase_promote.py::test_promote_post_review_requires_acceptance_completed` |
+| KR-04 | BR-PAY-04：多次付款和红冲后 `spent_amount` 准确 | 普通付款累加，红冲付款扣减原付款金额，主/子项目聚合金额同步更新 | `backend/tests/unit/test_payment_create.py::test_create_payment_uploads_voucher_and_updates_spent_amounts` `backend/tests/unit/test_payment_create.py::test_reverse_payment_creates_reversal_and_reduces_spent_amount` |
+| KR-05 | BR-PAY-02：超预算付款二次确认和通知 | 未确认超预算付款被拒；确认后通知 `dept_manager` 和 `admin`，审计标记 `over_budget=true` | `backend/tests/unit/test_payment_create.py::test_create_payment_requires_voucher_and_over_budget_confirmation` `backend/tests/unit/test_payment_create.py::test_confirmed_over_budget_payment_notifies_manager_and_admin` |
+| KR-06 | BR-REVOKE-01：撤销审批通过后的状态恢复 | 审批通过后当前环节恢复 `in_progress`，文档软删，后续环节回滚为 `waiting`，任务保留完成态 | `backend/tests/unit/test_revoke_requests.py::test_approve_revoke_request_restores_phase_soft_deletes_docs_and_limits_notifications` |
+| KR-07 | BR-TASK-01：多人任务的个人完成和整体聚合 | 多人指派创建执行人；单个执行人完成不结束任务，全部完成后任务聚合为完成 | `backend/tests/unit/test_task_service.py::test_create_task_assigns_multiple_members_and_notifies_each_executor` `backend/tests/unit/test_task_service.py::test_complete_task_marks_only_actor_executor_and_aggregates_task_status` |
+| KR-08 | BR-TASK-02/03：到期、逾期和 7 天升级 | 定时扫描标记逾期执行人和任务；7 天以上逾期额外通知 `admin` | `backend/tests/unit/test_task_deadline_cron.py::test_deadline_scan_marks_overdue_aggregates_and_notifies` |
+| KR-09 | FR-NOTIF-01：通知去重和同日多任务修复 | 重复扫描同一任务不重复通知；同日不同任务保留独立通知 | `backend/tests/unit/test_task_deadline_cron.py::test_deadline_scan_deduplicates_repeated_runs_but_keeps_distinct_tasks` |
+| KR-10 | BR-DOC-04/NFR：上传 MIME、50MB、路径穿越拒绝 | MIME/魔数不匹配拒绝；超过 50MB 拒绝；路径穿越文件名被本地存储层拒绝 | `backend/tests/unit/test_file_validator.py::test_file_validator_rejects_extension_mime_and_magic_failures` `backend/tests/unit/test_document_upload.py::test_document_service_rejects_content_above_50mb_limit_without_writing_storage` `backend/tests/unit/test_storage_backend.py::test_local_storage_rejects_path_traversal` |
+| KR-11 | BR-DOC-04：可执行文件上传拒绝 | `.exe`、`.sh` 等黑名单扩展保留；zip 内含 `.exe` 时拒绝上传 | `backend/tests/unit/test_file_validator.py::test_file_validator_blacklist_matches_requirements_br_doc_04` `backend/tests/unit/test_file_validator.py::test_file_validator_rejects_zip_containing_blocked_extension` |
+| KR-12 | FR-DOC-03：PDF 在线预览 | PDF 可预览并记录审计；非 PDF 预览返回 3020 | `backend/tests/unit/test_document_preview.py::test_preview_pdf_records_audit` `backend/tests/unit/test_document_preview.py::test_preview_rejects_non_pdf_with_3020` |
+| KR-13 | BR-USER-01/02：项目负责人转交 | 单项目/批量转交成功；in-flight 列表排除 closed；closed 转交拒绝；未转交 in-flight 项目时停用被拒 | `backend/tests/unit/test_project_handover.py::test_handover_transfers_manager_records_history_members_notifications_and_audit` `backend/tests/unit/test_project_handover.py::test_list_active_projects_and_batch_handover_skip_closed_projects` `backend/tests/unit/test_project_handover.py::test_handover_rejects_non_admin_closed_project_and_invalid_new_leader` `backend/tests/unit/test_user_management.py::test_disable_proj_leader_with_active_sub_projects_is_rejected` |
+| KR-14 | OQ-08/BR-REVOKE-01：撤销通知范围 | 撤销结果仅通知文档 uploader 和子项目 `proj_leader`，不通知普通项目成员 | `backend/tests/unit/test_revoke_requests.py::test_approve_revoke_request_restores_phase_soft_deletes_docs_and_limits_notifications` |

@@ -290,6 +290,30 @@ async def test_document_service_rejects_outsider_oversize_and_unsafe_filename() 
     assert storage.saved == []
 
 
+@pytest.mark.asyncio
+async def test_document_service_rejects_content_above_50mb_limit_without_writing_storage() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    storage = RecordingStorage()
+    service = DocumentService(
+        repository=InMemoryDocumentRepository(),
+        storage=storage,
+        max_file_size_bytes=50 * 1024 * 1024,
+    )
+
+    with pytest.raises(ValidationFailedError):
+        await service.upload_document(
+            actor=leader,
+            sub_project_id=uuid4(),
+            phase_id=uuid4(),
+            doc_type="meeting_material",
+            file_name="meeting.pdf",
+            content_type="application/pdf",
+            content=b"x" * (50 * 1024 * 1024 + 1),
+        )
+
+    assert storage.saved == []
+
+
 def test_document_upload_and_list_endpoints_return_doc_id_and_version() -> None:
     member = make_user(UserRole.proj_member, username="member")
     leader = make_user(UserRole.proj_leader, username="leader")
