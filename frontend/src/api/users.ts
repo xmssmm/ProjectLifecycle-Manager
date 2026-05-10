@@ -3,6 +3,7 @@ import type { AxiosInstance } from 'axios';
 import { apiClient } from '@/api/client';
 import type {
   PasswordResetPayload,
+  PasswordChangePayload,
   UserCreatePayload,
   UserListQuery,
   UserListRead,
@@ -27,6 +28,14 @@ export async function listUsers(
       role: query.role,
     },
   });
+  return response.data.data;
+}
+
+export async function getUser(
+  userId: string,
+  client: AxiosInstance = apiClient,
+): Promise<UserRead> {
+  const response = await client.get<ApiResponse<UserRead>>(`/users/${userId}`);
   return response.data.data;
 }
 
@@ -64,5 +73,13 @@ export async function resetUserPassword(
     `/users/${userId}/reset-password`,
     payload,
   );
+  return response.data.data;
+}
+
+export async function changeOwnPassword(
+  payload: PasswordChangePayload,
+  client: AxiosInstance = apiClient,
+): Promise<UserRead> {
+  const response = await client.post<ApiResponse<UserRead>>('/users/me/change-password', payload);
   return response.data.data;
 }

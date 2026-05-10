@@ -10,7 +10,10 @@ describe('App', () => {
   it('renders the workspace shell and placeholder route', async () => {
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: [{ path: '/', component: HomeView }],
+      routes: [
+        { path: '/', component: HomeView },
+        { path: '/profile', component: { template: '<div />' } },
+      ],
     });
 
     router.push('/');

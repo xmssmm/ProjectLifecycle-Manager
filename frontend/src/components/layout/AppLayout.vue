@@ -21,6 +21,7 @@ const router = useRouter();
 
 const navItems: NavItem[] = [
   { icon: House, index: '/', label: '工作台' },
+  { icon: User, index: '/profile', label: '我的' },
   { disabled: true, icon: Folder, index: '/main-projects', label: '项目' },
   { disabled: true, icon: Bell, index: '/notifications', label: '通知' },
   { icon: User, index: '/admin/users', label: '用户', requireRole: ['admin'] },
@@ -64,7 +65,9 @@ async function logout() {
           <p>基础工作区</p>
         </div>
         <div class="header-account">
-          <span>{{ authStore.user?.username ?? '未登录' }}</span>
+          <router-link class="header-account__name" to="/profile">
+            {{ authStore.user?.username ?? '未登录' }}
+          </router-link>
           <el-tooltip content="退出登录" placement="bottom">
             <el-button circle :icon="SwitchButton" @click="logout" />
           </el-tooltip>

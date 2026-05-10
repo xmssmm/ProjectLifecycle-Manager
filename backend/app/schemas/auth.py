@@ -2,7 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.models.users import UserRole
+from app.models.users import UserRole, UserStatus
 
 
 class LoginRequest(BaseModel):
@@ -24,5 +24,7 @@ class AccessTokenRead(BaseModel):
 class CurrentUserRead(BaseModel):
     id: UUID
     username: str
+    email: str | None
     role: UserRole
     dept_id: UUID | None
+    status: UserStatus

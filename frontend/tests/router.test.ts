@@ -15,12 +15,16 @@ describe('router', () => {
     const componentDemoRoute = router.getRoutes().find((route) => route.name === 'component-demo');
     const userManagementRoute = router.getRoutes().find((route) => route.name === 'admin-users');
     const departmentRoute = router.getRoutes().find((route) => route.name === 'admin-departments');
+    const profileRoute = router.getRoutes().find((route) => route.name === 'profile');
+    const passwordRoute = router.getRoutes().find((route) => route.name === 'change-password');
     const loginRoute = router.getRoutes().find((route) => route.name === 'login');
 
     expect(homeRoute?.path).toBe('/');
     expect(componentDemoRoute?.path).toBe('/component-demo');
     expect(userManagementRoute?.path).toBe('/admin/users');
     expect(departmentRoute?.path).toBe('/admin/departments');
+    expect(profileRoute?.path).toBe('/profile');
+    expect(passwordRoute?.path).toBe('/change-password');
     expect(loginRoute?.path).toBe('/login');
   });
 
@@ -45,14 +49,33 @@ describe('router', () => {
     const authStore = useAuthStore();
     authStore.setAccessToken('member-token');
     authStore.setUser({
-      id: 'member-1',
-      username: 'member',
-      role: 'proj_member',
       deptId: null,
+      email: null,
+      id: 'member-1',
+      role: 'proj_member',
+      status: 'active',
+      username: 'member',
     });
 
     await router.push('/admin/users');
 
     expect(router.currentRoute.value.name).toBe('home');
+  });
+
+  it('forces password-reset users to the change password page', async () => {
+    const authStore = useAuthStore();
+    authStore.setAccessToken('reset-token');
+    authStore.setUser({
+      deptId: null,
+      email: null,
+      id: 'reset-1',
+      role: 'proj_member',
+      status: 'password_reset_required',
+      username: 'reset-user',
+    });
+
+    await router.push('/');
+
+    expect(router.currentRoute.value.name).toBe('change-password');
   });
 });

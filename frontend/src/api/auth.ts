@@ -1,7 +1,7 @@
 import type { AxiosInstance } from 'axios';
 
 import { apiClient } from '@/api/client';
-import type { UserRole } from '@/stores/useAuthStore';
+import type { UserRole, UserStatus } from '@/types/users';
 
 interface ApiResponse<T> {
   code: number;
@@ -26,10 +26,12 @@ export interface AccessTokenPayload {
 }
 
 export interface CurrentUserPayload {
-  id: string;
-  username: string;
-  role: UserRole;
   dept_id: string | null;
+  email: string | null;
+  id: string;
+  role: UserRole;
+  status: UserStatus;
+  username: string;
 }
 
 export async function login(
@@ -45,13 +47,9 @@ export async function login(
 export async function refreshAccessToken(
   client: AxiosInstance = apiClient,
 ): Promise<AccessTokenPayload> {
-  const response = await client.post<ApiResponse<AccessTokenPayload>>(
-    '/auth/refresh',
-    undefined,
-    {
-      withCredentials: true,
-    },
-  );
+  const response = await client.post<ApiResponse<AccessTokenPayload>>('/auth/refresh', undefined, {
+    withCredentials: true,
+  });
   return response.data.data;
 }
 

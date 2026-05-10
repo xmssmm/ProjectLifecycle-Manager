@@ -108,8 +108,10 @@ def test_refresh_me_logout_and_blacklisted_access_token_flow() -> None:
     assert me_response.json()["data"] == {
         "id": str(user.id),
         "username": "admin",
+        "email": "admin@example.local",
         "role": UserRole.admin.value,
         "dept_id": None,
+        "status": UserStatus.active.value,
     }
 
     refresh_response = client.post("/api/v1/auth/refresh")

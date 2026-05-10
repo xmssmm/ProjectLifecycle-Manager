@@ -1,4 +1,4 @@
-import type { UserRole } from '@/stores/useAuthStore';
+export type UserRole = 'admin' | 'dept_manager' | 'finance_manager' | 'proj_leader' | 'proj_member';
 
 export type UserStatus = 'active' | 'disabled' | 'password_reset_required';
 
@@ -45,6 +45,11 @@ export interface UserUpdatePayload {
 
 export interface PasswordResetPayload {
   new_password: string;
+}
+
+export interface PasswordChangePayload {
+  new_password: string;
+  old_password: string;
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {

@@ -104,7 +104,9 @@ async def me(
         CurrentUserRead(
             id=user.id,
             username=user.username,
+            email=user.email,
             role=user.role,
             dept_id=user.dept_id,
+            status=user.status,
         ).model_dump(mode="json"),
     )

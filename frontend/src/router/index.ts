@@ -6,7 +6,9 @@ import ComponentDemoView from '@/views/admin/ComponentDemoView.vue';
 import DepartmentListView from '@/views/admin/DepartmentList.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import LoginView from '@/views/auth/LoginView.vue';
+import ChangePasswordView from '@/views/ChangePassword.vue';
 import HomeView from '@/views/HomeView.vue';
+import ProfileView from '@/views/Profile.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -36,6 +38,18 @@ const router = createRouter({
       meta: { requireRole: ['admin'], requiresAuth: true },
     },
     {
+      path: '/profile',
+      name: 'profile',
+      component: ProfileView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/change-password',
+      name: 'change-password',
+      component: ChangePasswordView,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: LoginView,
@@ -58,6 +72,14 @@ router.beforeEach((to) => {
       name: 'login',
       query: { redirect: to.fullPath },
     };
+  }
+
+  if (
+    !isPublic &&
+    authStore.user?.status === 'password_reset_required' &&
+    to.name !== 'change-password'
+  ) {
+    return { name: 'change-password' };
   }
 
   if (!isPublic && !canAccessRoute(to.meta)) {

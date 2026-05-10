@@ -116,10 +116,12 @@ describe('common UI components', () => {
     setActivePinia(createPinia());
     const authStore = useAuthStore();
     authStore.setUser({
-      id: 'finance-1',
-      username: 'finance',
-      role: 'finance_manager',
       deptId: null,
+      email: null,
+      id: 'finance-1',
+      role: 'finance_manager',
+      status: 'active',
+      username: 'finance',
     });
 
     const allowed = mount(PermissionGate, {

@@ -6,19 +6,17 @@ import {
   logout as logoutRequest,
   refreshAccessToken,
 } from '@/api/auth';
+import type { UserRole, UserStatus } from '@/types/users';
 
-export type UserRole =
-  | 'admin'
-  | 'dept_manager'
-  | 'finance_manager'
-  | 'proj_leader'
-  | 'proj_member';
+export type { UserRole, UserStatus } from '@/types/users';
 
 export interface AuthUser {
-  id: string;
-  username: string;
-  role: UserRole;
   deptId: string | null;
+  email: string | null;
+  id: string;
+  role: UserRole;
+  status: UserStatus;
+  username: string;
 }
 
 interface AuthState {
@@ -57,10 +55,12 @@ export const useAuthStore = defineStore('auth', {
     async loadCurrentUser() {
       const user = await getCurrentUser();
       this.setUser({
-        id: user.id,
-        username: user.username,
-        role: user.role,
         deptId: user.dept_id,
+        email: user.email,
+        id: user.id,
+        role: user.role,
+        status: user.status,
+        username: user.username,
       });
     },
     async refreshSession() {

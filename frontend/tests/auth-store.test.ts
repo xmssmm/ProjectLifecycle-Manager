@@ -50,17 +50,23 @@ describe('useAuthStore', () => {
       token_type: 'bearer',
     });
     vi.mocked(getCurrentUser).mockResolvedValue({
-      id: 'user-1',
-      username: 'admin',
-      role: 'admin',
       dept_id: null,
+      email: 'admin@example.com',
+      id: 'user-1',
+      role: 'admin',
+      status: 'active',
+      username: 'admin',
     });
     const store = useAuthStore();
 
     await store.login('admin', 'StrongPass1!');
 
     expect(store.accessToken).toBe('access-token');
-    expect(store.user?.username).toBe('admin');
+    expect(store.user).toMatchObject({
+      email: 'admin@example.com',
+      status: 'active',
+      username: 'admin',
+    });
   });
 
   it('refreshes and clears the session on logout', async () => {
@@ -71,7 +77,14 @@ describe('useAuthStore', () => {
     vi.mocked(logout).mockResolvedValue(undefined);
     const store = useAuthStore();
     store.setAccessToken('old-token');
-    store.setUser({ id: 'user-1', username: 'admin', role: 'admin', deptId: null });
+    store.setUser({
+      deptId: null,
+      email: 'admin@example.com',
+      id: 'user-1',
+      role: 'admin',
+      status: 'active',
+      username: 'admin',
+    });
 
     await store.refreshSession();
     expect(store.accessToken).toBe('fresh-token');

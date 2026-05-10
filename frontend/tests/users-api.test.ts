@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { createApiClient } from '../src/api/client';
 import {
   createUser,
+  changeOwnPassword,
   disableUser,
+  getUser,
   listUsers,
   resetUserPassword,
   updateUser,
@@ -57,13 +59,30 @@ describe('users api', () => {
     await updateUser('user-1', { email: 'next@example.com' }, client);
     await disableUser('user-1', client);
     await resetUserPassword('user-1', { new_password: 'NextPass123!' }, client);
+    await changeOwnPassword({ new_password: 'NextPass123!', old_password: 'OldPass123!' }, client);
 
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
       'post /users',
       'put /users/user-1',
       'delete /users/user-1',
       'post /users/user-1/reset-password',
+      'post /users/me/change-password',
     ]);
+  });
+
+  it('gets a single user profile', async () => {
+    const calls: AxiosRequestConfig[] = [];
+    const client = createApiClient('http://api.local');
+    client.defaults.adapter = recordingAdapter(calls, {
+      code: 0,
+      message: 'success',
+      data: sampleUser,
+    });
+
+    const result = await getUser('user-1', client);
+
+    expect(calls[0]).toMatchObject({ method: 'get', url: '/users/user-1' });
+    expect(result.email).toBe('admin@example.com');
   });
 });
 

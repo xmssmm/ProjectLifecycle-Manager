@@ -23,14 +23,28 @@ const layoutStubs = {
   RouterView: { template: '<div />' },
 };
 
-function setUser(role: 'admin' | 'dept_manager' | 'finance_manager' | 'proj_leader' | 'proj_member') {
+function setUser(
+  role: 'admin' | 'dept_manager' | 'finance_manager' | 'proj_leader' | 'proj_member',
+) {
   const authStore = useAuthStore();
   authStore.setAccessToken(`${role}-token`);
   authStore.setUser({
-    id: `${role}-id`,
-    username: role,
-    role,
     deptId: null,
+    email: null,
+    id: `${role}-id`,
+    role,
+    status: 'active',
+    username: role,
+  });
+}
+
+function createLayoutRouter() {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/profile', component: { template: '<div />' } },
+    ],
   });
 }
 
@@ -60,12 +74,7 @@ describe('frontend permissions', () => {
 
     const wrapper = mount(AppLayout, {
       global: {
-        plugins: [
-          createRouter({
-            history: createMemoryHistory(),
-            routes: [{ path: '/', component: { template: '<div />' } }],
-          }),
-        ],
+        plugins: [createLayoutRouter()],
         stubs: layoutStubs,
       },
     });
@@ -83,12 +92,7 @@ describe('frontend permissions', () => {
 
     const wrapper = mount(AppLayout, {
       global: {
-        plugins: [
-          createRouter({
-            history: createMemoryHistory(),
-            routes: [{ path: '/', component: { template: '<div />' } }],
-          }),
-        ],
+        plugins: [createLayoutRouter()],
         stubs: layoutStubs,
       },
     });
