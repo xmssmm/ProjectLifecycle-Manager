@@ -5,6 +5,14 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        fonts-noto-cjk \
+        libreoffice-calc \
+        libreoffice-impress \
+        libreoffice-writer \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml ./
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir -e .

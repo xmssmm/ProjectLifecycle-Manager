@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID, uuid4
 
@@ -25,12 +28,76 @@ from app.validators.file_validator import DefaultFileValidator, FileValidationEr
 VIEW_ALL_DOCUMENT_ROLES = frozenset(
     {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
 )
+SUPPORTED_OFFICE_PREVIEW_EXTENSIONS = frozenset({".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"})
 
 
 @dataclass(frozen=True)
 class DocumentDownload:
     document: Document
     content: bytes
+
+
+class OfficeDocumentConverter(Protocol):
+    def convert_to_pdf(self, *, file_name: str, content: bytes) -> bytes:
+        ...
+
+
+class LibreOfficeDocumentConverter:
+    def __init__(self, *, binary_path: str = "libreoffice", timeout_seconds: int = 30) -> None:
+        self._binary_path = binary_path
+        self._timeout_seconds = timeout_seconds
+
+    def convert_to_pdf(self, *, file_name: str, content: bytes) -> bytes:
+        """Convert an Office document to a PDF byte stream using LibreOffice headless."""
+        suffix = Path(file_name).suffix.lower()
+        if suffix not in SUPPORTED_OFFICE_PREVIEW_EXTENSIONS:
+            raise BusinessException(
+                code=3020,
+                message="Only Office documents can be previewed by this endpoint",
+                status_code=400,
+                data={"file_name": file_name},
+            )
+
+        with tempfile.TemporaryDirectory(prefix="office-preview-") as temp_dir:
+            temp_path = Path(temp_dir)
+            input_path = temp_path / f"source{suffix}"
+            output_dir = temp_path / "out"
+            output_dir.mkdir()
+            input_path.write_bytes(content)
+
+            try:
+                result = subprocess.run(
+                    [
+                        self._binary_path,
+                        "--headless",
+                        "--convert-to",
+                        "pdf",
+                        "--outdir",
+                        str(output_dir),
+                        str(input_path),
+                    ],
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                    timeout=self._timeout_seconds,
+                )
+            except (FileNotFoundError, subprocess.SubprocessError) as exc:
+                raise BusinessException(
+                    code=5003,
+                    message="Office preview converter is unavailable",
+                    status_code=503,
+                    data={"file_name": file_name},
+                ) from exc
+
+            output_path = output_dir / f"{input_path.stem}.pdf"
+            if result.returncode != 0 or not output_path.exists():
+                raise BusinessException(
+                    code=5003,
+                    message="Office document conversion failed",
+                    status_code=503,
+                    data={"file_name": file_name},
+                )
+            return output_path.read_bytes()
 
 
 class DocumentRepository(Protocol):
@@ -299,11 +366,13 @@ class DocumentService:
         storage: StorageBackend,
         max_file_size_bytes: int,
         file_validator: FileValidator | None = None,
+        office_converter: OfficeDocumentConverter | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._max_file_size_bytes = max_file_size_bytes
         self._file_validator = file_validator or DefaultFileValidator()
+        self._office_converter = office_converter or LibreOfficeDocumentConverter()
 
     async def upload_document(
         self,
@@ -443,6 +512,36 @@ class DocumentService:
             document=document,
             content=self._storage.read(document.file_path),
         )
+
+    async def preview_office_document(
+        self,
+        *,
+        actor: User,
+        document_id: UUID,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> DocumentDownload:
+        """Authorize and convert an Office document to a PDF preview stream."""
+        document = await self._get_authorized_document(actor=actor, document_id=document_id)
+        if not self._is_office_document(document):
+            raise BusinessException(
+                code=3020,
+                message="Only Office documents can be previewed by this endpoint",
+                status_code=400,
+                data={"document_id": str(document.id), "file_name": document.file_name},
+            )
+        content = self._office_converter.convert_to_pdf(
+            file_name=document.file_name,
+            content=self._storage.read(document.file_path),
+        )
+        self._record_preview(
+            actor=actor,
+            document=document,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            action="document.preview_office",
+        )
+        return DocumentDownload(document=document, content=content)
 
     async def _get_authorized_document(self, *, actor: User, document_id: UUID) -> Document:
         document = await self._repository.get_document(document_id)
@@ -606,12 +705,17 @@ class DocumentService:
         return document.file_name.lower().endswith(".pdf") or document.doc_type.lower() == "pdf"
 
     @staticmethod
+    def _is_office_document(document: Document) -> bool:
+        return Path(document.file_name).suffix.lower() in SUPPORTED_OFFICE_PREVIEW_EXTENSIONS
+
+    @staticmethod
     def _record_preview(
         *,
         actor: User,
         document: Document,
         audit_writer: AuditLogWriter | None,
         audit_context: AuditContext | None,
+        action: str = "document.preview",
     ) -> None:
         if audit_writer is None:
             return
@@ -619,7 +723,7 @@ class DocumentService:
         audit_writer.enqueue(
             AuditLogEntry(
                 actor_id=context.actor_id,
-                action="document.preview",
+                action=action,
                 target_type="document",
                 target_id=str(document.id),
                 before_state={},

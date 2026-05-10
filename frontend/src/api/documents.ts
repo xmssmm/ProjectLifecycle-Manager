@@ -75,3 +75,13 @@ export async function previewDocument(
   });
   return response.data;
 }
+
+export async function previewOfficeDocument(
+  documentId: string,
+  client: AxiosInstance = apiClient,
+): Promise<Blob> {
+  const response = await client.get<Blob>(`/documents/${documentId}/preview-office`, {
+    responseType: 'blob',
+  });
+  return response.data;
+}

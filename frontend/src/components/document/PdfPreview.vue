@@ -29,12 +29,16 @@ interface PdfLoadingTaskLike {
   promise: Promise<PdfDocumentProxyLike>;
 }
 
+type PreviewLoader = (documentId: string) => Promise<Blob>;
+
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const props = defineProps<{
   document: DocumentRead | null;
+  downloadFileName?: string;
   loadPdf?: (blob: Blob) => Promise<PdfDocumentProxyLike>;
   modelValue: boolean;
+  previewLoader?: PreviewLoader;
 }>();
 
 const emit = defineEmits<{
@@ -55,6 +59,9 @@ const visible = computed({
   set: (value: boolean) => emit('update:modelValue', value),
 });
 
+const downloadFileName = computed(
+  () => props.downloadFileName || props.document?.file_name || 'preview.pdf',
+);
 const zoomLabel = computed(() => `${Math.round(zoom.value * 100)}%`);
 
 watch(
@@ -83,7 +90,7 @@ async function loadPreview(document: DocumentRead): Promise<void> {
   zoom.value = 1;
 
   try {
-    const blob = await previewDocument(document.id);
+    const blob = await (props.previewLoader ?? previewDocument)(document.id);
     previewUrl.value = createBlobUrl(blob, document.id);
     pdfDocument.value = await (props.loadPdf ?? loadPdfWithPdfjs)(blob);
     pageCount.value = pdfDocument.value.numPages;
@@ -232,7 +239,7 @@ function createBlobUrl(blob: Blob, fallbackId: string): string {
         v-if="previewUrl && document"
         class="pdf-preview__download"
         data-test="preview-download"
-        :download="document.file_name"
+        :download="downloadFileName"
         :href="previewUrl"
       >
         <Download class="pdf-preview__icon" />

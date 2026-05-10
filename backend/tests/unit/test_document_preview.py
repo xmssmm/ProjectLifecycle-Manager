@@ -55,6 +55,23 @@ class MemoryStorage(StorageBackend):
         return f"/storage/{storage_key}"
 
 
+class FakeOfficeConverter:
+    def __init__(
+        self,
+        content: bytes = b"%PDF-1.7\nconverted",
+        error: BusinessException | None = None,
+    ) -> None:
+        self.content = content
+        self.error = error
+        self.calls: list[tuple[str, bytes]] = []
+
+    def convert_to_pdf(self, *, file_name: str, content: bytes) -> bytes:
+        self.calls.append((file_name, content))
+        if self.error is not None:
+            raise self.error
+        return self.content
+
+
 def make_user(role: UserRole, *, username: str) -> User:
     now = datetime.now(UTC)
     return User(
@@ -204,6 +221,123 @@ async def test_preview_rejects_non_pdf_with_3020() -> None:
     assert exc.value.code == 3020
 
 
+@pytest.mark.asyncio
+async def test_preview_office_converts_supported_document_and_records_audit() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase = make_phase(sub_project)
+    document = make_document(
+        sub_project=sub_project,
+        phase=phase,
+        uploader=leader,
+        file_name="meeting.docx",
+    )
+    repository = InMemoryDocumentRepository(
+        documents=[document],
+        sub_projects=[sub_project],
+        phases=[phase],
+    )
+    audit_writer = InMemoryAuditLogWriter()
+    converter = FakeOfficeConverter()
+    service = DocumentService(
+        repository=repository,
+        storage=MemoryStorage({document.file_path: b"office-bytes"}),
+        max_file_size_bytes=1024,
+        file_validator=NoopFileValidator(),
+        office_converter=converter,
+    )
+
+    preview = await service.preview_office_document(
+        actor=leader,
+        document_id=document.id,
+        audit_writer=audit_writer,
+        audit_context=AuditContext(actor_id=leader.id, request_id="req-office-preview"),
+    )
+
+    assert preview.content == b"%PDF-1.7\nconverted"
+    assert converter.calls == [("meeting.docx", b"office-bytes")]
+    assert audit_writer.entries[0].action == "document.preview_office"
+    assert audit_writer.entries[0].target_id == str(document.id)
+    assert audit_writer.entries[0].extra["file_name"] == "meeting.docx"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("file_name", ["meeting.pdf", "diagram.png", "archive.zip"])
+async def test_preview_office_rejects_unsupported_documents(file_name: str) -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase = make_phase(sub_project)
+    document = make_document(
+        sub_project=sub_project,
+        phase=phase,
+        uploader=leader,
+        file_name=file_name,
+    )
+    repository = InMemoryDocumentRepository(
+        documents=[document],
+        sub_projects=[sub_project],
+        phases=[phase],
+    )
+    converter = FakeOfficeConverter()
+    service = DocumentService(
+        repository=repository,
+        storage=MemoryStorage({document.file_path: b"content"}),
+        max_file_size_bytes=1024,
+        file_validator=NoopFileValidator(),
+        office_converter=converter,
+    )
+
+    with pytest.raises(BusinessException) as exc:
+        await service.preview_office_document(actor=leader, document_id=document.id)
+
+    assert exc.value.code == 3020
+    assert converter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_preview_office_does_not_audit_failed_conversion() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase = make_phase(sub_project)
+    document = make_document(
+        sub_project=sub_project,
+        phase=phase,
+        uploader=leader,
+        file_name="meeting.xlsx",
+    )
+    repository = InMemoryDocumentRepository(
+        documents=[document],
+        sub_projects=[sub_project],
+        phases=[phase],
+    )
+    audit_writer = InMemoryAuditLogWriter()
+    converter = FakeOfficeConverter(
+        error=BusinessException(
+            code=5003,
+            message="Office document conversion failed",
+            status_code=503,
+        ),
+    )
+    service = DocumentService(
+        repository=repository,
+        storage=MemoryStorage({document.file_path: b"broken-office-bytes"}),
+        max_file_size_bytes=1024,
+        file_validator=NoopFileValidator(),
+        office_converter=converter,
+    )
+
+    with pytest.raises(BusinessException) as exc:
+        await service.preview_office_document(
+            actor=leader,
+            document_id=document.id,
+            audit_writer=audit_writer,
+            audit_context=AuditContext(actor_id=leader.id, request_id="req-office-preview"),
+        )
+
+    assert exc.value.code == 5003
+    assert audit_writer.entries == []
+
+
 def test_document_preview_endpoint_streams_inline_pdf() -> None:
     member = make_user(UserRole.proj_member, username="member")
     leader = make_user(UserRole.proj_leader, username="leader")
@@ -250,6 +384,57 @@ def test_document_preview_endpoint_streams_inline_pdf() -> None:
 
     assert response.status_code == 200
     assert response.content == b"%PDF-1.7\nbody"
+    assert response.headers["content-type"] == "application/pdf"
+    assert "inline" in response.headers["content-disposition"]
+    assert "meeting.pdf" in response.headers["content-disposition"]
+
+
+def test_document_office_preview_endpoint_streams_converted_pdf() -> None:
+    member = make_user(UserRole.proj_member, username="member")
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase = make_phase(sub_project)
+    document = make_document(
+        sub_project=sub_project,
+        phase=phase,
+        uploader=member,
+        file_name="meeting.docx",
+    )
+
+    class FakeDocumentService:
+        async def preview_office_document(
+            self,
+            *,
+            actor: User,
+            document_id: UUID,
+            audit_writer: object | None = None,
+            audit_context: object | None = None,
+        ) -> DocumentDownload:
+            assert actor.id == member.id
+            assert document_id == document.id
+            assert audit_writer is not None
+            assert audit_context is not None
+            return DocumentDownload(document=document, content=b"%PDF-1.7\nconverted")
+
+    async def fake_db_session() -> AsyncIterator[object]:
+        yield object()
+
+    async def fake_current_user() -> User:
+        return member
+
+    async def fake_document_service() -> FakeDocumentService:
+        return FakeDocumentService()
+
+    app = create_app(rate_limit_store=InMemoryRateLimitStore())
+    app.dependency_overrides[get_db_session] = fake_db_session
+    app.dependency_overrides[get_current_user] = fake_current_user
+    app.dependency_overrides[get_document_service] = fake_document_service
+    client = TestClient(app)
+
+    response = client.get(f"/api/v1/documents/{document.id}/preview-office")
+
+    assert response.status_code == 200
+    assert response.content == b"%PDF-1.7\nconverted"
     assert response.headers["content-type"] == "application/pdf"
     assert "inline" in response.headers["content-disposition"]
     assert "meeting.pdf" in response.headers["content-disposition"]
