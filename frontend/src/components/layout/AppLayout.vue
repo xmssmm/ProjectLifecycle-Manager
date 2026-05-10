@@ -33,6 +33,13 @@ const navItems: NavItem[] = [
   { icon: User, index: '/profile', label: '我的' },
   { icon: Folder, index: '/main-projects', label: '项目' },
   { icon: List, index: '/tasks', label: '任务' },
+  { icon: List, index: '/revoke-requests', label: '撤销', requireRole: ['proj_leader'] },
+  {
+    icon: List,
+    index: '/revoke-requests/review',
+    label: '撤销审批',
+    requireRole: ['admin', 'dept_manager'],
+  },
   { disabled: true, icon: Bell, index: '/notifications', label: '通知' },
   { icon: User, index: '/admin/users', label: '用户', requireRole: ['admin'] },
   { icon: Setting, index: '/admin/departments', label: '部门', requireRole: ['admin'] },

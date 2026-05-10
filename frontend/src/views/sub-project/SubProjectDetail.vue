@@ -46,6 +46,15 @@ const canTerminate = computed(() => {
     !['closed', 'terminated'].includes(currentSubProject?.status ?? '')
   );
 });
+const canRequestRevoke = computed(() => {
+  const currentSubProject = subProject.value;
+  return Boolean(
+    currentSubProject &&
+    authStore.user?.role === 'proj_leader' &&
+    currentSubProject.manager_id === authStore.user.id &&
+    !['closed', 'terminated'].includes(currentSubProject.status),
+  );
+});
 const canManageMembers = computed(() => {
   const currentSubProject = subProject.value;
   return Boolean(
@@ -165,6 +174,12 @@ function formatDate(value: unknown): string {
         :to="{ name: 'sub-project-payments', params: { id: subProject.id } }"
       >
         <el-button>付款记录</el-button>
+      </router-link>
+      <router-link
+        v-if="subProject && canRequestRevoke"
+        :to="{ name: 'revoke-apply', params: { id: subProject.id } }"
+      >
+        <el-button data-test="open-revoke-apply">撤销申请</el-button>
       </router-link>
       <router-link
         v-if="subProject && canEditRejected"

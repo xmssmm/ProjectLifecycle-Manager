@@ -16,6 +16,8 @@ import MainProjectListView from '@/views/main-project/MainProjectList.vue';
 import MainProjectReviewView from '@/views/main-project/MainProjectReview.vue';
 import PaymentListView from '@/views/payment/PaymentList.vue';
 import ProfileView from '@/views/Profile.vue';
+import RevokeApplyView from '@/views/revoke/RevokeApply.vue';
+import RevokeReviewView from '@/views/revoke/RevokeReview.vue';
 import SubProjectDetailView from '@/views/sub-project/SubProjectDetail.vue';
 import SubProjectEditView from '@/views/sub-project/SubProjectEdit.vue';
 import SubProjectListView from '@/views/sub-project/SubProjectList.vue';
@@ -127,6 +129,25 @@ const router = createRouter({
       component: PaymentListView,
       meta: { requiresAuth: true },
       props: (route) => ({ subProjectId: String(route.params.id) }),
+    },
+    {
+      path: '/sub-projects/:id/revoke',
+      name: 'revoke-apply',
+      component: RevokeApplyView,
+      meta: { permission: 'revoke_request.submit', requiresAuth: true },
+      props: (route) => ({ subProjectId: String(route.params.id) }),
+    },
+    {
+      path: '/revoke-requests',
+      name: 'revoke-requests',
+      component: RevokeApplyView,
+      meta: { permission: 'revoke_request.submit', requiresAuth: true },
+    },
+    {
+      path: '/revoke-requests/review',
+      name: 'revoke-review',
+      component: RevokeReviewView,
+      meta: { permission: 'revoke_request.review', requiresAuth: true },
     },
     {
       path: '/sub-projects/:id',
