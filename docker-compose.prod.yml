@@ -1,0 +1,174 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-project_mgmt}
+      POSTGRES_USER: ${POSTGRES_USER:-project_mgmt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CORS_ALLOW_ORIGINS: ${PROD_CORS_ALLOW_ORIGINS:-https://localhost}
+      STORAGE_ROOT: /app/storage
+    command:
+      [
+        "gunicorn",
+        "app.main:app",
+        "-k",
+        "uvicorn.workers.UvicornWorker",
+        "--bind",
+        "0.0.0.0:8000",
+        "--workers",
+        "${GUNICORN_WORKERS:-4}",
+        "--timeout",
+        "120",
+      ]
+    expose:
+      - "8000"
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STORAGE_ROOT: /app/storage
+    command:
+      [
+        "celery",
+        "-A",
+        "app.tasks.celery_app:celery_app",
+        "worker",
+        "--loglevel=info",
+      ]
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STORAGE_ROOT: /app/storage
+    command:
+      [
+        "celery",
+        "-A",
+        "app.tasks.celery_app:celery_app",
+        "beat",
+        "--loglevel=info",
+      ]
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: ${PROD_VITE_API_BASE_URL:-/api/v1}
+    restart: unless-stopped
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_certs:/etc/nginx/certs
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /etc/nginx/certs && if [ ! -f /etc/nginx/certs/localhost.crt ]; then openssl req -x509 -nodes -newkey rsa:2048 -days 365 -keyout /etc/nginx/certs/localhost.key -out /etc/nginx/certs/localhost.crt -subj '/CN=localhost'; fi && nginx -g 'daemon off;'",
+      ]
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
+  nginx_certs:

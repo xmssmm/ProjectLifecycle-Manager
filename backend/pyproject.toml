@@ -13,6 +13,7 @@ dependencies = [
     "bcrypt>=4.0,<4.1",
     "celery>=5.3",
     "fastapi>=0.110",
+    "gunicorn>=22.0",
     "passlib[bcrypt]>=1.7",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
