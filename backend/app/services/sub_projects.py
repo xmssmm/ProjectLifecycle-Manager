@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from datetime import UTC, datetime
+from collections.abc import Callable, Sequence
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -19,7 +19,12 @@ from app.models.main_projects import (
 from app.models.phases import Phase, PhaseStatus
 from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
-from app.schemas.sub_projects import SubProjectCreate, SubProjectReviewRequest, SubProjectUpdate
+from app.schemas.sub_projects import (
+    SubProjectCreate,
+    SubProjectReviewRequest,
+    SubProjectTerminateRequest,
+    SubProjectUpdate,
+)
 from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter, to_audit_state
 from app.services.notifications import NotificationService
 
@@ -80,6 +85,9 @@ class SubProjectRepository(Protocol):
         *,
         excluding_user_id: UUID | None = None,
     ) -> list[UUID]:
+        ...
+
+    async def phase_completion_counts(self, sub_project_id: UUID) -> tuple[int, int]:
         ...
 
     def add(self, sub_project: SubProject) -> None:
@@ -182,6 +190,18 @@ class SqlAlchemySubProjectRepository:
             conditions.append(User.id != excluding_user_id)
         result = await self._session.scalars(select(User.id).where(*conditions))
         return list(result.all())
+
+    async def phase_completion_counts(self, sub_project_id: UUID) -> tuple[int, int]:
+        total = await self._session.scalar(
+            select(func.count()).select_from(Phase).where(Phase.sub_project_id == sub_project_id),
+        )
+        incomplete = await self._session.scalar(
+            select(func.count()).select_from(Phase).where(
+                Phase.sub_project_id == sub_project_id,
+                Phase.status != PhaseStatus.completed,
+            ),
+        )
+        return int(total or 0), int(incomplete or 0)
 
     def add(self, sub_project: SubProject) -> None:
         self._session.add(sub_project)
@@ -288,6 +308,11 @@ class InMemorySubProjectRepository:
             and user.id != excluding_user_id
         ]
 
+    async def phase_completion_counts(self, sub_project_id: UUID) -> tuple[int, int]:
+        phases = [phase for phase in self.phases if phase.sub_project_id == sub_project_id]
+        incomplete = [phase for phase in phases if phase.status != PhaseStatus.completed]
+        return len(phases), len(incomplete)
+
     def add(self, sub_project: SubProject) -> None:
         self.sub_projects.append(sub_project)
 
@@ -310,9 +335,11 @@ class SubProjectService:
         *,
         repository: SubProjectRepository,
         notification_service: NotificationService | None = None,
+        today_provider: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
         self._notification_service = notification_service
+        self._today_provider = today_provider
 
     async def list_sub_projects(
         self,
@@ -510,6 +537,85 @@ class SubProjectService:
                 "over_budget_warning": over_budget_data is not None,
                 "over_budget_reason": payload.over_budget_reason,
             },
+        )
+        return sub_project
+
+    async def close_sub_project(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> SubProject:
+        if actor.role != UserRole.dept_manager:
+            raise PermissionDeniedError()
+
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        if sub_project.status == SubProjectStatus.closed:
+            return sub_project
+        if sub_project.status != SubProjectStatus.in_progress:
+            raise self._invalid_status(sub_project.status.value, "当前状态不允许结项子项目")
+
+        phase_count, incomplete_count = await self._repository.phase_completion_counts(
+            sub_project.id,
+        )
+        if phase_count != 6 or incomplete_count > 0:
+            raise BusinessException(
+                code=3003,
+                message="6 个环节全部完成后才能结项子项目",
+                status_code=409,
+                data={"phase_count": phase_count, "incomplete_phase_count": incomplete_count},
+            )
+
+        before_state = to_audit_state(sub_project)
+        sub_project.status = SubProjectStatus.closed
+        sub_project.actual_end_date = self._today_provider()
+        await self._repository.commit()
+        await self._repository.refresh(sub_project)
+        self._record_audit(
+            action="sub_project.close",
+            actor=actor,
+            sub_project=sub_project,
+            before_state=before_state,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            extra={
+                "phase_count": phase_count,
+                "incomplete_phase_count": incomplete_count,
+            },
+        )
+        return sub_project
+
+    async def terminate_sub_project(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        payload: SubProjectTerminateRequest,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> SubProject:
+        if actor.role not in {UserRole.admin, UserRole.dept_manager}:
+            raise PermissionDeniedError()
+
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        if sub_project.status in {SubProjectStatus.closed, SubProjectStatus.terminated}:
+            raise self._invalid_status(sub_project.status.value, "当前状态不允许中止子项目")
+
+        before_state = to_audit_state(sub_project)
+        sub_project.status = SubProjectStatus.terminated
+        sub_project.actual_end_date = self._today_provider()
+        await self._repository.commit()
+        await self._repository.refresh(sub_project)
+        self._record_audit(
+            action="sub_project.terminate",
+            actor=actor,
+            sub_project=sub_project,
+            before_state=before_state,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            extra={"reason": payload.reason},
         )
         return sub_project
 

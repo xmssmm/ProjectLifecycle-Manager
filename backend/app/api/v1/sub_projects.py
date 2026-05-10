@@ -15,6 +15,7 @@ from app.schemas.sub_projects import (
     SubProjectListRead,
     SubProjectRead,
     SubProjectReviewRequest,
+    SubProjectTerminateRequest,
     SubProjectUpdate,
 )
 from app.services.audit import AuditContext, BackgroundAuditLogWriter, get_audit_context
@@ -123,6 +124,46 @@ async def review_sub_project(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, object]:
     sub_project = await service.review_sub_project(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+        payload=payload,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
+    return success_response(serialize_sub_project(sub_project))
+
+
+@router.post("/{sub_project_id}/close")
+async def close_sub_project(
+    sub_project_id: UUID,
+    background_tasks: BackgroundTasks,
+    service: Annotated[SubProjectService, Depends(get_sub_project_service)],
+    current_user: Annotated[User, Depends(require_role(UserRole.dept_manager))],
+) -> dict[str, object]:
+    sub_project = await service.close_sub_project(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
+    return success_response(serialize_sub_project(sub_project))
+
+
+@router.post("/{sub_project_id}/terminate")
+async def terminate_sub_project(
+    sub_project_id: UUID,
+    payload: SubProjectTerminateRequest,
+    background_tasks: BackgroundTasks,
+    service: Annotated[SubProjectService, Depends(get_sub_project_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    sub_project = await service.terminate_sub_project(
         actor=current_user,
         sub_project_id=sub_project_id,
         payload=payload,

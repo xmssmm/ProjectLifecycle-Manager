@@ -5,13 +5,14 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.core.exceptions import BusinessException
 from app.models.main_projects import MainProject, MainProjectStatus, ProjectReviewDecision
 from app.models.phases import PhaseStatus
 from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
-from app.schemas.sub_projects import SubProjectReviewRequest
+from app.schemas.sub_projects import SubProjectReviewRequest, SubProjectTerminateRequest
 from app.services.audit import AuditContext, InMemoryAuditLogWriter
 from app.services.notifications import InMemoryNotificationRepository, NotificationService
 from app.services.sub_projects import InMemorySubProjectRepository, SubProjectService
@@ -97,6 +98,7 @@ def make_service(
             repository=notification_repository,
             business_date_provider=lambda: date(2026, 5, 10),
         ),
+        today_provider=lambda: date(2026, 5, 10),
     )
     return service, repository, notification_repository
 
@@ -245,3 +247,83 @@ async def test_review_sub_project_reject_path() -> None:
     assert reviewed.status == SubProjectStatus.rejected
     assert repository.reviews[0].review_comment == "预算说明不完整"
     assert repository.phases == []
+
+
+@pytest.mark.asyncio
+async def test_close_sub_project_requires_all_six_phases_completed() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    reviewer = make_user(UserRole.dept_manager, username="reviewer")
+    main_project = make_main_project()
+    sub_project = make_sub_project(
+        main_project=main_project,
+        creator=leader,
+        status=SubProjectStatus.in_progress,
+    )
+    service, repository, _notification_repository = make_service(
+        users=[leader, reviewer],
+        main_projects=[main_project],
+        sub_projects=[sub_project],
+    )
+    service._create_default_phases(sub_project_id=sub_project.id, actor_id=reviewer.id)
+
+    with pytest.raises(BusinessException) as blocked:
+        await service.close_sub_project(actor=reviewer, sub_project_id=sub_project.id)
+    assert blocked.value.code == 3003
+
+    for phase in repository.phases:
+        phase.status = PhaseStatus.completed
+
+    audit_writer = InMemoryAuditLogWriter()
+    closed = await service.close_sub_project(
+        actor=reviewer,
+        sub_project_id=sub_project.id,
+        audit_writer=audit_writer,
+    )
+
+    assert closed.status == SubProjectStatus.closed
+    assert closed.actual_end_date == date(2026, 5, 10)
+    assert audit_writer.entries[0].action == "sub_project.close"
+    assert audit_writer.entries[0].extra["phase_count"] == 6
+
+
+@pytest.mark.asyncio
+async def test_terminate_sub_project_requires_privileged_role_and_reason() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    admin = make_user(UserRole.admin, username="admin")
+    main_project = make_main_project()
+    sub_project = make_sub_project(
+        main_project=main_project,
+        creator=leader,
+        status=SubProjectStatus.in_progress,
+    )
+    service, _repository, _notification_repository = make_service(
+        users=[leader, admin],
+        main_projects=[main_project],
+        sub_projects=[sub_project],
+    )
+    audit_writer = InMemoryAuditLogWriter()
+
+    with pytest.raises(BusinessException) as denied:
+        await service.terminate_sub_project(
+            actor=leader,
+            sub_project_id=sub_project.id,
+            payload=SubProjectTerminateRequest(reason="负责人申请中止"),
+        )
+    assert denied.value.code == 1003
+
+    terminated = await service.terminate_sub_project(
+        actor=admin,
+        sub_project_id=sub_project.id,
+        payload=SubProjectTerminateRequest(reason="采购取消"),
+        audit_writer=audit_writer,
+    )
+
+    assert terminated.status == SubProjectStatus.terminated
+    assert terminated.actual_end_date == date(2026, 5, 10)
+    assert audit_writer.entries[0].action == "sub_project.terminate"
+    assert audit_writer.entries[0].extra["reason"] == "采购取消"
+
+
+def test_terminate_reason_rejects_blank_text() -> None:
+    with pytest.raises(ValidationError):
+        SubProjectTerminateRequest(reason="   ")

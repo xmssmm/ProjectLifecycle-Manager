@@ -1,8 +1,9 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.models.main_projects import ProjectReviewDecision
 from app.models.sub_projects import SubProjectStatus
@@ -55,6 +56,15 @@ class SubProjectReviewRequest(BaseModel):
     updates: SubProjectReviewUpdate | None = None
     confirm_over_budget: bool = False
     over_budget_reason: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SubProjectTerminateRequest(BaseModel):
+    reason: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=500),
+    ]
 
     model_config = ConfigDict(extra="forbid")
 
