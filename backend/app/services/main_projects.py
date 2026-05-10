@@ -21,6 +21,7 @@ from app.models.main_projects import (
     ProjectReview,
     ProjectReviewDecision,
 )
+from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
 from app.schemas.main_projects import (
     MainProjectCreate,
@@ -44,6 +45,9 @@ class MainProjectRepository(Protocol):
         ...
 
     async def next_project_sequence(self) -> int:
+        ...
+
+    async def count_open_sub_projects(self, main_project_id: UUID) -> int:
         ...
 
     async def list_active_user_ids_by_role(
@@ -90,6 +94,15 @@ class SqlAlchemyMainProjectRepository:
         value = await self._session.scalar(text("SELECT nextval('main_project_no_seq')"))
         return int(cast(int, value))
 
+    async def count_open_sub_projects(self, main_project_id: UUID) -> int:
+        value = await self._session.scalar(
+            select(func.count()).select_from(SubProject).where(
+                SubProject.main_project_id == main_project_id,
+                SubProject.status.notin_([SubProjectStatus.closed, SubProjectStatus.terminated]),
+            ),
+        )
+        return int(value or 0)
+
     async def list_active_user_ids_by_role(
         self,
         role: UserRole,
@@ -120,10 +133,12 @@ class InMemoryMainProjectRepository:
         self,
         projects: Sequence[MainProject] | None = None,
         *,
+        sub_projects: Sequence[SubProject] | None = None,
         users: Sequence[User] | None = None,
         next_sequence: int = 1,
     ) -> None:
         self.projects = list(projects or [])
+        self.sub_projects = list(sub_projects or [])
         self.users = list(users or [])
         self.reviews: list[ProjectReview] = []
         self._next_sequence = next_sequence
@@ -140,6 +155,14 @@ class InMemoryMainProjectRepository:
         value = self._next_sequence
         self._next_sequence += 1
         return value
+
+    async def count_open_sub_projects(self, main_project_id: UUID) -> int:
+        return sum(
+            1
+            for sub_project in self.sub_projects
+            if sub_project.main_project_id == main_project_id
+            and sub_project.status not in {SubProjectStatus.closed, SubProjectStatus.terminated}
+        )
 
     async def list_active_user_ids_by_role(
         self,
@@ -366,6 +389,30 @@ class MainProjectService:
                 "modified_fields": modified_fields,
             },
         )
+        return project
+
+    async def close_project(self, *, actor: User, project_id: UUID) -> MainProject:
+        if actor.role != UserRole.dept_manager:
+            raise PermissionDeniedError()
+
+        project = await self._get_existing_project(project_id)
+        if project.status == MainProjectStatus.closed:
+            return project
+        if project.status not in {MainProjectStatus.not_started, MainProjectStatus.in_progress}:
+            raise self._invalid_status(project.status, "当前状态不允许结项主项目")
+
+        open_sub_project_count = await self._repository.count_open_sub_projects(project.id)
+        if open_sub_project_count > 0:
+            raise BusinessException(
+                code=3003,
+                message="仍存在未结项或未中止的子项目",
+                status_code=409,
+                data={"open_sub_project_count": open_sub_project_count},
+            )
+
+        project.status = MainProjectStatus.closed
+        await self._repository.commit()
+        await self._repository.refresh(project)
         return project
 
     async def _get_existing_project(self, project_id: UUID) -> MainProject:

@@ -19,6 +19,7 @@ from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.base import Base
 from app.models.main_projects import MainProject, MainProjectStatus
+from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
 from app.schemas.main_projects import MainProjectCreate, MainProjectUpdate
 from app.services.main_projects import InMemoryMainProjectRepository, MainProjectService
@@ -54,9 +55,14 @@ def make_payload(*, name: str = "主项目A") -> MainProjectCreate:
 def make_service(
     *,
     projects: list[MainProject] | None = None,
+    sub_projects: list[SubProject] | None = None,
     next_sequence: int = 1,
 ) -> tuple[MainProjectService, InMemoryMainProjectRepository]:
-    repository = InMemoryMainProjectRepository(projects or [], next_sequence=next_sequence)
+    repository = InMemoryMainProjectRepository(
+        projects or [],
+        sub_projects=sub_projects or [],
+        next_sequence=next_sequence,
+    )
     return (
         MainProjectService(
             repository=repository,
@@ -257,3 +263,61 @@ def test_main_project_endpoints_return_standard_payloads() -> None:
     assert list_response.json()["data"]["total"] == 1
     assert detail_response.json()["data"]["id"] == str(project.id)
     assert update_response.json()["data"]["name"] == "主项目B"
+
+
+def make_sub_project(
+    main_project: MainProject,
+    *,
+    status: SubProjectStatus,
+) -> SubProject:
+    now = datetime.now(UTC)
+    return SubProject(
+        id=uuid4(),
+        project_no=f"{main_project.project_no}-ZX-001",
+        name="子项目A",
+        main_project_id=main_project.id,
+        dept_id=main_project.dept_id,
+        budget=Decimal("10000.00"),
+        manager_id=uuid4(),
+        creator_id=uuid4(),
+        status=status,
+        plan_end_date=None,
+        actual_end_date=None,
+        spent_amount=Decimal("0.00"),
+        remark=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+@pytest.mark.asyncio
+async def test_close_main_project_requires_all_sub_projects_closed_or_terminated() -> None:
+    actor = make_user(UserRole.dept_manager, username="dept")
+    project = await make_service()[0].create_project(actor=actor, payload=make_payload())
+    project.status = MainProjectStatus.in_progress
+    open_sub_project = make_sub_project(project, status=SubProjectStatus.in_progress)
+    service, _repository = make_service(projects=[project], sub_projects=[open_sub_project])
+
+    with pytest.raises(BusinessException) as blocked:
+        await service.close_project(actor=actor, project_id=project.id)
+
+    assert blocked.value.code == 3003
+    assert blocked.value.data == {"open_sub_project_count": 1}
+    assert project.status == MainProjectStatus.in_progress
+
+    open_sub_project.status = SubProjectStatus.closed
+    closed = await service.close_project(actor=actor, project_id=project.id)
+
+    assert closed.status == MainProjectStatus.closed
+
+
+@pytest.mark.asyncio
+async def test_close_main_project_requires_dept_manager_role() -> None:
+    actor = make_user(UserRole.dept_manager, username="dept")
+    finance = make_user(UserRole.finance_manager, username="finance")
+    project = await make_service()[0].create_project(actor=actor, payload=make_payload())
+    project.status = MainProjectStatus.in_progress
+    service, _repository = make_service(projects=[project])
+
+    with pytest.raises(PermissionDeniedError):
+        await service.close_project(actor=finance, project_id=project.id)

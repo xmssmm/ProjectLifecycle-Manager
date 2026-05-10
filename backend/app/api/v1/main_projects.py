@@ -133,3 +133,13 @@ async def review_main_project(
         audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
     )
     return success_response(serialize_main_project(project))
+
+
+@router.post("/{project_id}/close")
+async def close_main_project(
+    project_id: UUID,
+    service: Annotated[MainProjectService, Depends(get_main_project_service)],
+    current_user: Annotated[User, Depends(require_role(UserRole.dept_manager))],
+) -> dict[str, object]:
+    project = await service.close_project(actor=current_user, project_id=project_id)
+    return success_response(serialize_main_project(project))
