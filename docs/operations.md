@@ -90,6 +90,31 @@ docker compose -f docker-compose.prod.yml logs --tail 200 celery-worker
 docker compose -f docker-compose.prod.yml logs --tail 200 celery-beat
 ```
 
+当前定时任务包括：
+
+- 每日 09:00：任务到期/逾期扫描。
+- 每日 09:00：通知每日摘要生成。
+- 每周一 03:00：文件清理。
+- 每月 1 日 00:30：审计日志分区维护。
+- 每日 03:30：过期报表清理。
+
+如果用户反馈报表长时间生成中、每日摘要未发送、任务逾期未提醒，先检查 `celery-worker` 和 `celery-beat` 日志。
+
+## 报表文件维护
+
+报表文件默认保留 7 天，由 Celery 定时清理。若磁盘压力异常，先查看报表任务和 storage 占用：
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T backend python - <<'PY'
+from pathlib import Path
+root = Path('/app/storage')
+total = sum(path.stat().st_size for path in root.rglob('*') if path.is_file())
+print(f'storage bytes={total}')
+PY
+```
+
+不要直接删除数据库中仍引用的报表或文档文件；需要人工清理时先做备份。
+
 ## 备份
 
 每日备份命令：
