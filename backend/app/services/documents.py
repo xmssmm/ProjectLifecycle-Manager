@@ -8,7 +8,12 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import PermissionDeniedError, ResourceNotFoundError, ValidationFailedError
+from app.core.exceptions import (
+    BusinessException,
+    PermissionDeniedError,
+    ResourceNotFoundError,
+    ValidationFailedError,
+)
 from app.models.documents import Document
 from app.models.phases import Phase
 from app.models.sub_projects import SubProject, SubProjectMember
@@ -370,6 +375,40 @@ class DocumentService:
         )
 
     async def download_document(self, *, actor: User, document_id: UUID) -> DocumentDownload:
+        document = await self._get_authorized_document(actor=actor, document_id=document_id)
+        return DocumentDownload(
+            document=document,
+            content=self._storage.read(document.file_path),
+        )
+
+    async def preview_document(
+        self,
+        *,
+        actor: User,
+        document_id: UUID,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> DocumentDownload:
+        document = await self._get_authorized_document(actor=actor, document_id=document_id)
+        if not self._is_pdf_document(document):
+            raise BusinessException(
+                code=3020,
+                message="Only PDF documents can be previewed",
+                status_code=400,
+                data={"document_id": str(document.id), "file_name": document.file_name},
+            )
+        self._record_preview(
+            actor=actor,
+            document=document,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+        )
+        return DocumentDownload(
+            document=document,
+            content=self._storage.read(document.file_path),
+        )
+
+    async def _get_authorized_document(self, *, actor: User, document_id: UUID) -> Document:
         document = await self._repository.get_document(document_id)
         if document is None:
             raise ResourceNotFoundError("Document does not exist")
@@ -377,10 +416,7 @@ class DocumentService:
         if sub_project is None:
             raise ResourceNotFoundError("Sub project does not exist")
         await self._ensure_visible(actor, sub_project)
-        return DocumentDownload(
-            document=document,
-            content=self._storage.read(document.file_path),
-        )
+        return document
 
     async def soft_delete_phase_documents(self, phase_id: UUID) -> list[Document]:
         phase = await self._repository.get_phase(phase_id)
@@ -524,6 +560,40 @@ class DocumentService:
                     "doc_type": doc_type,
                     "file_name": file_name,
                     "content_type": content_type or "",
+                },
+                request_id=context.request_id,
+            ),
+        )
+
+    @staticmethod
+    def _is_pdf_document(document: Document) -> bool:
+        return document.file_name.lower().endswith(".pdf") or document.doc_type.lower() == "pdf"
+
+    @staticmethod
+    def _record_preview(
+        *,
+        actor: User,
+        document: Document,
+        audit_writer: AuditLogWriter | None,
+        audit_context: AuditContext | None,
+    ) -> None:
+        if audit_writer is None:
+            return
+        context = audit_context or AuditContext(actor_id=actor.id)
+        audit_writer.enqueue(
+            AuditLogEntry(
+                actor_id=context.actor_id,
+                action="document.preview",
+                target_type="document",
+                target_id=str(document.id),
+                before_state={},
+                after_state={},
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                extra={
+                    "doc_type": document.doc_type,
+                    "file_name": document.file_name,
+                    "version": document.version,
                 },
                 request_id=context.request_id,
             ),

@@ -109,3 +109,29 @@ async def download_document(
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
         },
     )
+
+
+@router.get("/{document_id}/preview")
+async def preview_document(
+    document_id: UUID,
+    background_tasks: BackgroundTasks,
+    service: Annotated[DocumentService, Depends(get_document_service)],
+    current_user: Annotated[User, Depends(require_permission("document.download"))],
+) -> StreamingResponse:
+    preview = await service.preview_document(
+        actor=current_user,
+        document_id=document_id,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
+    encoded_filename = quote(preview.document.file_name)
+    return StreamingResponse(
+        iter([preview.content]),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+        },
+    )
