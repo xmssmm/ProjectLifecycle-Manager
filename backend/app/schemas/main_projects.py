@@ -5,6 +5,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.main_projects import MainProjectStatus, ProjectReviewDecision
+from app.models.phases import PhaseStatus
+from app.models.sub_projects import SubProjectStatus
 
 
 class MainProjectCreate(BaseModel):
@@ -77,3 +79,25 @@ class MainProjectListRead(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ProjectProgressFunnelSubProjectRead(BaseModel):
+    id: UUID
+    project_no: str
+    name: str
+    status: SubProjectStatus
+    phase_status: PhaseStatus
+
+
+class ProjectProgressFunnelItemRead(BaseModel):
+    phase_no: int
+    code: str
+    name: str
+    sub_project_count: int
+    sub_projects: list[ProjectProgressFunnelSubProjectRead]
+
+
+class ProjectProgressFunnelRead(BaseModel):
+    main_project_id: UUID
+    total_sub_projects: int
+    items: list[ProjectProgressFunnelItemRead]

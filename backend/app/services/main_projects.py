@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Protocol, cast
@@ -21,6 +22,7 @@ from app.models.main_projects import (
     ProjectReview,
     ProjectReviewDecision,
 )
+from app.models.phases import Phase, PhaseStatus
 from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
 from app.schemas.main_projects import (
@@ -35,6 +37,39 @@ from app.services.notifications import NotificationService
 VIEW_ALL_PROJECT_ROLES = frozenset(
     {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
 )
+PHASE_DEFINITIONS = (
+    (1, "initiation", "立项"),
+    (2, "procurement", "采购"),
+    (3, "contract", "合同"),
+    (4, "acceptance", "验收"),
+    (5, "payment", "付款"),
+    (6, "post_review", "后评价"),
+)
+
+
+@dataclass(frozen=True)
+class ProjectProgressFunnelSubProject:
+    id: UUID
+    project_no: str
+    name: str
+    status: SubProjectStatus
+    phase_status: PhaseStatus
+
+
+@dataclass(frozen=True)
+class ProjectProgressFunnelItem:
+    phase_no: int
+    code: str
+    name: str
+    sub_project_count: int
+    sub_projects: list[ProjectProgressFunnelSubProject]
+
+
+@dataclass(frozen=True)
+class ProjectProgressFunnel:
+    main_project_id: UUID
+    total_sub_projects: int
+    items: list[ProjectProgressFunnelItem]
 
 
 class MainProjectRepository(Protocol):
@@ -48,6 +83,12 @@ class MainProjectRepository(Protocol):
         ...
 
     async def count_open_sub_projects(self, main_project_id: UUID) -> int:
+        ...
+
+    async def list_sub_projects_by_main_project(self, main_project_id: UUID) -> list[SubProject]:
+        ...
+
+    async def list_phases_by_sub_project_ids(self, sub_project_ids: Sequence[UUID]) -> list[Phase]:
         ...
 
     async def list_active_user_ids_by_role(
@@ -103,6 +144,24 @@ class SqlAlchemyMainProjectRepository:
         )
         return int(value or 0)
 
+    async def list_sub_projects_by_main_project(self, main_project_id: UUID) -> list[SubProject]:
+        result = await self._session.scalars(
+            select(SubProject)
+            .where(SubProject.main_project_id == main_project_id)
+            .order_by(SubProject.project_no),
+        )
+        return list(result.all())
+
+    async def list_phases_by_sub_project_ids(self, sub_project_ids: Sequence[UUID]) -> list[Phase]:
+        if not sub_project_ids:
+            return []
+        result = await self._session.scalars(
+            select(Phase)
+            .where(Phase.sub_project_id.in_(sub_project_ids))
+            .order_by(Phase.phase_no),
+        )
+        return list(result.all())
+
     async def list_active_user_ids_by_role(
         self,
         role: UserRole,
@@ -134,11 +193,13 @@ class InMemoryMainProjectRepository:
         projects: Sequence[MainProject] | None = None,
         *,
         sub_projects: Sequence[SubProject] | None = None,
+        phases: Sequence[Phase] | None = None,
         users: Sequence[User] | None = None,
         next_sequence: int = 1,
     ) -> None:
         self.projects = list(projects or [])
         self.sub_projects = list(sub_projects or [])
+        self.phases = list(phases or [])
         self.users = list(users or [])
         self.reviews: list[ProjectReview] = []
         self._next_sequence = next_sequence
@@ -162,6 +223,23 @@ class InMemoryMainProjectRepository:
             for sub_project in self.sub_projects
             if sub_project.main_project_id == main_project_id
             and sub_project.status not in {SubProjectStatus.closed, SubProjectStatus.terminated}
+        )
+
+    async def list_sub_projects_by_main_project(self, main_project_id: UUID) -> list[SubProject]:
+        return sorted(
+            [
+                sub_project
+                for sub_project in self.sub_projects
+                if sub_project.main_project_id == main_project_id
+            ],
+            key=lambda sub_project: sub_project.project_no,
+        )
+
+    async def list_phases_by_sub_project_ids(self, sub_project_ids: Sequence[UUID]) -> list[Phase]:
+        ids = set(sub_project_ids)
+        return sorted(
+            [phase for phase in self.phases if phase.sub_project_id in ids],
+            key=lambda phase: (str(phase.sub_project_id), phase.phase_no),
         )
 
     async def list_active_user_ids_by_role(
@@ -216,6 +294,34 @@ class MainProjectService:
     async def get_project(self, *, actor: User, project_id: UUID) -> MainProject:
         self._ensure_view_all(actor)
         return await self._get_existing_project(project_id)
+
+    async def get_progress_funnel(
+        self,
+        *,
+        actor: User,
+        project_id: UUID,
+    ) -> ProjectProgressFunnel:
+        self._ensure_view_all(actor)
+        await self._get_existing_project(project_id)
+        sub_projects = await self._repository.list_sub_projects_by_main_project(project_id)
+        phases = await self._repository.list_phases_by_sub_project_ids(
+            [sub_project.id for sub_project in sub_projects],
+        )
+        phases_by_sub_project = self._index_phases_by_sub_project(phases)
+        return ProjectProgressFunnel(
+            main_project_id=project_id,
+            total_sub_projects=len(sub_projects),
+            items=[
+                self._build_progress_funnel_item(
+                    phase_no=phase_no,
+                    code=code,
+                    name=name,
+                    sub_projects=sub_projects,
+                    phases_by_sub_project=phases_by_sub_project,
+                )
+                for phase_no, code, name in PHASE_DEFINITIONS
+            ],
+        )
 
     async def create_project(self, *, actor: User, payload: MainProjectCreate) -> MainProject:
         if actor.role != UserRole.dept_manager:
@@ -428,6 +534,44 @@ class MainProjectService:
     def _ensure_view_all(actor: User) -> None:
         if actor.role not in VIEW_ALL_PROJECT_ROLES:
             raise PermissionDeniedError()
+
+    @staticmethod
+    def _index_phases_by_sub_project(phases: Sequence[Phase]) -> dict[UUID, dict[int, Phase]]:
+        indexed: dict[UUID, dict[int, Phase]] = {}
+        for phase in phases:
+            indexed.setdefault(phase.sub_project_id, {})[phase.phase_no] = phase
+        return indexed
+
+    @staticmethod
+    def _build_progress_funnel_item(
+        *,
+        phase_no: int,
+        code: str,
+        name: str,
+        sub_projects: Sequence[SubProject],
+        phases_by_sub_project: dict[UUID, dict[int, Phase]],
+    ) -> ProjectProgressFunnelItem:
+        drill_items: list[ProjectProgressFunnelSubProject] = []
+        for sub_project in sub_projects:
+            phase = phases_by_sub_project.get(sub_project.id, {}).get(phase_no)
+            if phase is None or phase.status != PhaseStatus.in_progress:
+                continue
+            drill_items.append(
+                ProjectProgressFunnelSubProject(
+                    id=sub_project.id,
+                    project_no=sub_project.project_no,
+                    name=sub_project.name,
+                    status=sub_project.status,
+                    phase_status=phase.status,
+                ),
+            )
+        return ProjectProgressFunnelItem(
+            phase_no=phase_no,
+            code=code,
+            name=name,
+            sub_project_count=len(drill_items),
+            sub_projects=drill_items,
+        )
 
     async def _send_notification(
         self,

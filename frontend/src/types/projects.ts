@@ -1,3 +1,5 @@
+import type { PhaseStatus } from '@/types/phases';
+
 export type ProjectStatus =
   | 'pending_review'
   | 'reviewing'
@@ -163,6 +165,28 @@ export interface SubProjectHandoverQuery {
   pageSize: number;
   subProjectId?: string;
   toUserId?: string;
+}
+
+export interface ProjectProgressFunnelSubProject {
+  id: string;
+  name: string;
+  phase_status: PhaseStatus;
+  project_no: string;
+  status: ProjectStatus;
+}
+
+export interface ProjectProgressFunnelItem {
+  code: string;
+  name: string;
+  phase_no: number;
+  sub_project_count: number;
+  sub_projects: ProjectProgressFunnelSubProject[];
+}
+
+export interface ProjectProgressFunnelRead {
+  items: ProjectProgressFunnelItem[];
+  main_project_id: string;
+  total_sub_projects: number;
 }
 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {

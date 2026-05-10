@@ -670,6 +670,83 @@ body {
   font-weight: 600;
 }
 
+.progress-funnel {
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1fr);
+}
+
+.progress-funnel > .project-detail-band__header {
+  grid-column: 1 / -1;
+}
+
+.progress-funnel__chart {
+  width: 100%;
+  min-height: 300px;
+}
+
+.progress-funnel__phases {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-funnel__phase {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  color: #172033;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.progress-funnel__phase--active {
+  border-color: #2563eb;
+  background: #edf3ff;
+}
+
+.progress-funnel__phase strong {
+  color: #1d4ed8;
+}
+
+.progress-funnel__drill {
+  display: grid;
+  gap: 12px;
+}
+
+.progress-funnel__drill-list {
+  display: grid;
+  gap: 10px;
+}
+
+.progress-funnel__drill-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  color: inherit;
+  background: #fafbfc;
+  text-decoration: none;
+}
+
+.progress-funnel__drill-item strong {
+  overflow-wrap: anywhere;
+}
+
+.progress-funnel__drill-item p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 12px;
+}
+
 .project-form-band {
   padding: 24px;
   border: 1px solid #d8dde5;
@@ -1146,6 +1223,15 @@ body {
 
   .project-member-toolbar {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .progress-funnel {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-funnel__drill-item {
+    align-items: flex-start;
     flex-direction: column;
   }
 

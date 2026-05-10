@@ -8,6 +8,7 @@ import type {
   MainProjectRead,
   MainProjectReviewPayload,
   MainProjectUpdatePayload,
+  ProjectProgressFunnelRead,
 } from '@/types/projects';
 
 interface ApiResponse<T> {
@@ -34,6 +35,16 @@ export async function getMainProject(
   client: AxiosInstance = apiClient,
 ): Promise<MainProjectRead> {
   const response = await client.get<ApiResponse<MainProjectRead>>(`/main-projects/${projectId}`);
+  return response.data.data;
+}
+
+export async function getProjectProgressFunnel(
+  projectId: string,
+  client: AxiosInstance = apiClient,
+): Promise<ProjectProgressFunnelRead> {
+  const response = await client.get<ApiResponse<ProjectProgressFunnelRead>>(
+    `/main-projects/${projectId}/progress-funnel`,
+  );
   return response.data.data;
 }
 
