@@ -28,6 +28,19 @@ describe('router', () => {
     const mainProjectReviewRoute = router
       .getRoutes()
       .find((route) => route.name === 'main-project-review');
+    const subProjectRoute = router.getRoutes().find((route) => route.name === 'sub-projects');
+    const subProjectDetailRoute = router
+      .getRoutes()
+      .find((route) => route.name === 'sub-project-detail');
+    const subProjectCreateRoute = router
+      .getRoutes()
+      .find((route) => route.name === 'sub-project-create');
+    const subProjectEditRoute = router
+      .getRoutes()
+      .find((route) => route.name === 'sub-project-edit');
+    const subProjectReviewRoute = router
+      .getRoutes()
+      .find((route) => route.name === 'sub-project-review');
     const profileRoute = router.getRoutes().find((route) => route.name === 'profile');
     const passwordRoute = router.getRoutes().find((route) => route.name === 'change-password');
     const loginRoute = router.getRoutes().find((route) => route.name === 'login');
@@ -41,6 +54,11 @@ describe('router', () => {
     expect(mainProjectCreateRoute?.path).toBe('/main-projects/new');
     expect(mainProjectEditRoute?.path).toBe('/main-projects/:id/edit');
     expect(mainProjectReviewRoute?.path).toBe('/main-projects/:id/review');
+    expect(subProjectRoute?.path).toBe('/sub-projects');
+    expect(subProjectDetailRoute?.path).toBe('/sub-projects/:id');
+    expect(subProjectCreateRoute?.path).toBe('/sub-projects/new');
+    expect(subProjectEditRoute?.path).toBe('/sub-projects/:id/edit');
+    expect(subProjectReviewRoute?.path).toBe('/sub-projects/:id/review');
     expect(profileRoute?.path).toBe('/profile');
     expect(passwordRoute?.path).toBe('/change-password');
     expect(loginRoute?.path).toBe('/login');

@@ -42,6 +42,7 @@ function confirmAction(): void {
 <template>
   <el-dialog v-model="visible" :title="title" width="420px">
     <p class="confirm-dialog__message">{{ message }}</p>
+    <slot />
     <template #footer>
       <el-button @click="closeDialog">{{ cancelText }}</el-button>
       <el-button :type="type" @click="confirmAction">

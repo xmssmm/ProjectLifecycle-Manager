@@ -13,6 +13,10 @@ import MainProjectEditView from '@/views/main-project/MainProjectEdit.vue';
 import MainProjectListView from '@/views/main-project/MainProjectList.vue';
 import MainProjectReviewView from '@/views/main-project/MainProjectReview.vue';
 import ProfileView from '@/views/Profile.vue';
+import SubProjectDetailView from '@/views/sub-project/SubProjectDetail.vue';
+import SubProjectEditView from '@/views/sub-project/SubProjectEdit.vue';
+import SubProjectListView from '@/views/sub-project/SubProjectList.vue';
+import SubProjectReviewView from '@/views/sub-project/SubProjectReview.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -73,6 +77,39 @@ const router = createRouter({
       component: MainProjectDetailView,
       meta: { permission: 'project.view_all', requiresAuth: true },
       props: (route) => ({ projectId: String(route.params.id) }),
+    },
+    {
+      path: '/sub-projects',
+      name: 'sub-projects',
+      component: SubProjectListView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/sub-projects/new',
+      name: 'sub-project-create',
+      component: SubProjectEditView,
+      meta: { permission: 'sub_project.create', requiresAuth: true },
+    },
+    {
+      path: '/sub-projects/:id/edit',
+      name: 'sub-project-edit',
+      component: SubProjectEditView,
+      meta: { permission: 'sub_project.create', requiresAuth: true },
+      props: (route) => ({ subProjectId: String(route.params.id) }),
+    },
+    {
+      path: '/sub-projects/:id/review',
+      name: 'sub-project-review',
+      component: SubProjectReviewView,
+      meta: { permission: 'sub_project.review', requiresAuth: true },
+      props: (route) => ({ subProjectId: String(route.params.id) }),
+    },
+    {
+      path: '/sub-projects/:id',
+      name: 'sub-project-detail',
+      component: SubProjectDetailView,
+      meta: { requiresAuth: true },
+      props: (route) => ({ subProjectId: String(route.params.id) }),
     },
     {
       path: '/profile',

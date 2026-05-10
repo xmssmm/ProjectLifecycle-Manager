@@ -6,7 +6,12 @@ import { ConfirmDialog, DataTable, StatusTag } from '@/components/common';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
-import { MAIN_PROJECT_TIMELINE, PROJECT_STATUS_LABELS, type ProjectStatus } from '@/types/projects';
+import {
+  MAIN_PROJECT_TIMELINE,
+  PROJECT_STATUS_LABELS,
+  type ProjectStatus,
+  type SubProjectRead,
+} from '@/types/projects';
 
 const props = defineProps<{
   projectId: string;
@@ -48,6 +53,7 @@ const subProjectColumns = [
   { key: 'status', label: '状态', width: 110 },
   { key: 'budget', label: '预算', width: 140 },
   { key: 'plan_end_date', label: '计划完成', width: 140 },
+  { key: 'actions', label: '操作', width: 120 },
 ];
 
 onMounted(loadProject);
@@ -172,6 +178,14 @@ function timelineTitle(status: ProjectStatus): string {
           </template>
           <template #plan_end_date="{ value }">
             {{ formatDate(value) }}
+          </template>
+          <template #actions="{ row }">
+            <router-link
+              v-if="(row as SubProjectRead | undefined)?.id"
+              :to="{ name: 'sub-project-detail', params: { id: (row as SubProjectRead).id } }"
+            >
+              <el-button size="small">查看</el-button>
+            </router-link>
           </template>
         </DataTable>
       </section>

@@ -83,6 +83,29 @@ export interface SubProjectListQuery {
   pageSize: number;
 }
 
+export interface SubProjectCreatePayload {
+  budget: string;
+  dept_id: string;
+  main_project_id: string;
+  name: string;
+  plan_end_date: string | null;
+  remark: string | null;
+}
+
+export type SubProjectUpdatePayload = Partial<Omit<SubProjectCreatePayload, 'main_project_id'>>;
+
+export interface SubProjectReviewPayload {
+  confirm_over_budget: boolean;
+  decision: ProjectReviewDecision;
+  over_budget_reason: string | null;
+  review_comment: string | null;
+  updates: SubProjectUpdatePayload | null;
+}
+
+export interface SubProjectTerminatePayload {
+  reason: string;
+}
+
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   pending_review: '待审核',
   reviewing: '审核中',
@@ -103,6 +126,18 @@ export const MAIN_PROJECT_STATUS_OPTIONS = [
   { label: PROJECT_STATUS_LABELS.in_progress, value: 'in_progress' },
   { label: PROJECT_STATUS_LABELS.completed, value: 'completed' },
   { label: PROJECT_STATUS_LABELS.closed, value: 'closed' },
+] as const;
+
+export const SUB_PROJECT_STATUS_OPTIONS = [
+  { label: '全部状态', value: '' },
+  { label: PROJECT_STATUS_LABELS.pending_review, value: 'pending_review' },
+  { label: PROJECT_STATUS_LABELS.reviewing, value: 'reviewing' },
+  { label: PROJECT_STATUS_LABELS.rejected, value: 'rejected' },
+  { label: PROJECT_STATUS_LABELS.not_started, value: 'not_started' },
+  { label: PROJECT_STATUS_LABELS.in_progress, value: 'in_progress' },
+  { label: PROJECT_STATUS_LABELS.completed, value: 'completed' },
+  { label: PROJECT_STATUS_LABELS.closed, value: 'closed' },
+  { label: PROJECT_STATUS_LABELS.terminated, value: 'terminated' },
 ] as const;
 
 export const MAIN_PROJECT_TIMELINE: ProjectStatus[] = [
