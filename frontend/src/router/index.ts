@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import ComponentDemoView from '@/views/admin/ComponentDemoView.vue';
+import DepartmentListView from '@/views/admin/DepartmentList.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import LoginView from '@/views/auth/LoginView.vue';
 import HomeView from '@/views/HomeView.vue';
@@ -26,6 +27,12 @@ const router = createRouter({
       path: '/admin/users',
       name: 'admin-users',
       component: UserListView,
+      meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/departments',
+      name: 'admin-departments',
+      component: DepartmentListView,
       meta: { requireRole: ['admin'], requiresAuth: true },
     },
     {

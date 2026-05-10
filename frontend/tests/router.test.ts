@@ -14,11 +14,13 @@ describe('router', () => {
     const homeRoute = router.getRoutes().find((route) => route.name === 'home');
     const componentDemoRoute = router.getRoutes().find((route) => route.name === 'component-demo');
     const userManagementRoute = router.getRoutes().find((route) => route.name === 'admin-users');
+    const departmentRoute = router.getRoutes().find((route) => route.name === 'admin-departments');
     const loginRoute = router.getRoutes().find((route) => route.name === 'login');
 
     expect(homeRoute?.path).toBe('/');
     expect(componentDemoRoute?.path).toBe('/component-demo');
     expect(userManagementRoute?.path).toBe('/admin/users');
+    expect(departmentRoute?.path).toBe('/admin/departments');
     expect(loginRoute?.path).toBe('/login');
   });
 
