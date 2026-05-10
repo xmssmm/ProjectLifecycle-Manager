@@ -1,4 +1,9 @@
-import axios, { AxiosError, AxiosHeaders, type AxiosInstance } from 'axios';
+import axios, {
+  AxiosError,
+  AxiosHeaders,
+  type AxiosInstance,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 import { ElMessage } from 'element-plus';
 import type { Router } from 'vue-router';
 
@@ -16,10 +21,15 @@ interface ApiInterceptorOptions {
   router?: Pick<Router, 'push'>;
 }
 
+interface RetriableRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
+
 export function createApiClient(baseURL = apiBaseUrl): AxiosInstance {
   return axios.create({
     baseURL,
     timeout: 15000,
+    withCredentials: true,
   });
 }
 
@@ -45,16 +55,47 @@ export function installApiInterceptors(
     (response) => response,
     async (error: AxiosError) => {
       const status = error.response?.status;
+      const originalRequest = error.config as RetriableRequestConfig | undefined;
 
-      if (status === 401) {
+      if (
+        status === 401 &&
+        originalRequest &&
+        !originalRequest._retry &&
+        !originalRequest.url?.includes('/auth/refresh')
+      ) {
+        originalRequest._retry = true;
+        try {
+          const refreshResponse = await client.post('/auth/refresh');
+          const nextAccessToken = refreshResponse.data?.data?.access_token as string | undefined;
+          if (!nextAccessToken) {
+            throw new Error('Missing refreshed access token');
+          }
+          const authStore = useAuthStore();
+          authStore.setAccessToken(nextAccessToken);
+          const headers = AxiosHeaders.from(originalRequest.headers);
+          headers.set('Authorization', `Bearer ${nextAccessToken}`);
+          originalRequest.headers = headers;
+          return client(originalRequest);
+        } catch {
+          const authStore = useAuthStore();
+          authStore.clearSession();
+          message.error('登录状态已过期，请重新登录');
+
+          try {
+            await options.router?.push({ name: 'login' });
+          } catch {
+            // The login route may not be registered in focused unit tests.
+          }
+        }
+      } else if (status === 401) {
         const authStore = useAuthStore();
-        authStore.setAccessToken(null);
+        authStore.clearSession();
         message.error('登录状态已过期，请重新登录');
 
         try {
           await options.router?.push({ name: 'login' });
         } catch {
-          // The login route is added by the auth feature task.
+          // The login route may not be registered in focused unit tests.
         }
       } else if (status === 429) {
         message.warning('请求过于频繁，请稍后再试');

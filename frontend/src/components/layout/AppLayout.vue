@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { Bell, Box, Folder, House, Setting } from '@element-plus/icons-vue';
+import { Bell, Box, Folder, House, Setting, SwitchButton } from '@element-plus/icons-vue';
+import { useRouter } from 'vue-router';
+
+import { useAuthStore } from '@/stores/useAuthStore';
+
+const authStore = useAuthStore();
+const router = useRouter();
+
+async function logout() {
+  await authStore.logout();
+  await router.replace({ name: 'login' });
+}
 </script>
 
 <template>
@@ -38,6 +49,12 @@ import { Bell, Box, Folder, House, Setting } from '@element-plus/icons-vue';
         <div>
           <h1>企业项目过程管理与资料归档系统</h1>
           <p>基础工作区</p>
+        </div>
+        <div class="header-account">
+          <span>{{ authStore.user?.username ?? '未登录' }}</span>
+          <el-tooltip content="退出登录" placement="bottom">
+            <el-button circle :icon="SwitchButton" @click="logout" />
+          </el-tooltip>
         </div>
       </el-header>
 

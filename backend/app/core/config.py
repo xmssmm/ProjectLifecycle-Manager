@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 
-    cors_allow_origins: str = "http://localhost:5173"
+    cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     rate_limit_per_minute: int = 100
     max_upload_size_mb: int = 50
 

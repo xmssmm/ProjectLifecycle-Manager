@@ -32,6 +32,13 @@ def test_cors_uses_configured_origins() -> None:
     assert response.headers["access-control-allow-origin"] == "http://allowed.example"
 
 
+def test_default_cors_allows_localhost_and_loopback_dev_hosts() -> None:
+    settings = Settings(cors_allow_origins=str(Settings.model_fields["cors_allow_origins"].default))
+
+    assert "http://localhost:5173" in settings.cors_origins
+    assert "http://127.0.0.1:5173" in settings.cors_origins
+
+
 def test_security_headers_are_added_to_responses() -> None:
     client = TestClient(create_app(health_checker=healthy_components))
 

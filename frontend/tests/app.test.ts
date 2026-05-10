@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import { describe, expect, it } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
@@ -17,15 +18,17 @@ describe('App', () => {
 
     const wrapper = mount(App, {
       global: {
-        plugins: [router],
+        plugins: [createPinia(), router],
         stubs: {
           ElAside: { template: '<aside><slot /></aside>' },
+          ElButton: { template: '<button><slot /></button>' },
           ElContainer: { template: '<section><slot /></section>' },
           ElHeader: { template: '<header><slot /></header>' },
           ElIcon: { template: '<i><slot /></i>' },
           ElMain: { template: '<main><slot /></main>' },
           ElMenu: { template: '<nav><slot /></nav>' },
           ElMenuItem: { template: '<a><slot /></a>' },
+          ElTooltip: { template: '<span><slot /></span>' },
         },
       },
     });

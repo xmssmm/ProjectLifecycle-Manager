@@ -75,6 +75,8 @@ body {
 .app-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   height: 72px;
   border-bottom: 1px solid #d8dde5;
   background: #fff;
@@ -90,6 +92,14 @@ body {
   margin: 4px 0 0;
   color: #667085;
   font-size: 13px;
+}
+
+.header-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #344054;
+  font-size: 14px;
 }
 
 .app-main {
@@ -222,6 +232,52 @@ body {
   margin: 16px 0;
 }
 
+.login-page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: #eef2f7;
+}
+
+.login-panel {
+  width: min(100%, 420px);
+  padding: 28px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 40px rgb(15 23 42 / 10%);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.login-brand h1 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.login-brand p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.login-form {
+  display: grid;
+  gap: 2px;
+}
+
+.login-button {
+  width: 100%;
+  margin-top: 4px;
+}
+
 @media (width <= 768px) {
   .app-shell {
     display: block;
@@ -254,5 +310,13 @@ body {
   .component-demo__status {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-panel {
+    padding: 22px;
   }
 }

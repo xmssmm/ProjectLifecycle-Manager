@@ -16,6 +16,7 @@ describe('apiClient', () => {
 
     expect(apiClient.defaults.baseURL).toBe('http://localhost:8000/api/v1');
     expect(apiClient.defaults.timeout).toBe(15000);
+    expect(apiClient.defaults.withCredentials).toBe(true);
   });
 
   it('adds the bearer token to outgoing requests', async () => {
@@ -45,6 +46,52 @@ describe('apiClient', () => {
     expect(authStore.accessToken).toBeNull();
     expect(router.push).toHaveBeenCalledWith({ name: 'login' });
     expect(message.error).toHaveBeenCalledWith('登录状态已过期，请重新登录');
+  });
+
+  it('refreshes the access token and retries the original request once', async () => {
+    const apiClient = createApiClient('http://api.local');
+    const authStore = useAuthStore();
+    authStore.setAccessToken('expired-token');
+    installApiInterceptors(apiClient);
+    const seenAuthorizationHeaders: Array<string | null> = [];
+    apiClient.defaults.adapter = async (config) => {
+      const headers = AxiosHeaders.from(config.headers);
+      if (config.url === '/auth/refresh') {
+        return {
+          config,
+          data: { code: 0, message: 'success', data: { access_token: 'fresh-token' } },
+          headers: {},
+          status: 200,
+          statusText: 'OK',
+        };
+      }
+
+      seenAuthorizationHeaders.push(headers.get('Authorization')?.toString() ?? null);
+      if (seenAuthorizationHeaders.length === 1) {
+        const response: AxiosResponse = {
+          config: config as InternalAxiosRequestConfig,
+          data: {},
+          headers: {},
+          status: 401,
+          statusText: 'Unauthorized',
+        };
+        throw new AxiosError('expired', undefined, config, undefined, response);
+      }
+
+      return {
+        config,
+        data: { ok: true },
+        headers: {},
+        status: 200,
+        statusText: 'OK',
+      };
+    };
+
+    const response = await apiClient.get('/private');
+
+    expect(response.status).toBe(200);
+    expect(authStore.accessToken).toBe('fresh-token');
+    expect(seenAuthorizationHeaders).toEqual(['Bearer expired-token', 'Bearer fresh-token']);
   });
 
   it('shows clear messages for rate limit and server errors', async () => {
