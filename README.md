@@ -1,6 +1,6 @@
 # 企业项目过程管理与资料归档系统
 
-这是采购类项目过程管理与资料归档系统的全功能开发仓库。当前任务为 `T-1-INFRA-01`，目标是建立可运行的后端、前端、数据库、缓存与本地开发骨架。
+这是采购类项目过程管理与资料归档系统的全功能开发仓库。当前 `develop` 已完成 MVP（Phase 1）和 Phase 2“体验与可视化”功能，覆盖项目流程、资料归档、任务协作、付款、撤销、审计、报表、仪表盘、移动端适配、Office 预览和通知增强。
 
 ## 本地启动 5 步指南
 
@@ -58,8 +58,12 @@ npm.cmd run typecheck
 
 ## 文档
 
+- 部署手册：`docs/deployment-manual.md`
+- 使用手册：`docs/user-manual.md`
+- Phase 2 发布说明：`docs/RELEASE_NOTES_PHASE_2.md`
 - Office 在线预览部署与使用：`docs/office-preview.md`
 - 日常运维：`docs/operations.md`
+- 上线检查清单：`docs/release-checklist.md`
 - 故障排查：`docs/troubleshooting.md`
 
 ## 技术栈
@@ -70,4 +74,4 @@ npm.cmd run typecheck
 
 ## 当前状态
 
-本仓库处于 greenfield 初始化阶段。业务功能会严格按照 `docs/DEVELOPMENT_PLAN_FULL.md` 和 `docs/ROADMAP.md` 分阶段实现。
+Phase 2 功能已合并到 `develop`。后续演进按 `docs/ROADMAP.md` 继续推进 Phase 3 企业集成、Phase 4 规模与合规、Phase 5 平台化与智能化。
