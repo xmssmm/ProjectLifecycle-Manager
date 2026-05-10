@@ -26,6 +26,7 @@ from app.models.sub_projects import (
     SubProjectNoCounter,
     SubProjectStatus,
 )
+from app.models.tasks import Task, TaskExecutor, TaskStatus
 from app.models.users import User, UserRole, UserStatus
 
 __all__ = [
@@ -43,6 +44,9 @@ __all__ = [
     "SubProjectMemberRole",
     "SubProjectNoCounter",
     "SubProjectStatus",
+    "Task",
+    "TaskExecutor",
+    "TaskStatus",
     "Notification",
     "Phase",
     "PhaseDocRequirement",
