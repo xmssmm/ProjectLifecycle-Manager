@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.models.documents import Document
 from app.models.main_projects import (
@@ -33,6 +36,7 @@ from app.schemas.sub_projects import (
     SubProjectReviewRequest,
 )
 from app.services.audit import AuditContext
+from app.services.documents import DocumentService, SqlAlchemyDocumentRepository
 from app.services.payments import PaymentVoucherUpload
 from tests.e2e.conftest import E2EContext
 
@@ -256,6 +260,50 @@ async def test_single_dept_manager_deadlock_uses_admin_override_review(
     assert review is not None
     assert review.admin_override is True
     assert e2e_context.audit_writer.entries[-1].extra["admin_override"] is True
+
+
+@pytest.mark.asyncio
+async def test_concurrent_same_doc_type_uploads_assign_unique_versions(
+    e2e_context: E2EContext,
+) -> None:
+    _main_project, sub_project = await _create_approved_project_tree(e2e_context)
+    phase = (await _phases_by_no(e2e_context, sub_project.id))[1]
+    await _upload_required_documents(e2e_context, sub_project, phase, "meeting_material")
+    engine = cast(AsyncEngine, e2e_context.session.bind)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def upload_copy(index: int) -> None:
+        async with session_factory() as session:
+            service = DocumentService(
+                repository=SqlAlchemyDocumentRepository(session),
+                storage=e2e_context.storage,
+                max_file_size_bytes=1024 * 1024,
+            )
+            await service.upload_document(
+                actor=e2e_context.leader,
+                sub_project_id=sub_project.id,
+                phase_id=phase.id,
+                doc_type="meeting_material",
+                file_name=f"meeting-material-{index}.pdf",
+                content_type="application/pdf",
+                content=PDF_BYTES,
+            )
+
+    await asyncio.gather(*(upload_copy(index) for index in range(2, 8)))
+    documents = list(
+        await e2e_context.session.scalars(
+            select(Document)
+            .where(
+                Document.sub_project_id == sub_project.id,
+                Document.phase_id == phase.id,
+                Document.doc_type == "meeting_material",
+            )
+            .order_by(Document.version),
+        ),
+    )
+
+    assert [document.version for document in documents] == list(range(1, 8))
+    assert [document.version for document in documents if document.is_latest] == [7]
 
 
 async def _create_approved_project_tree(

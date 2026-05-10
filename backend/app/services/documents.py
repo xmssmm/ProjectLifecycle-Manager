@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -53,6 +53,15 @@ class DocumentRepository(Protocol):
         phase_id: UUID,
         doc_type: str,
     ) -> list[Document]:
+        ...
+
+    async def lock_document_group(
+        self,
+        *,
+        sub_project_id: UUID,
+        phase_id: UUID,
+        doc_type: str,
+    ) -> None:
         ...
 
     async def list_documents(
@@ -121,6 +130,19 @@ class SqlAlchemyDocumentRepository:
             .with_for_update(),
         )
         return list(result.all())
+
+    async def lock_document_group(
+        self,
+        *,
+        sub_project_id: UUID,
+        phase_id: UUID,
+        doc_type: str,
+    ) -> None:
+        lock_key = f"document-version:{sub_project_id}:{phase_id}:{doc_type}"
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+            {"lock_key": lock_key},
+        )
 
     async def list_documents(
         self,
@@ -219,6 +241,15 @@ class InMemoryDocumentRepository:
         ]
         return sorted(documents, key=lambda document: document.version, reverse=True)
 
+    async def lock_document_group(
+        self,
+        *,
+        sub_project_id: UUID,
+        phase_id: UUID,
+        doc_type: str,
+    ) -> None:
+        return None
+
     async def list_documents(
         self,
         *,
@@ -305,6 +336,11 @@ class DocumentService:
             content=content,
             audit_writer=audit_writer,
             audit_context=audit_context,
+        )
+        await self._repository.lock_document_group(
+            sub_project_id=sub_project.id,
+            phase_id=phase.id,
+            doc_type=cleaned_doc_type,
         )
         group_documents = await self._repository.list_group_documents_for_update(
             sub_project_id=sub_project.id,
