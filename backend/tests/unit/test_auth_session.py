@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -12,7 +12,7 @@ from app.core.db import get_db_session
 from app.core.deps import get_auth_token_store
 from app.core.exceptions import AuthenticationError
 from app.core.middleware import InMemoryRateLimitStore
-from app.core.security import hash_password
+from app.core.security import create_jwt_token, hash_password
 from app.main import create_app
 from app.models.users import User, UserRole, UserStatus
 from app.services.auth import (
@@ -154,3 +154,30 @@ async def test_user_wide_token_revocation_rejects_existing_access_tokens() -> No
             token_store=token_store,
             settings=settings,
         )
+
+
+@pytest.mark.asyncio
+async def test_validate_token_claims_rejects_tampered_and_expired_tokens() -> None:
+    settings = make_settings()
+    user = make_user()
+    token_store = InMemoryAuthTokenStore()
+    tokens = create_auth_tokens(user, settings)
+    replacement = "x" if tokens.access_token[-1] != "x" else "y"
+    tampered = f"{tokens.access_token[:-1]}{replacement}"
+    expired = create_jwt_token(
+        subject=str(user.id),
+        key=settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+        token_type="access",
+        expires_delta=timedelta(seconds=-1),
+        extra_claims={"role": user.role.value, "username": user.username},
+    )
+
+    for token in (tampered, expired):
+        with pytest.raises(AuthenticationError):
+            await validate_token_claims(
+                token,
+                expected_type="access",
+                token_store=token_store,
+                settings=settings,
+            )

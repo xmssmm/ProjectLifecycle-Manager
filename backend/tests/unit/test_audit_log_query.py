@@ -21,6 +21,7 @@ from app.services.audit_logs import (
     AuditLogQuery,
     AuditLogService,
     InMemoryAuditLogRepository,
+    build_audit_log_conditions,
 )
 
 
@@ -198,3 +199,22 @@ def test_audit_log_endpoint_maps_filters_and_serializes_page() -> None:
     assert payload["total"] == 1
     assert payload["items"][0]["id"] == str(audit_log.id)
     assert payload["items"][0]["action"] == "user.update"
+
+
+def test_audit_log_query_parameters_are_bound_against_sql_injection() -> None:
+    conditions = build_audit_log_conditions(
+        AuditLogQuery(
+            action="user.update' OR '1'='1",
+            target_type="user'; DROP TABLE audit_logs; --",
+        ),
+    )
+
+    compiled = " ".join(
+        str(condition.compile(compile_kwargs={"literal_binds": False}))
+        for condition in conditions
+    )
+
+    assert "audit_logs.action =" in compiled
+    assert "audit_logs.target_type =" in compiled
+    assert "OR '1'='1" not in compiled
+    assert "DROP TABLE" not in compiled
