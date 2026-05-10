@@ -1011,6 +1011,74 @@ body {
   border-collapse: collapse;
 }
 
+.task-mobile-list {
+  display: none;
+}
+
+.task-mobile-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.task-mobile-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-mobile-card__header span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.task-mobile-card__header h3 {
+  margin: 4px 0 0;
+  color: #172033;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.task-mobile-card__meta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.task-mobile-card__meta div {
+  display: grid;
+  gap: 3px;
+}
+
+.task-mobile-card__meta dt {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.task-mobile-card__meta dd {
+  min-width: 0;
+  margin: 0;
+  color: #344054;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.task-mobile-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mobile-only-action {
+  display: none !important;
+}
+
 .task-table th,
 .task-table td {
   padding: 12px;
@@ -1409,6 +1477,19 @@ body {
     margin-inline: -12px;
     border-inline: 0;
     border-radius: 0;
+  }
+
+  .task-table {
+    display: none;
+  }
+
+  .task-mobile-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .mobile-only-action {
+    display: inline-flex !important;
   }
 
   .task-page .project-member-table {

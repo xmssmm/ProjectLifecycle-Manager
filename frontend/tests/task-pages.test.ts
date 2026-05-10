@@ -64,6 +64,37 @@ describe('TaskList', () => {
       sub_project_id: 'sub-1',
     });
   });
+
+  it('lets the current assignee complete a task from the mobile card in two steps', async () => {
+    const authStore = useAuthStore();
+    authStore.setAccessToken('token');
+    authStore.setUser({
+      deptId: null,
+      email: null,
+      id: 'member-1',
+      role: 'proj_member',
+      status: 'active',
+      username: 'member',
+    });
+    vi.mocked(completeTask).mockResolvedValue(completedTask);
+    const wrapper = mount(TaskList, { global: { stubs } });
+    await flushPromises();
+
+    const quickButton = wrapper.find('[data-test="quick-complete-task-task-1"]');
+    expect(quickButton.classes()).toContain('mobile-only-action');
+
+    await quickButton.trigger('click');
+
+    expect(wrapper.find('[data-test="quick-complete-confirm"]').text()).toContain(
+      'Prepare minutes',
+    );
+    expect(completeTask).not.toHaveBeenCalled();
+
+    await wrapper.find('[data-test="confirm-quick-complete"]').trigger('click');
+    await flushPromises();
+
+    expect(completeTask).toHaveBeenCalledWith('task-1');
+  });
 });
 
 describe('TaskDetail', () => {
