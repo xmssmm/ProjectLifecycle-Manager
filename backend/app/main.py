@@ -1,6 +1,8 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -8,8 +10,10 @@ from fastapi.openapi.utils import get_openapi
 from app.api.v1.auth import get_auth_failure_store
 from app.api.v1.auth import router as auth_router
 from app.api.v1.departments import router as departments_router
+from app.api.v1.system import router as system_router
 from app.api.v1.users import router as users_router
 from app.core.config import Settings, get_settings
+from app.core.db import AsyncSessionLocal
 from app.core.deps import get_auth_token_store
 from app.core.exceptions import BusinessException, business_exception_handler
 from app.core.health import collect_health
@@ -29,8 +33,42 @@ from app.services.auth import (
     RedisAuthFailureStore,
     RedisAuthTokenStore,
 )
+from app.services.system_health import (
+    SqlAlchemyRoleHealthReader,
+    SystemHealthService,
+    SystemHealthWarning,
+)
 
 HealthChecker = Callable[[], Awaitable[dict[str, str]]]
+HealthWarningChecker = Callable[[], Awaitable[list[SystemHealthWarning]]]
+LifespanContext = Callable[[FastAPI], AbstractAsyncContextManager[None]]
+
+
+async def collect_startup_health_warnings() -> list[SystemHealthWarning]:
+    async with AsyncSessionLocal() as session:
+        service = SystemHealthService(role_reader=SqlAlchemyRoleHealthReader(session))
+        return await service.collect_warnings()
+
+
+def build_startup_health_warning_lifespan(
+    checker: HealthWarningChecker,
+) -> LifespanContext:
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        logger = structlog.get_logger("app.system_health")
+        try:
+            warnings = await checker()
+        except Exception:
+            logger.exception("system.health_warnings_check_failed")
+        else:
+            logger.info(
+                "system.health_warnings_checked",
+                warning_count=len(warnings),
+                warnings=warnings,
+            )
+        yield
+
+    return lifespan
 
 
 def install_openapi_customization(app: FastAPI) -> None:
@@ -65,6 +103,7 @@ def create_app(
     auth_failure_store: AuthFailureStore | None = None,
     auth_token_store: AuthTokenStore | None = None,
     health_checker: HealthChecker | None = None,
+    health_warning_checker: HealthWarningChecker | None = None,
 ) -> FastAPI:
     configure_logging()
     resolved_settings = settings or get_settings()
@@ -74,11 +113,17 @@ def create_app(
         resolved_settings.redis_url,
     )
     resolved_auth_token_store = auth_token_store or RedisAuthTokenStore(resolved_settings.redis_url)
+    lifespan_context = (
+        build_startup_health_warning_lifespan(health_warning_checker)
+        if health_warning_checker is not None
+        else None
+    )
 
     app = FastAPI(
         title="企业项目过程管理与资料归档系统 API",
         version="0.1.0",
         description="企业项目过程管理与资料归档系统后端接口。",
+        lifespan=lifespan_context,
         openapi_tags=[
             {"name": "auth", "description": "Authentication endpoints."},
             {"name": "users", "description": "用户管理接口。"},
@@ -109,6 +154,7 @@ def create_app(
     app.dependency_overrides[get_auth_token_store] = lambda: resolved_auth_token_store
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
+    app.include_router(system_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
 
     @app.get("/health", tags=["system"])
@@ -129,4 +175,4 @@ def create_app(
     return app
 
 
-app = create_app()
+app = create_app(health_warning_checker=collect_startup_health_warnings)
