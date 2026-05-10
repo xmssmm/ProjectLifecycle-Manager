@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { createApiClient } from '../src/api/client';
 import {
   closeSubProject,
+  addSubProjectMember,
   createSubProject,
   getSubProject,
+  listSubProjectMembers,
   listSubProjects,
+  removeSubProjectMember,
   reviewSubProject,
   submitSubProject,
   terminateSubProject,
@@ -63,6 +66,21 @@ describe('sub project api', () => {
     await closeSubProject('sub-1', client);
     await terminateSubProject('sub-1', { reason: '需求取消' }, client);
 
+    client.defaults.adapter = recordingAdapter(calls, {
+      code: 0,
+      message: 'success',
+      data: { items: [sampleMember], total: 1 },
+    });
+    await listSubProjectMembers('sub-1', client);
+
+    client.defaults.adapter = recordingAdapter(calls, {
+      code: 0,
+      message: 'success',
+      data: sampleMember,
+    });
+    await addSubProjectMember('sub-1', { user_id: 'member-1' }, client);
+    await removeSubProjectMember('sub-1', 'member-1', client);
+
     expect(calls[0]).toMatchObject({
       method: 'get',
       params: { page: 1, page_size: 20 },
@@ -89,6 +107,16 @@ describe('sub project api', () => {
       method: 'post',
       url: '/sub-projects/sub-1/terminate',
     });
+    expect(calls[8]).toMatchObject({ method: 'get', url: '/sub-projects/sub-1/members' });
+    expect(calls[9]).toMatchObject({
+      data: JSON.stringify({ user_id: 'member-1' }),
+      method: 'post',
+      url: '/sub-projects/sub-1/members',
+    });
+    expect(calls[10]).toMatchObject({
+      method: 'delete',
+      url: '/sub-projects/sub-1/members/member-1',
+    });
   });
 });
 
@@ -108,6 +136,16 @@ const sampleSubProject = {
   spent_amount: '0.00',
   status: 'pending_review',
   updated_at: '2026-05-10T00:00:00Z',
+};
+
+const sampleMember = {
+  created_at: '2026-05-10T00:00:00Z',
+  id: 'member-row-1',
+  joined_at: '2026-05-10T00:00:00Z',
+  role_in_project: 'proj_member',
+  sub_project_id: 'sub-1',
+  updated_at: '2026-05-10T00:00:00Z',
+  user_id: 'member-1',
 };
 
 function recordingAdapter(calls: AxiosRequestConfig[], data: unknown): AxiosAdapter {

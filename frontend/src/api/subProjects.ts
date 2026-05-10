@@ -5,6 +5,9 @@ import type {
   SubProjectCreatePayload,
   SubProjectListQuery,
   SubProjectListRead,
+  SubProjectMemberCreatePayload,
+  SubProjectMemberListRead,
+  SubProjectMemberRead,
   SubProjectRead,
   SubProjectReviewPayload,
   SubProjectTerminatePayload,
@@ -98,6 +101,39 @@ export async function terminateSubProject(
   const response = await client.post<ApiResponse<SubProjectRead>>(
     `/sub-projects/${subProjectId}/terminate`,
     payload,
+  );
+  return response.data.data;
+}
+
+export async function listSubProjectMembers(
+  subProjectId: string,
+  client: AxiosInstance = apiClient,
+): Promise<SubProjectMemberListRead> {
+  const response = await client.get<ApiResponse<SubProjectMemberListRead>>(
+    `/sub-projects/${subProjectId}/members`,
+  );
+  return response.data.data;
+}
+
+export async function addSubProjectMember(
+  subProjectId: string,
+  payload: SubProjectMemberCreatePayload,
+  client: AxiosInstance = apiClient,
+): Promise<SubProjectMemberRead> {
+  const response = await client.post<ApiResponse<SubProjectMemberRead>>(
+    `/sub-projects/${subProjectId}/members`,
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function removeSubProjectMember(
+  subProjectId: string,
+  userId: string,
+  client: AxiosInstance = apiClient,
+): Promise<SubProjectMemberRead> {
+  const response = await client.delete<ApiResponse<SubProjectMemberRead>>(
+    `/sub-projects/${subProjectId}/members/${userId}`,
   );
   return response.data.data;
 }

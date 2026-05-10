@@ -106,6 +106,27 @@ export interface SubProjectTerminatePayload {
   reason: string;
 }
 
+export type SubProjectMemberRole = 'proj_leader' | 'proj_member';
+
+export interface SubProjectMemberRead {
+  created_at: string;
+  id: string;
+  joined_at: string;
+  role_in_project: SubProjectMemberRole;
+  sub_project_id: string;
+  updated_at: string;
+  user_id: string;
+}
+
+export interface SubProjectMemberListRead {
+  items: SubProjectMemberRead[];
+  total: number;
+}
+
+export interface SubProjectMemberCreatePayload {
+  user_id: string;
+}
+
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   pending_review: '待审核',
   reviewing: '审核中',

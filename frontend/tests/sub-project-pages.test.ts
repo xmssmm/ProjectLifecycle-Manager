@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createSubProject,
+  addSubProjectMember,
   getSubProject,
+  listSubProjectMembers,
   listSubProjects,
+  removeSubProjectMember,
   reviewSubProject,
   submitSubProject,
   terminateSubProject,
@@ -17,9 +20,12 @@ import SubProjectList from '@/views/sub-project/SubProjectList.vue';
 import SubProjectReview from '@/views/sub-project/SubProjectReview.vue';
 
 vi.mock('@/api/subProjects', () => ({
+  addSubProjectMember: vi.fn(),
   createSubProject: vi.fn(),
   getSubProject: vi.fn(),
+  listSubProjectMembers: vi.fn(),
   listSubProjects: vi.fn(),
+  removeSubProjectMember: vi.fn(),
   reviewSubProject: vi.fn(),
   submitSubProject: vi.fn(),
   terminateSubProject: vi.fn(),
@@ -46,7 +52,13 @@ describe('sub project pages', () => {
       total: 2,
     });
     vi.mocked(getSubProject).mockResolvedValue(sampleSubProject);
+    vi.mocked(listSubProjectMembers).mockResolvedValue({
+      items: [sampleMember],
+      total: 1,
+    });
     vi.mocked(createSubProject).mockResolvedValue(sampleSubProject);
+    vi.mocked(addSubProjectMember).mockResolvedValue(sampleMember);
+    vi.mocked(removeSubProjectMember).mockResolvedValue(sampleMember);
     vi.mocked(submitSubProject).mockResolvedValue(sampleSubProject);
     vi.mocked(reviewSubProject).mockResolvedValue({
       ...sampleSubProject,
@@ -94,6 +106,28 @@ describe('sub project pages', () => {
     await flushPromises();
 
     expect(terminateSubProject).toHaveBeenCalledWith('sub-1', { reason: '需求取消' });
+  });
+
+  it('lets project leader add and remove sub project members', async () => {
+    const wrapper = mount(SubProjectDetail, {
+      global: { stubs },
+      props: { subProjectId: 'sub-1' },
+    });
+    await flushPromises();
+
+    expect(listSubProjectMembers).toHaveBeenCalledWith('sub-1');
+    expect(wrapper.text()).toContain('member-1');
+
+    await wrapper.find('[data-test="member-user-id"]').setValue('member-2');
+    await wrapper.find('[data-test="add-member"]').trigger('click');
+    await flushPromises();
+
+    expect(addSubProjectMember).toHaveBeenCalledWith('sub-1', { user_id: 'member-2' });
+
+    await wrapper.find('[data-test="remove-member"]').trigger('click');
+    await flushPromises();
+
+    expect(removeSubProjectMember).toHaveBeenCalledWith('sub-1', 'member-1');
   });
 
   it('validates and creates a sub project before submitting it', async () => {
@@ -195,6 +229,16 @@ const closedSubProject = {
   id: 'sub-2',
   name: '历史子项目',
   status: 'closed',
+} as const;
+
+const sampleMember = {
+  created_at: '2026-05-10T00:00:00Z',
+  id: 'member-row-1',
+  joined_at: '2026-05-10T00:00:00Z',
+  role_in_project: 'proj_member',
+  sub_project_id: 'sub-1',
+  updated_at: '2026-05-10T00:00:00Z',
+  user_id: 'member-1',
 } as const;
 
 const stubs = {

@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia';
 
 import {
+  addSubProjectMember as addSubProjectMemberRequest,
   closeSubProject as closeSubProjectRequest,
   createSubProject as createSubProjectRequest,
   getSubProject,
+  listSubProjectMembers,
   listSubProjects,
+  removeSubProjectMember as removeSubProjectMemberRequest,
   reviewSubProject as reviewSubProjectRequest,
   submitSubProject as submitSubProjectRequest,
   terminateSubProject as terminateSubProjectRequest,
@@ -13,6 +16,8 @@ import {
 import type {
   SubProjectCreatePayload,
   SubProjectListQuery,
+  SubProjectMemberCreatePayload,
+  SubProjectMemberRead,
   SubProjectRead,
   SubProjectReviewPayload,
   SubProjectTerminatePayload,
@@ -24,6 +29,8 @@ interface SubProjectState {
   detailLoading: boolean;
   listQuery: SubProjectListQuery;
   loading: boolean;
+  members: SubProjectMemberRead[];
+  membersLoading: boolean;
   page: number;
   pageSize: number;
   subProjects: SubProjectRead[];
@@ -36,6 +43,8 @@ export const useSubProjectStore = defineStore('sub-projects', {
     detailLoading: false,
     listQuery: { page: 1, pageSize: 20 },
     loading: false,
+    members: [],
+    membersLoading: false,
     page: 1,
     pageSize: 20,
     subProjects: [],
@@ -64,6 +73,16 @@ export const useSubProjectStore = defineStore('sub-projects', {
         return subProject;
       } finally {
         this.detailLoading = false;
+      }
+    },
+    async fetchSubProjectMembers(subProjectId: string) {
+      this.membersLoading = true;
+      try {
+        const result = await listSubProjectMembers(subProjectId);
+        this.members = result.items;
+        return result.items;
+      } finally {
+        this.membersLoading = false;
       }
     },
     async createSubProject(payload: SubProjectCreatePayload) {
@@ -95,6 +114,19 @@ export const useSubProjectStore = defineStore('sub-projects', {
       const subProject = await terminateSubProjectRequest(subProjectId, payload);
       this.currentSubProject = subProject;
       return subProject;
+    },
+    async addSubProjectMember(subProjectId: string, payload: SubProjectMemberCreatePayload) {
+      const member = await addSubProjectMemberRequest(subProjectId, payload);
+      this.members = [
+        ...this.members.filter((item) => item.user_id !== member.user_id),
+        member,
+      ].sort((left, right) => left.joined_at.localeCompare(right.joined_at));
+      return member;
+    },
+    async removeSubProjectMember(subProjectId: string, userId: string) {
+      const member = await removeSubProjectMemberRequest(subProjectId, userId);
+      this.members = this.members.filter((item) => item.user_id !== userId);
+      return member;
     },
   },
 });
