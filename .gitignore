@@ -38,6 +38,7 @@ Thumbs.db
 /logs/
 /tmp/
 /output/
+/backups/
 
 # Local worktrees
 .worktrees/
