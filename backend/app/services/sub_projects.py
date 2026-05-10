@@ -6,10 +6,15 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BusinessException, PermissionDeniedError, ResourceNotFoundError
+from app.core.exceptions import (
+    BusinessException,
+    PermissionDeniedError,
+    ResourceConflictError,
+    ResourceNotFoundError,
+)
 from app.models.main_projects import (
     MainProject,
     MainProjectStatus,
@@ -17,10 +22,16 @@ from app.models.main_projects import (
     ProjectReviewDecision,
 )
 from app.models.phases import Phase, PhaseStatus
-from app.models.sub_projects import SubProject, SubProjectStatus
+from app.models.sub_projects import (
+    SubProject,
+    SubProjectMember,
+    SubProjectMemberRole,
+    SubProjectStatus,
+)
 from app.models.users import User, UserRole, UserStatus
 from app.schemas.sub_projects import (
     SubProjectCreate,
+    SubProjectMemberCreate,
     SubProjectReviewRequest,
     SubProjectTerminateRequest,
     SubProjectUpdate,
@@ -68,6 +79,20 @@ class SubProjectRepository(Protocol):
     async def get_main_project(self, main_project_id: UUID) -> MainProject | None:
         ...
 
+    async def get_user(self, user_id: UUID) -> User | None:
+        ...
+
+    async def list_members(self, sub_project_id: UUID) -> list[SubProjectMember]:
+        ...
+
+    async def get_member(
+        self,
+        *,
+        sub_project_id: UUID,
+        user_id: UUID,
+    ) -> SubProjectMember | None:
+        ...
+
     async def next_sub_project_sequence(self, main_project_id: UUID) -> int:
         ...
 
@@ -99,6 +124,12 @@ class SubProjectRepository(Protocol):
     def add_phase(self, phase: Phase) -> None:
         ...
 
+    def add_member(self, member: SubProjectMember) -> None:
+        ...
+
+    async def delete_member(self, member: SubProjectMember) -> None:
+        ...
+
     async def commit(self) -> None:
         ...
 
@@ -119,7 +150,15 @@ class SqlAlchemySubProjectRepository:
     ) -> tuple[list[SubProject], int]:
         conditions = []
         if actor.role not in VIEW_ALL_SUB_PROJECT_ROLES:
-            conditions.append(SubProject.manager_id == actor.id)
+            member_exists = (
+                select(SubProjectMember.id)
+                .where(
+                    SubProjectMember.sub_project_id == SubProject.id,
+                    SubProjectMember.user_id == actor.id,
+                )
+                .exists()
+            )
+            conditions.append(or_(SubProject.manager_id == actor.id, member_exists))
 
         total = await self._session.scalar(
             select(func.count()).select_from(SubProject).where(*conditions),
@@ -141,6 +180,32 @@ class SqlAlchemySubProjectRepository:
     async def get_main_project(self, main_project_id: UUID) -> MainProject | None:
         main_project = await self._session.get(MainProject, main_project_id)
         return main_project if isinstance(main_project, MainProject) else None
+
+    async def get_user(self, user_id: UUID) -> User | None:
+        user = await self._session.get(User, user_id)
+        return user if isinstance(user, User) else None
+
+    async def list_members(self, sub_project_id: UUID) -> list[SubProjectMember]:
+        result = await self._session.scalars(
+            select(SubProjectMember)
+            .where(SubProjectMember.sub_project_id == sub_project_id)
+            .order_by(SubProjectMember.role_in_project.asc(), SubProjectMember.joined_at.asc()),
+        )
+        return list(result.all())
+
+    async def get_member(
+        self,
+        *,
+        sub_project_id: UUID,
+        user_id: UUID,
+    ) -> SubProjectMember | None:
+        result = await self._session.scalar(
+            select(SubProjectMember).where(
+                SubProjectMember.sub_project_id == sub_project_id,
+                SubProjectMember.user_id == user_id,
+            ),
+        )
+        return result if isinstance(result, SubProjectMember) else None
 
     async def next_sub_project_sequence(self, main_project_id: UUID) -> int:
         value = await self._session.scalar(
@@ -212,6 +277,12 @@ class SqlAlchemySubProjectRepository:
     def add_phase(self, phase: Phase) -> None:
         self._session.add(phase)
 
+    def add_member(self, member: SubProjectMember) -> None:
+        self._session.add(member)
+
+    async def delete_member(self, member: SubProjectMember) -> None:
+        await self._session.delete(member)
+
     async def commit(self) -> None:
         await self._session.commit()
 
@@ -225,11 +296,13 @@ class InMemorySubProjectRepository:
         *,
         main_projects: Sequence[MainProject],
         sub_projects: Sequence[SubProject] | None = None,
+        members: Sequence[SubProjectMember] | None = None,
         users: Sequence[User] | None = None,
         next_sequences: dict[UUID, int] | None = None,
     ) -> None:
         self.main_projects = list(main_projects)
         self.sub_projects = list(sub_projects or [])
+        self.members = list(members or [])
         self.users = list(users or [])
         self.reviews: list[ProjectReview] = []
         self.phases: list[Phase] = []
@@ -249,6 +322,7 @@ class InMemorySubProjectRepository:
                 sub_project
                 for sub_project in self.sub_projects
                 if sub_project.manager_id == actor.id
+                or self._has_member(sub_project_id=sub_project.id, user_id=actor.id)
             ]
         ordered = sorted(filtered, key=lambda sub_project: sub_project.created_at, reverse=True)
         start = (page - 1) * page_size
@@ -263,6 +337,31 @@ class InMemorySubProjectRepository:
     async def get_main_project(self, main_project_id: UUID) -> MainProject | None:
         return next(
             (project for project in self.main_projects if project.id == main_project_id),
+            None,
+        )
+
+    async def get_user(self, user_id: UUID) -> User | None:
+        return next((user for user in self.users if user.id == user_id), None)
+
+    async def list_members(self, sub_project_id: UUID) -> list[SubProjectMember]:
+        members = [member for member in self.members if member.sub_project_id == sub_project_id]
+        return sorted(
+            members,
+            key=lambda member: (member.role_in_project.value, member.joined_at),
+        )
+
+    async def get_member(
+        self,
+        *,
+        sub_project_id: UUID,
+        user_id: UUID,
+    ) -> SubProjectMember | None:
+        return next(
+            (
+                member
+                for member in self.members
+                if member.sub_project_id == sub_project_id and member.user_id == user_id
+            ),
             None,
         )
 
@@ -322,11 +421,23 @@ class InMemorySubProjectRepository:
     def add_phase(self, phase: Phase) -> None:
         self.phases.append(phase)
 
+    def add_member(self, member: SubProjectMember) -> None:
+        self.members.append(member)
+
+    async def delete_member(self, member: SubProjectMember) -> None:
+        self.members.remove(member)
+
     async def commit(self) -> None:
         return None
 
     async def refresh(self, sub_project: SubProject) -> None:
         return None
+
+    def _has_member(self, *, sub_project_id: UUID, user_id: UUID) -> bool:
+        return any(
+            member.sub_project_id == sub_project_id and member.user_id == user_id
+            for member in self.members
+        )
 
 
 class SubProjectService:
@@ -356,8 +467,109 @@ class SubProjectService:
 
     async def get_sub_project(self, *, actor: User, sub_project_id: UUID) -> SubProject:
         sub_project = await self._get_existing_sub_project(sub_project_id)
-        self._ensure_visible(actor, sub_project)
+        await self._ensure_visible(actor, sub_project)
         return sub_project
+
+    async def list_sub_project_members(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+    ) -> list[SubProjectMember]:
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        await self._ensure_visible(actor, sub_project)
+        return await self._repository.list_members(sub_project.id)
+
+    async def add_sub_project_member(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        payload: SubProjectMemberCreate,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> SubProjectMember:
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        self._ensure_project_leader(actor, sub_project)
+
+        user = await self._repository.get_user(payload.user_id)
+        if user is None:
+            raise ResourceNotFoundError("用户不存在")
+        if user.status != UserStatus.active or user.role != UserRole.proj_member:
+            raise BusinessException(
+                code=3003,
+                message="只能添加活跃项目参与人",
+                status_code=409,
+                data={"status": user.status.value, "role": user.role.value},
+            )
+        existing = await self._repository.get_member(
+            sub_project_id=sub_project.id,
+            user_id=payload.user_id,
+        )
+        if existing is not None:
+            raise ResourceConflictError("成员已存在")
+
+        now = datetime.now(UTC)
+        member = SubProjectMember(
+            id=uuid4(),
+            sub_project_id=sub_project.id,
+            user_id=payload.user_id,
+            role_in_project=SubProjectMemberRole.proj_member,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        self._repository.add_member(member)
+        await self._repository.commit()
+        self._record_member_audit(
+            action="sub_project_member.add",
+            actor=actor,
+            member=member,
+            before_state={},
+            after_state=to_audit_state(member),
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+        )
+        return member
+
+    async def remove_sub_project_member(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        user_id: UUID,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> SubProjectMember:
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        self._ensure_project_leader(actor, sub_project)
+        member = await self._repository.get_member(
+            sub_project_id=sub_project.id,
+            user_id=user_id,
+        )
+        if member is None:
+            raise ResourceNotFoundError("成员关系不存在")
+        if member.user_id == actor.id or member.role_in_project == SubProjectMemberRole.proj_leader:
+            raise BusinessException(
+                code=3003,
+                message="不能移除子项目负责人",
+                status_code=409,
+                data={"user_id": str(user_id)},
+            )
+
+        before_state = to_audit_state(member)
+        await self._repository.delete_member(member)
+        await self._repository.commit()
+        self._record_member_audit(
+            action="sub_project_member.remove",
+            actor=actor,
+            member=member,
+            before_state=before_state,
+            after_state={},
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+        )
+        return member
 
     async def create_sub_project(self, *, actor: User, payload: SubProjectCreate) -> SubProject:
         if actor.role != UserRole.proj_leader:
@@ -386,6 +598,17 @@ class SubProjectService:
             updated_at=now,
         )
         self._repository.add(sub_project)
+        self._repository.add_member(
+            SubProjectMember(
+                id=uuid4(),
+                sub_project_id=sub_project.id,
+                user_id=actor.id,
+                role_in_project=SubProjectMemberRole.proj_leader,
+                joined_at=now,
+                created_at=now,
+                updated_at=now,
+            ),
+        )
         await self._repository.commit()
         await self._repository.refresh(sub_project)
         return sub_project
@@ -631,9 +854,20 @@ class SubProjectService:
             raise ResourceNotFoundError("主项目不存在")
         return main_project
 
-    @staticmethod
-    def _ensure_visible(actor: User, sub_project: SubProject) -> None:
+    async def _ensure_visible(self, actor: User, sub_project: SubProject) -> None:
         if actor.role in VIEW_ALL_SUB_PROJECT_ROLES or sub_project.manager_id == actor.id:
+            return
+        member = await self._repository.get_member(
+            sub_project_id=sub_project.id,
+            user_id=actor.id,
+        )
+        if member is not None:
+            return
+        raise PermissionDeniedError()
+
+    @staticmethod
+    def _ensure_project_leader(actor: User, sub_project: SubProject) -> None:
+        if actor.role == UserRole.proj_leader and sub_project.manager_id == actor.id:
             return
         raise PermissionDeniedError()
 
@@ -732,6 +966,35 @@ class SubProjectService:
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
                 extra=extra,
+                request_id=context.request_id,
+            ),
+        )
+
+    @staticmethod
+    def _record_member_audit(
+        *,
+        action: str,
+        actor: User,
+        member: SubProjectMember,
+        before_state: dict[str, object],
+        after_state: dict[str, object],
+        audit_writer: AuditLogWriter | None,
+        audit_context: AuditContext | None,
+    ) -> None:
+        if audit_writer is None:
+            return
+        context = audit_context or AuditContext(actor_id=actor.id)
+        audit_writer.enqueue(
+            AuditLogEntry(
+                actor_id=context.actor_id or actor.id,
+                action=action,
+                target_type="sub_project_member",
+                target_id=str(member.id),
+                before_state=before_state,
+                after_state=after_state,
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                extra={"sub_project_id": str(member.sub_project_id)},
                 request_id=context.request_id,
             ),
         )

@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.models.main_projects import ProjectReviewDecision
-from app.models.sub_projects import SubProjectStatus
+from app.models.sub_projects import SubProjectMemberRole, SubProjectStatus
 
 
 class SubProjectCreate(BaseModel):
@@ -69,6 +69,12 @@ class SubProjectTerminateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class SubProjectMemberCreate(BaseModel):
+    user_id: UUID
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SubProjectRead(BaseModel):
     id: UUID
     project_no: str
@@ -94,3 +100,20 @@ class SubProjectListRead(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class SubProjectMemberRead(BaseModel):
+    id: UUID
+    sub_project_id: UUID
+    user_id: UUID
+    role_in_project: SubProjectMemberRole
+    joined_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SubProjectMemberListRead(BaseModel):
+    items: list[SubProjectMemberRead]
+    total: int

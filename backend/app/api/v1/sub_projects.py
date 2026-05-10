@@ -13,6 +13,9 @@ from app.models.users import User, UserRole
 from app.schemas.sub_projects import (
     SubProjectCreate,
     SubProjectListRead,
+    SubProjectMemberCreate,
+    SubProjectMemberListRead,
+    SubProjectMemberRead,
     SubProjectRead,
     SubProjectReviewRequest,
     SubProjectTerminateRequest,
@@ -38,6 +41,10 @@ async def get_sub_project_service(
 
 def serialize_sub_project(sub_project: SubProject) -> dict[str, object]:
     return SubProjectRead.model_validate(sub_project).model_dump(mode="json")
+
+
+def serialize_sub_project_member(member: object) -> dict[str, object]:
+    return SubProjectMemberRead.model_validate(member).model_dump(mode="json")
 
 
 @router.get("")
@@ -79,6 +86,65 @@ async def get_sub_project(
 ) -> dict[str, object]:
     sub_project = await service.get_sub_project(actor=current_user, sub_project_id=sub_project_id)
     return success_response(serialize_sub_project(sub_project))
+
+
+@router.get("/{sub_project_id}/members")
+async def list_sub_project_members(
+    sub_project_id: UUID,
+    service: Annotated[SubProjectService, Depends(get_sub_project_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    members = await service.list_sub_project_members(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+    )
+    payload = SubProjectMemberListRead(
+        items=[SubProjectMemberRead.model_validate(member) for member in members],
+        total=len(members),
+    )
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.post("/{sub_project_id}/members")
+async def add_sub_project_member(
+    sub_project_id: UUID,
+    payload: SubProjectMemberCreate,
+    background_tasks: BackgroundTasks,
+    service: Annotated[SubProjectService, Depends(get_sub_project_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    member = await service.add_sub_project_member(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+        payload=payload,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
+    return success_response(serialize_sub_project_member(member))
+
+
+@router.delete("/{sub_project_id}/members/{user_id}")
+async def remove_sub_project_member(
+    sub_project_id: UUID,
+    user_id: UUID,
+    background_tasks: BackgroundTasks,
+    service: Annotated[SubProjectService, Depends(get_sub_project_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    member = await service.remove_sub_project_member(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+        user_id=user_id,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
+    return success_response(serialize_sub_project_member(member))
 
 
 @router.put("/{sub_project_id}")

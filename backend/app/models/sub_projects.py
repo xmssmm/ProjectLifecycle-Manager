@@ -1,14 +1,27 @@
 from __future__ import annotations
 
 import enum
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, Index, Numeric, String, Text, text
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 
 from app.models.base import Base, TimestampMixin, UuidPrimaryKeyMixin
 from app.models.users import enum_values
@@ -28,6 +41,11 @@ class SubProjectStatus(enum.StrEnum):
     completed = "completed"
     closed = "closed"
     terminated = "terminated"
+
+
+class SubProjectMemberRole(enum.StrEnum):
+    proj_leader = "proj_leader"
+    proj_member = "proj_member"
 
 
 class SubProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
@@ -86,6 +104,48 @@ class SubProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
     department: Mapped[Department] = relationship()
     manager: Mapped[User] = relationship(foreign_keys=[manager_id])
     creator: Mapped[User | None] = relationship(foreign_keys=[creator_id])
+
+
+class SubProjectMember(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "sub_project_members"
+    __table_args__ = (
+        UniqueConstraint(
+            "sub_project_id",
+            "user_id",
+            name="uq_sub_project_members_sub_project_user",
+        ),
+        Index("ix_sub_project_members_sub_project_id", "sub_project_id"),
+        Index("ix_sub_project_members_user_id", "user_id"),
+    )
+
+    sub_project_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("sub_projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    role_in_project: Mapped[SubProjectMemberRole] = mapped_column(
+        Enum(
+            SubProjectMemberRole,
+            name="sub_project_member_role",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=SubProjectMemberRole.proj_member,
+        server_default=SubProjectMemberRole.proj_member.value,
+    )
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    sub_project: Mapped[SubProject] = relationship()
+    user: Mapped[User] = relationship()
 
 
 class SubProjectNoCounter(Base):
