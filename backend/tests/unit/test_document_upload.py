@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Table, UniqueConstraint
 
 from app.api.v1.documents import get_document_service
 from app.core.db import get_db_session
@@ -151,6 +151,7 @@ def make_document(
 
 def test_document_model_has_group_version_unique_constraint_and_latest_index() -> None:
     table = Document.__table__
+    assert isinstance(table, Table)
 
     assert {
         "doc_no",

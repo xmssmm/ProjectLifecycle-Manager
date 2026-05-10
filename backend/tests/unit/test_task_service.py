@@ -323,7 +323,7 @@ async def test_complete_task_marks_only_actor_executor_and_aggregates_task_statu
 
     completed = await service.complete_task(actor=member_b, task_id=task.id)
 
-    assert executor_b.status == TaskStatus.completed
+    assert TaskStatus(executor_b.status) == TaskStatus.completed
     assert executor_b.actual_end_date == date(2026, 5, 10)
     assert completed.status == TaskStatus.completed
 
