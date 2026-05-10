@@ -1,4 +1,12 @@
 export type NotificationDeliveryMode = 'real_time' | 'daily_digest';
+export type NotificationChannel = 'in_app' | 'email' | 'wework' | 'dingtalk';
+
+export interface NotificationChannels {
+  dingtalk: boolean;
+  email: boolean;
+  in_app: boolean;
+  wework: boolean;
+}
 
 export interface NotificationRead {
   created_at: string;
@@ -36,6 +44,7 @@ export interface NotificationReadAllResult {
 }
 
 export interface NotificationPreferenceRead {
+  channels: NotificationChannels;
   delivery_mode: NotificationDeliveryMode;
   description: string;
   direct_related: boolean;
@@ -49,6 +58,7 @@ export interface NotificationPreferenceListRead {
 }
 
 export interface NotificationPreferenceUpdateItem {
+  channels: NotificationChannels;
   delivery_mode: NotificationDeliveryMode;
   enabled: boolean;
   scenario: string;

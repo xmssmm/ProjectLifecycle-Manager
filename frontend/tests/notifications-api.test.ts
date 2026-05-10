@@ -59,7 +59,12 @@ describe('notifications api', () => {
     await updateNotificationPreferences(
       {
         preferences: [
-          { scenario: 'task_assigned', enabled: false, delivery_mode: 'daily_digest' },
+          {
+            channels: { dingtalk: false, email: true, in_app: false, wework: false },
+            scenario: 'task_assigned',
+            enabled: false,
+            delivery_mode: 'daily_digest',
+          },
         ],
       },
       client,
@@ -89,7 +94,12 @@ describe('notifications api', () => {
     expect(calls[5]).toMatchObject({
       data: JSON.stringify({
         preferences: [
-          { scenario: 'task_assigned', enabled: false, delivery_mode: 'daily_digest' },
+          {
+            channels: { dingtalk: false, email: true, in_app: false, wework: false },
+            scenario: 'task_assigned',
+            enabled: false,
+            delivery_mode: 'daily_digest',
+          },
         ],
       }),
       method: 'put',
@@ -113,6 +123,7 @@ const sampleNotification = {
 };
 
 const samplePreference = {
+  channels: { dingtalk: false, email: false, in_app: true, wework: false },
   description: '任务执行人收到任务分配提醒',
   direct_related: true,
   delivery_mode: 'real_time',

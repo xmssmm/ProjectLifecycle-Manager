@@ -5,6 +5,14 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 NotificationDeliveryModeValue = Literal["real_time", "daily_digest"]
+NotificationChannelValue = Literal["in_app", "email", "wework", "dingtalk"]
+
+
+class NotificationChannelSettings(BaseModel):
+    in_app: bool = True
+    email: bool = False
+    wework: bool = False
+    dingtalk: bool = False
 
 
 class NotificationRead(BaseModel):
@@ -45,6 +53,7 @@ class NotificationPreferenceRead(BaseModel):
     direct_related: bool
     enabled: bool
     delivery_mode: NotificationDeliveryModeValue
+    channels: NotificationChannelSettings
 
 
 class NotificationPreferenceListRead(BaseModel):
@@ -55,6 +64,7 @@ class NotificationPreferenceUpdateItem(BaseModel):
     scenario: str
     enabled: bool
     delivery_mode: NotificationDeliveryModeValue = "real_time"
+    channels: NotificationChannelSettings | None = None
 
 
 class NotificationPreferenceUpdate(BaseModel):

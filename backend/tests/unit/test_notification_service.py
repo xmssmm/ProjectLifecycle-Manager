@@ -18,6 +18,7 @@ from app.main import create_app
 from app.models.base import Base
 from app.models.notifications import Notification, NotificationPreference
 from app.models.users import User, UserRole, UserStatus
+from app.services.notification_channels import NotificationChannelType
 from app.services.notifications import (
     InMemoryNotificationRepository,
     NotificationDeliveryMode,
@@ -121,9 +122,11 @@ def test_notification_preference_table_has_required_columns_and_constraints() ->
         "scenario",
         "enabled",
         "delivery_mode",
+        "channels",
         "created_at",
         "updated_at",
     }.issubset(set(table.c.keys()))
+    assert isinstance(table.c.channels.type, JSONB)
 
     assert any(
         isinstance(constraint, UniqueConstraint)
@@ -398,6 +401,8 @@ async def test_lists_and_updates_notification_preferences() -> None:
 
     assert all(item.enabled for item in defaults)
     assert all(item.delivery_mode == NotificationDeliveryMode.real_time for item in defaults)
+    assert all(item.channels[NotificationChannelType.in_app] for item in defaults)
+    assert all(not item.channels[NotificationChannelType.email] for item in defaults)
     assert {item.scenario for item in defaults}.issuperset(
         {
             "project_pending_review",
@@ -413,6 +418,10 @@ async def test_lists_and_updates_notification_preferences() -> None:
             "task_assigned": StoredNotificationPreference(
                 enabled=False,
                 delivery_mode=NotificationDeliveryMode.daily_digest,
+                channels={
+                    NotificationChannelType.in_app: False,
+                    NotificationChannelType.email: True,
+                },
             ),
             "project_pending_review": StoredNotificationPreference(
                 enabled=True,
@@ -424,6 +433,10 @@ async def test_lists_and_updates_notification_preferences() -> None:
     assert repository.preferences[(user.id, "task_assigned")] == StoredNotificationPreference(
         enabled=False,
         delivery_mode=NotificationDeliveryMode.daily_digest,
+        channels={
+            NotificationChannelType.in_app: False,
+            NotificationChannelType.email: True,
+        },
     )
     assert repository.preferences[
         (user.id, "project_pending_review")
@@ -435,6 +448,12 @@ async def test_lists_and_updates_notification_preferences() -> None:
     assert (
         next(item for item in updated if item.scenario == "task_assigned").delivery_mode
         == NotificationDeliveryMode.daily_digest
+    )
+    assert (
+        next(item for item in updated if item.scenario == "task_assigned").channels[
+            NotificationChannelType.email
+        ]
+        is True
     )
 
 
@@ -516,6 +535,12 @@ def test_notification_preference_endpoints_list_and_update() -> None:
                     direct_related=True,
                     enabled=False,
                     delivery_mode=NotificationDeliveryMode.daily_digest,
+                    channels={
+                        NotificationChannelType.in_app: False,
+                        NotificationChannelType.email: True,
+                        NotificationChannelType.wework: False,
+                        NotificationChannelType.dingtalk: False,
+                    },
                 ),
             ]
 
@@ -530,6 +555,12 @@ def test_notification_preference_endpoints_list_and_update() -> None:
                 "task_assigned": StoredNotificationPreference(
                     enabled=True,
                     delivery_mode=NotificationDeliveryMode.real_time,
+                    channels={
+                        NotificationChannelType.in_app: True,
+                        NotificationChannelType.email: False,
+                        NotificationChannelType.wework: True,
+                        NotificationChannelType.dingtalk: False,
+                    },
                 ),
             }
             return [
@@ -540,6 +571,12 @@ def test_notification_preference_endpoints_list_and_update() -> None:
                     direct_related=True,
                     enabled=True,
                     delivery_mode=NotificationDeliveryMode.real_time,
+                    channels={
+                        NotificationChannelType.in_app: True,
+                        NotificationChannelType.email: False,
+                        NotificationChannelType.wework: True,
+                        NotificationChannelType.dingtalk: False,
+                    },
                 ),
             ]
 
@@ -567,6 +604,12 @@ def test_notification_preference_endpoints_list_and_update() -> None:
                     "scenario": "task_assigned",
                     "enabled": True,
                     "delivery_mode": "real_time",
+                    "channels": {
+                        "in_app": True,
+                        "email": False,
+                        "wework": True,
+                        "dingtalk": False,
+                    },
                 },
             ],
         },
@@ -580,6 +623,12 @@ def test_notification_preference_endpoints_list_and_update() -> None:
         "direct_related": True,
         "enabled": False,
         "delivery_mode": "daily_digest",
+        "channels": {
+            "in_app": False,
+            "email": True,
+            "wework": False,
+            "dingtalk": False,
+        },
     }
     assert update_response.status_code == 200
     assert update_response.json()["data"]["items"][0]["enabled"] is True

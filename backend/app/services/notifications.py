@@ -15,6 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ResourceNotFoundError, ValidationFailedError
 from app.models.notifications import Notification, NotificationPreference
 from app.models.users import User
+from app.services.notification_channels import (
+    NotificationChannel,
+    NotificationChannelMessage,
+    NotificationChannelType,
+    normalize_channel_settings,
+)
 
 BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
 DAILY_DIGEST_SCENARIO = "daily_digest"
@@ -57,12 +63,28 @@ class NotificationPreferenceState:
     direct_related: bool
     enabled: bool
     delivery_mode: NotificationDeliveryMode
+    channels: dict[NotificationChannelType, bool]
 
 
 @dataclass(frozen=True)
 class StoredNotificationPreference:
     enabled: bool
     delivery_mode: NotificationDeliveryMode
+    channels: (
+        Mapping[NotificationChannelType, bool]
+        | Mapping[str, bool]
+        | None
+    ) = None
+
+    def channel_enabled(self, channel: NotificationChannelType) -> bool:
+        channels = self.normalized_channels()
+        return channels[channel]
+
+    def normalized_channels(self) -> dict[NotificationChannelType, bool]:
+        return normalize_channel_settings(
+            self.channels,
+            in_app_default=self.enabled,
+        )
 
 
 @dataclass(frozen=True)
@@ -283,6 +305,7 @@ class SqlAlchemyNotificationRepository:
             preference.user_id: StoredNotificationPreference(
                 enabled=preference.enabled,
                 delivery_mode=NotificationDeliveryMode(preference.delivery_mode),
+                channels=self._preference_channels(preference),
             )
             for preference in result.all()
         }
@@ -295,6 +318,7 @@ class SqlAlchemyNotificationRepository:
             preference.scenario: StoredNotificationPreference(
                 enabled=preference.enabled,
                 delivery_mode=NotificationDeliveryMode(preference.delivery_mode),
+                channels=self._preference_channels(preference),
             )
             for preference in result.all()
         }
@@ -325,6 +349,7 @@ class SqlAlchemyNotificationRepository:
                     scenario=scenario,
                     enabled=preference_update.enabled,
                     delivery_mode=preference_update.delivery_mode.value,
+                    channels=self._serialize_channels(preference_update),
                     created_at=now,
                     updated_at=now,
                 )
@@ -332,6 +357,7 @@ class SqlAlchemyNotificationRepository:
                 continue
             preference.enabled = preference_update.enabled
             preference.delivery_mode = preference_update.delivery_mode.value
+            preference.channels = self._serialize_channels(preference_update)
             preference.updated_at = now
 
     async def list_pending_digest_notifications(self, business_date: date) -> list[Notification]:
@@ -433,6 +459,20 @@ class SqlAlchemyNotificationRepository:
         start = datetime.combine(business_date, time.min, tzinfo=BUSINESS_TIMEZONE)
         end = start + timedelta(days=1)
         return start.astimezone(UTC), end.astimezone(UTC)
+
+    @staticmethod
+    def _preference_channels(
+        preference: NotificationPreference,
+    ) -> dict[NotificationChannelType, bool]:
+        raw_channels = getattr(preference, "channels", None)
+        return normalize_channel_settings(raw_channels, in_app_default=preference.enabled)
+
+    @staticmethod
+    def _serialize_channels(preference: StoredNotificationPreference) -> dict[str, bool]:
+        return {
+            channel.value: enabled
+            for channel, enabled in preference.normalized_channels().items()
+        }
 
 
 class InMemoryNotificationRepository:
@@ -617,10 +657,12 @@ class NotificationService:
         repository: NotificationRepository,
         business_date_provider: Callable[[], date] = current_business_date,
         now_provider: Callable[[], datetime] = current_utc_datetime,
+        channels: Mapping[NotificationChannelType, NotificationChannel] | None = None,
     ) -> None:
         self._repository = repository
         self._business_date_provider = business_date_provider
         self._now_provider = now_provider
+        self._channels = dict(channels or {})
 
     async def send(
         self,
@@ -641,7 +683,7 @@ class NotificationService:
         receiver_ids = [
             receiver_id
             for receiver_id in receiver_ids
-            if receiver_preferences[receiver_id].enabled
+            if self._has_enabled_channel(receiver_preferences[receiver_id])
         ]
         if not receiver_ids:
             return []
@@ -660,6 +702,11 @@ class NotificationService:
         existing = await self._repository.existing_dedup_keys(list(dedup_by_receiver.values()))
         now = self._now_provider()
         notification_payload = dict(payload or {})
+        in_app_receiver_ids = {
+            receiver_id
+            for receiver_id in receiver_ids
+            if receiver_preferences[receiver_id].channel_enabled(NotificationChannelType.in_app)
+        }
 
         notifications = [
             Notification(
@@ -675,15 +722,22 @@ class NotificationService:
                 updated_at=now,
             )
             for receiver_id, dedup_key in dedup_by_receiver.items()
+            if receiver_id in in_app_receiver_ids
             if dedup_key not in existing
         ]
 
-        if not notifications:
-            return []
-
-        self._repository.add_many(notifications)
-        await self._repository.commit()
-        await self._repository.refresh_many(notifications)
+        if notifications:
+            self._repository.add_many(notifications)
+            await self._repository.commit()
+            await self._repository.refresh_many(notifications)
+        await self._send_external_channels(
+            scenario=scenario,
+            source_id=source_key,
+            payload=notification_payload,
+            dedup_by_receiver=dedup_by_receiver,
+            receiver_preferences=receiver_preferences,
+            existing_dedup_keys=existing,
+        )
         return notifications
 
     async def list_notifications(
@@ -720,6 +774,7 @@ class NotificationService:
                     )
                 ).enabled,
                 delivery_mode=preference.delivery_mode,
+                channels=preference.normalized_channels(),
             )
             for definition in NOTIFICATION_SCENARIOS
         ]
@@ -884,6 +939,39 @@ class NotificationService:
             enabled=True,
             delivery_mode=NotificationDeliveryMode.real_time,
         )
+
+    def _has_enabled_channel(self, preference: StoredNotificationPreference) -> bool:
+        if preference.channel_enabled(NotificationChannelType.in_app):
+            return True
+        return any(preference.channel_enabled(channel) for channel in self._channels)
+
+    async def _send_external_channels(
+        self,
+        *,
+        scenario: str,
+        source_id: str,
+        payload: dict[str, object],
+        dedup_by_receiver: Mapping[UUID, str],
+        receiver_preferences: Mapping[UUID, StoredNotificationPreference],
+        existing_dedup_keys: set[str],
+    ) -> None:
+        for receiver_id, dedup_key in dedup_by_receiver.items():
+            if dedup_key in existing_dedup_keys:
+                continue
+            preference = receiver_preferences[receiver_id]
+            for channel_type, channel in self._channels.items():
+                if not preference.channel_enabled(channel_type):
+                    continue
+                await channel.send(
+                    NotificationChannelMessage(
+                        channel=channel_type,
+                        receiver_id=receiver_id,
+                        scenario=scenario,
+                        source_id=source_id,
+                        payload=dict(payload),
+                        dedup_key=dedup_key,
+                    ),
+                )
 
     def _build_digest_payload(
         self,
