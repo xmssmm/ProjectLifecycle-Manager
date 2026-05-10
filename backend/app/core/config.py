@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     smtp_from_address: str = ""
     smtp_use_tls: bool = True
 
+    wework_enabled: bool = False
+    wework_webhook_url: str = ""
+    wework_webhook_secret: str = ""
+
     storage_backend: str = "local"
     storage_root: str = Field(default="/app/storage")
     storage_public_url_prefix: str = "/storage"
