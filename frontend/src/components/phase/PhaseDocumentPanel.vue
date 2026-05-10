@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { downloadDocument, listDocuments } from '@/api/documents';
 import DocumentList from '@/components/document/DocumentList.vue';
 import DocumentUploader from '@/components/document/DocumentUploader.vue';
+import { useAcceptanceStepStore } from '@/stores/useAcceptanceStepStore';
 import { usePhaseStore } from '@/stores/usePhaseStore';
+import { ACCEPTANCE_STEP_STATUS_LABELS, type AcceptanceStepRead } from '@/types/acceptanceSteps';
 import type { DocumentRead } from '@/types/documents';
 import type { PhaseDetailRead, PhaseRead, PhaseRequiredDocumentRead } from '@/types/phases';
 
@@ -13,10 +15,19 @@ const props = defineProps<{
 }>();
 
 const phaseStore = usePhaseStore();
+const acceptanceStepStore = useAcceptanceStepStore();
 const documents = ref<DocumentRead[]>([]);
 const documentsLoading = ref(false);
 const detail = ref<PhaseDetailRead | null>(null);
 const selectedPhaseId = ref('');
+const stepError = ref('');
+const stepForm = reactive({
+  description: '',
+  planDate: '',
+  responsibleId: '',
+  stepName: '',
+  stepNo: 1,
+});
 
 const phaseOptions = computed(() =>
   phaseStore.phases
@@ -31,6 +42,10 @@ const completionText = computed(() => {
   }
   return `${completion.uploaded_total} / ${completion.required_total}`;
 });
+const isAcceptancePhase = computed(() => detail.value?.phase_no === 4);
+const acceptanceSteps = computed(() =>
+  detail.value ? (acceptanceStepStore.stepsByPhase[detail.value.id] ?? []) : [],
+);
 
 onMounted(initialize);
 
@@ -90,6 +105,9 @@ async function loadSelectedPhase(): Promise<void> {
     ]);
     detail.value = phaseDetail;
     documents.value = documentList.items;
+    if (phaseDetail.phase_no === 4) {
+      await acceptanceStepStore.fetchSteps(phaseId);
+    }
   } finally {
     documentsLoading.value = false;
   }
@@ -111,6 +129,54 @@ async function handleDownload(documentItem: DocumentRead): Promise<void> {
 
 function isMissing(document: PhaseRequiredDocumentRead): boolean {
   return missingDocTypes.value.has(document.doc_type);
+}
+
+async function submitAcceptanceStep(): Promise<void> {
+  if (!detail.value) {
+    return;
+  }
+
+  stepError.value = '';
+  const stepNo = Number(stepForm.stepNo);
+  const stepName = stepForm.stepName.trim();
+  const responsibleId = stepForm.responsibleId.trim();
+  if (!Number.isFinite(stepNo) || stepNo < 1 || !stepName || !responsibleId) {
+    stepError.value = '步骤序号、名称、责任人必填';
+    return;
+  }
+
+  await acceptanceStepStore.createStep(detail.value.id, {
+    description: stepForm.description.trim() || null,
+    planDate: stepForm.planDate || null,
+    responsibleId,
+    stepName,
+    stepNo,
+  });
+  resetStepForm(stepNo + 1);
+}
+
+async function completeAcceptanceStep(step: AcceptanceStepRead): Promise<void> {
+  if (!detail.value || step.status === 'completed') {
+    return;
+  }
+  await acceptanceStepStore.updateStep(detail.value.id, step.id, { status: 'completed' });
+  await loadSelectedPhase();
+}
+
+function resetStepForm(nextStepNo = 1): void {
+  stepForm.description = '';
+  stepForm.planDate = '';
+  stepForm.responsibleId = '';
+  stepForm.stepName = '';
+  stepForm.stepNo = nextStepNo;
+}
+
+function stepStatusLabel(step: AcceptanceStepRead): string {
+  return ACCEPTANCE_STEP_STATUS_LABELS[step.status];
+}
+
+function formatOptionalDate(value: string | null): string {
+  return value || '-';
 }
 </script>
 
@@ -172,9 +238,223 @@ function isMissing(document: PhaseRequiredDocumentRead): boolean {
 
       <el-empty v-if="detail.required_documents.length === 0" description="当前环节无必传文档" />
 
+      <section
+        v-if="isAcceptancePhase"
+        class="phase-document-panel__acceptance"
+        data-test="acceptance-step-panel"
+      >
+        <div class="phase-document-panel__acceptance-header">
+          <div>
+            <h4>验收步骤</h4>
+            <p>按步骤指派责任人、上传验收报告并完成验收。</p>
+          </div>
+          <el-tag>{{ acceptanceSteps.length }} 项</el-tag>
+        </div>
+
+        <form class="phase-document-panel__step-form" @submit.prevent="submitAcceptanceStep">
+          <label>
+            <span>序号</span>
+            <!-- prettier-ignore -->
+            <input v-model.number="stepForm.stepNo" data-test="acceptance-step-no" min="1" type="number">
+          </label>
+          <label>
+            <span>步骤名称</span>
+            <!-- prettier-ignore -->
+            <input v-model="stepForm.stepName" data-test="acceptance-step-name" type="text">
+          </label>
+          <label>
+            <span>责任人</span>
+            <!-- prettier-ignore -->
+            <input v-model="stepForm.responsibleId" data-test="acceptance-step-responsible" type="text">
+          </label>
+          <label>
+            <span>计划日期</span>
+            <!-- prettier-ignore -->
+            <input v-model="stepForm.planDate" data-test="acceptance-step-plan-date" type="date">
+          </label>
+          <label class="phase-document-panel__step-form-description">
+            <span>说明</span>
+            <textarea
+              v-model="stepForm.description"
+              data-test="acceptance-step-description"
+              rows="2"
+            />
+          </label>
+          <button
+            class="phase-document-panel__step-submit"
+            data-test="create-acceptance-step"
+            type="button"
+            @click="submitAcceptanceStep"
+          >
+            新增步骤
+          </button>
+        </form>
+        <p v-if="stepError" class="phase-document-panel__step-error">{{ stepError }}</p>
+
+        <div v-if="acceptanceSteps.length > 0" class="phase-document-panel__step-list">
+          <article
+            v-for="step in acceptanceSteps"
+            :key="step.id"
+            class="phase-document-panel__step-card"
+          >
+            <div class="phase-document-panel__step-main">
+              <div>
+                <h5>{{ step.step_no }}. {{ step.step_name }}</h5>
+                <p>{{ step.description || '暂无说明' }}</p>
+              </div>
+              <el-tag :type="step.status === 'completed' ? 'success' : 'warning'">
+                {{ stepStatusLabel(step) }}
+              </el-tag>
+            </div>
+            <div class="phase-document-panel__step-meta">
+              <span>责任人 {{ step.responsible_id }}</span>
+              <span>计划 {{ formatOptionalDate(step.plan_date) }}</span>
+              <span>完成 {{ formatOptionalDate(step.completed_at) }}</span>
+            </div>
+            <div class="phase-document-panel__step-actions">
+              <DocumentUploader
+                :acceptance-step-id="step.id"
+                doc-type="acceptance_report"
+                :phase-id="detail.id"
+                :sub-project-id="props.subProjectId"
+                @uploaded="handleUploaded"
+              />
+              <button
+                class="phase-document-panel__step-complete"
+                :data-test="`complete-acceptance-step-${step.id}`"
+                :disabled="
+                  step.status === 'completed' || acceptanceStepStore.updatingId === step.id
+                "
+                type="button"
+                @click="completeAcceptanceStep(step)"
+              >
+                完成步骤
+              </button>
+            </div>
+          </article>
+        </div>
+        <el-empty v-else description="暂无验收步骤" />
+      </section>
+
       <DocumentList :documents="documents" :loading="documentsLoading" @download="handleDownload" />
     </template>
 
     <el-empty v-else-if="!phaseStore.loading" description="暂无环节文档" />
   </section>
 </template>
+
+<style scoped>
+.phase-document-panel__acceptance {
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  padding: 16px;
+}
+
+.phase-document-panel__acceptance-header,
+.phase-document-panel__step-main,
+.phase-document-panel__step-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.phase-document-panel__acceptance-header h4,
+.phase-document-panel__step-card h5 {
+  margin: 0;
+}
+
+.phase-document-panel__acceptance-header p,
+.phase-document-panel__step-card p {
+  color: #64748b;
+  margin: 4px 0 0;
+}
+
+.phase-document-panel__step-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 96px repeat(3, minmax(140px, 1fr)) auto;
+  margin-top: 16px;
+}
+
+.phase-document-panel__step-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.phase-document-panel__step-form span,
+.phase-document-panel__step-meta {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.phase-document-panel__step-form input,
+.phase-document-panel__step-form textarea {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.phase-document-panel__step-form-description {
+  grid-column: 1 / -2;
+}
+
+.phase-document-panel__step-submit,
+.phase-document-panel__step-complete {
+  align-self: end;
+  background: #1f6feb;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+.phase-document-panel__step-complete {
+  background: #16a34a;
+}
+
+.phase-document-panel__step-complete:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.phase-document-panel__step-error {
+  color: #dc2626;
+  margin: 10px 0 0;
+}
+
+.phase-document-panel__step-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.phase-document-panel__step-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.phase-document-panel__step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+@media (width <= 900px) {
+  .phase-document-panel__step-form {
+    grid-template-columns: 1fr;
+  }
+
+  .phase-document-panel__step-form-description {
+    grid-column: auto;
+  }
+}
+</style>
