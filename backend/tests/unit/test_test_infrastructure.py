@@ -11,6 +11,7 @@ from app.models.phases import Phase
 from app.models.sub_projects import SubProject
 from app.models.tasks import Task, TaskExecutor
 from app.models.users import User, UserRole
+from tests.conftest import normalize_asyncpg_url
 from tests.factories import (
     DepartmentFactory,
     DocumentFactory,
@@ -52,3 +53,14 @@ def test_core_factories_build_valid_model_instances() -> None:
     assert isinstance(executor, TaskExecutor)
     assert document.file_path.endswith(".pdf")
     assert isinstance(payment, Payment)
+
+
+def test_postgres_testcontainer_url_is_normalized_for_asyncpg() -> None:
+    assert (
+        normalize_asyncpg_url("postgresql+psycopg2://user:pass@localhost:5432/test")
+        == "postgresql+asyncpg://user:pass@localhost:5432/test"
+    )
+    assert (
+        normalize_asyncpg_url("postgresql://user:pass@localhost:5432/test")
+        == "postgresql+asyncpg://user:pass@localhost:5432/test"
+    )

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 
 import pytest
 from testcontainers.postgres import PostgresContainer  # type: ignore[import-untyped]
 from testcontainers.redis import RedisContainer  # type: ignore[import-untyped]
+
+DOCKER_DESKTOP_BIN = r"C:\Program Files\Docker\Docker\resources\bin"
+if os.path.isdir(DOCKER_DESKTOP_BIN):
+    os.environ["PATH"] = f"{DOCKER_DESKTOP_BIN}{os.pathsep}{os.environ.get('PATH', '')}"
 
 
 @pytest.fixture(scope="session")
@@ -21,10 +26,15 @@ def redis_container() -> Iterator[RedisContainer]:
 
 @pytest.fixture(scope="session")
 def postgres_url(postgres_container: PostgresContainer) -> str:
-    return str(postgres_container.get_connection_url()).replace(
-        "postgresql://",
-        "postgresql+asyncpg://",
-    )
+    return normalize_asyncpg_url(str(postgres_container.get_connection_url()))
+
+
+def normalize_asyncpg_url(url: str) -> str:
+    if url.startswith("postgresql+psycopg2://"):
+        return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
 
 
 @pytest.fixture(scope="session")

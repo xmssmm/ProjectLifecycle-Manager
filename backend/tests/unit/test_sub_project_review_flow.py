@@ -278,6 +278,7 @@ async def test_close_sub_project_requires_all_six_phases_completed() -> None:
 
     for phase in repository.phases:
         phase.status = PhaseStatus.completed
+    sub_project.status = SubProjectStatus.completed
 
     audit_writer = InMemoryAuditLogWriter()
     closed = await service.close_sub_project(

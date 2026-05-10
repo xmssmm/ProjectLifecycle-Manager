@@ -1036,7 +1036,7 @@ class SubProjectService:
         sub_project = await self._get_existing_sub_project(sub_project_id)
         if sub_project.status == SubProjectStatus.closed:
             return sub_project
-        if sub_project.status != SubProjectStatus.in_progress:
+        if sub_project.status not in {SubProjectStatus.in_progress, SubProjectStatus.completed}:
             raise self._invalid_status(sub_project.status.value, "当前状态不允许结项子项目")
 
         phase_count, incomplete_count = await self._repository.phase_completion_counts(
