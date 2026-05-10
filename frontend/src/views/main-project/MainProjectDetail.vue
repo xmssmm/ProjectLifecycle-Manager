@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref, watch } from 'vue';
 
 import { ConfirmDialog, DataTable, StatusTag } from '@/components/common';
+import ProjectProgressFunnel from '@/components/main-project/ProjectProgressFunnel.vue';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
@@ -156,6 +157,11 @@ function timelineTitle(status: ProjectStatus): string {
           />
         </el-steps>
       </section>
+
+      <ProjectProgressFunnel
+        :funnel="mainProjectStore.progressFunnel"
+        :loading="mainProjectStore.progressFunnelLoading"
+      />
 
       <section class="project-detail-band">
         <div class="project-detail-band__header">

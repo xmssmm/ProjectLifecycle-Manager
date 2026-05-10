@@ -5,6 +5,7 @@ import { createApiClient } from '../src/api/client';
 import {
   createMainProject,
   getMainProject,
+  getProjectProgressFunnel,
   listMainProjects,
   reviewMainProject,
   submitMainProject,
@@ -45,6 +46,19 @@ describe('project api', () => {
 
     expect(calls[1]).toMatchObject({ method: 'get', url: '/main-projects/main-1' });
     expect(detail.name).toBe('智慧档案平台');
+
+    client.defaults.adapter = recordingAdapter(calls, {
+      code: 0,
+      message: 'success',
+      data: sampleFunnel,
+    });
+    const funnel = await getProjectProgressFunnel('main-1', client);
+
+    expect(calls[2]).toMatchObject({
+      method: 'get',
+      url: '/main-projects/main-1/progress-funnel',
+    });
+    expect(funnel.items[0].sub_project_count).toBe(1);
   });
 
   it('lists sub projects for detail pages', async () => {
@@ -179,6 +193,28 @@ const sampleSubProject = {
   spent_amount: '0.00',
   status: 'in_progress',
   updated_at: '2026-05-10T00:00:00Z',
+};
+
+const sampleFunnel = {
+  items: [
+    {
+      code: 'procurement',
+      name: '采购',
+      phase_no: 2,
+      sub_project_count: 1,
+      sub_projects: [
+        {
+          id: 'sub-1',
+          name: '采购实施',
+          phase_status: 'in_progress',
+          project_no: 'Z-2026-0001-ZX-001',
+          status: 'in_progress',
+        },
+      ],
+    },
+  ],
+  main_project_id: 'main-1',
+  total_sub_projects: 1,
 };
 
 function recordingAdapter(calls: AxiosRequestConfig[], data: unknown): AxiosAdapter {

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import {
   createMainProject as createMainProjectRequest,
   getMainProject,
+  getProjectProgressFunnel,
   listMainProjects,
   reviewMainProject as reviewMainProjectRequest,
   submitMainProject as submitMainProjectRequest,
@@ -15,6 +16,7 @@ import type {
   MainProjectRead,
   MainProjectReviewPayload,
   MainProjectUpdatePayload,
+  ProjectProgressFunnelRead,
   SubProjectRead,
 } from '@/types/projects';
 
@@ -26,6 +28,8 @@ interface MainProjectState {
   loading: boolean;
   page: number;
   pageSize: number;
+  progressFunnel: ProjectProgressFunnelRead | null;
+  progressFunnelLoading: boolean;
   projects: MainProjectRead[];
   total: number;
 }
@@ -39,6 +43,8 @@ export const useMainProjectStore = defineStore('main-projects', {
     loading: false,
     page: 1,
     pageSize: 20,
+    progressFunnel: null,
+    progressFunnelLoading: false,
     projects: [],
     total: 0,
   }),
@@ -59,18 +65,23 @@ export const useMainProjectStore = defineStore('main-projects', {
     },
     async fetchMainProjectDetail(projectId: string) {
       this.detailLoading = true;
+      this.progressFunnelLoading = true;
+      this.progressFunnel = null;
       try {
-        const [project, subProjects] = await Promise.all([
+        const [project, subProjects, progressFunnel] = await Promise.all([
           getMainProject(projectId),
           listSubProjects({ page: 1, pageSize: 100 }),
+          getProjectProgressFunnel(projectId),
         ]);
         this.currentProject = project;
+        this.progressFunnel = progressFunnel;
         this.currentSubProjects = subProjects.items.filter(
           (subProject) => subProject.main_project_id === projectId,
         );
         return project;
       } finally {
         this.detailLoading = false;
+        this.progressFunnelLoading = false;
       }
     },
     async createMainProject(payload: MainProjectCreatePayload) {

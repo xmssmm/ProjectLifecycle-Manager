@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createMainProject,
   getMainProject,
+  getProjectProgressFunnel,
   listMainProjects,
   reviewMainProject,
   submitMainProject,
@@ -12,6 +13,7 @@ import {
 } from '@/api/mainProjects';
 import { listSubProjects } from '@/api/subProjects';
 import { useAuthStore } from '@/stores/useAuthStore';
+import type { ProjectProgressFunnelRead } from '@/types/projects';
 import MainProjectDetail from '@/views/main-project/MainProjectDetail.vue';
 import MainProjectEdit from '@/views/main-project/MainProjectEdit.vue';
 import MainProjectList from '@/views/main-project/MainProjectList.vue';
@@ -20,6 +22,7 @@ import MainProjectReview from '@/views/main-project/MainProjectReview.vue';
 vi.mock('@/api/mainProjects', () => ({
   createMainProject: vi.fn(),
   getMainProject: vi.fn(),
+  getProjectProgressFunnel: vi.fn(),
   listMainProjects: vi.fn(),
   reviewMainProject: vi.fn(),
   submitMainProject: vi.fn(),
@@ -51,6 +54,7 @@ describe('main project pages', () => {
       total: 2,
     });
     vi.mocked(getMainProject).mockResolvedValue(sampleMainProject);
+    vi.mocked(getProjectProgressFunnel).mockResolvedValue(sampleFunnel);
     vi.mocked(createMainProject).mockResolvedValue(sampleMainProject);
     vi.mocked(updateMainProject).mockResolvedValue(rejectedProject);
     vi.mocked(submitMainProject).mockResolvedValue({
@@ -291,6 +295,28 @@ const otherSubProject = {
   name: '其他子项目',
 } as const;
 
+const sampleFunnel: ProjectProgressFunnelRead = {
+  items: [
+    {
+      code: 'procurement',
+      name: '采购',
+      phase_no: 2,
+      sub_project_count: 1,
+      sub_projects: [
+        {
+          id: 'sub-1',
+          name: '采购实施',
+          phase_status: 'in_progress',
+          project_no: 'Z-2026-0001-ZX-001',
+          status: 'in_progress',
+        },
+      ],
+    },
+  ],
+  main_project_id: 'main-1',
+  total_sub_projects: 1,
+};
+
 const stubs = {
   ElAlert: { props: ['title'], template: '<section>{{ title }}</section>' },
   DataTable: {
@@ -336,6 +362,10 @@ const stubs = {
     props: ['modelValue', 'message', 'title'],
     template:
       '<section v-if="modelValue" data-test="submit-confirm-dialog">{{ title }}{{ message }}<button data-test="confirm-submit" @click="$emit(\'confirm\')">确认</button></section>',
+  },
+  ProjectProgressFunnel: {
+    props: ['funnel', 'loading'],
+    template: '<section>项目进度漏斗</section>',
   },
   RouterLink: { props: ['to'], template: '<a><slot /></a>' },
   SearchBar: {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createMainProject,
   getMainProject,
+  getProjectProgressFunnel,
   listMainProjects,
   reviewMainProject,
   submitMainProject,
@@ -11,10 +12,12 @@ import {
 } from '@/api/mainProjects';
 import { listSubProjects } from '@/api/subProjects';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
+import type { ProjectProgressFunnelRead } from '@/types/projects';
 
 vi.mock('@/api/mainProjects', () => ({
   createMainProject: vi.fn(),
   getMainProject: vi.fn(),
+  getProjectProgressFunnel: vi.fn(),
   listMainProjects: vi.fn(),
   reviewMainProject: vi.fn(),
   submitMainProject: vi.fn(),
@@ -36,6 +39,7 @@ describe('useMainProjectStore', () => {
       total: 1,
     });
     vi.mocked(getMainProject).mockResolvedValue(sampleMainProject);
+    vi.mocked(getProjectProgressFunnel).mockResolvedValue(sampleFunnel);
     vi.mocked(createMainProject).mockResolvedValue(sampleMainProject);
     vi.mocked(updateMainProject).mockResolvedValue({ ...sampleMainProject, name: '更新后项目' });
     vi.mocked(submitMainProject).mockResolvedValue({
@@ -62,10 +66,12 @@ describe('useMainProjectStore', () => {
 
     expect(listMainProjects).toHaveBeenCalledWith({ page: 1, pageSize: 20 });
     expect(getMainProject).toHaveBeenCalledWith('main-1');
+    expect(getProjectProgressFunnel).toHaveBeenCalledWith('main-1');
     expect(listSubProjects).toHaveBeenCalledWith({ page: 1, pageSize: 100 });
     expect(store.projects[0].name).toBe('智慧档案平台');
     expect(store.currentProject?.id).toBe('main-1');
     expect(store.currentSubProjects[0].main_project_id).toBe('main-1');
+    expect(store.progressFunnel?.items[0].name).toBe('采购');
   });
 
   it('creates, updates, and submits main projects', async () => {
@@ -146,3 +152,25 @@ const sampleSubProject = {
   status: 'in_progress',
   updated_at: '2026-05-10T00:00:00Z',
 } as const;
+
+const sampleFunnel: ProjectProgressFunnelRead = {
+  items: [
+    {
+      code: 'procurement',
+      name: '采购',
+      phase_no: 2,
+      sub_project_count: 1,
+      sub_projects: [
+        {
+          id: 'sub-1',
+          name: '采购实施',
+          phase_status: 'in_progress',
+          project_no: 'Z-2026-0001-ZX-001',
+          status: 'in_progress',
+        },
+      ],
+    },
+  ],
+  main_project_id: 'main-1',
+  total_sub_projects: 1,
+};

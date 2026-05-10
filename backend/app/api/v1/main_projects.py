@@ -16,9 +16,16 @@ from app.schemas.main_projects import (
     MainProjectRead,
     MainProjectReviewRequest,
     MainProjectUpdate,
+    ProjectProgressFunnelItemRead,
+    ProjectProgressFunnelRead,
+    ProjectProgressFunnelSubProjectRead,
 )
 from app.services.audit import AuditContext, BackgroundAuditLogWriter, get_audit_context
-from app.services.main_projects import MainProjectService, SqlAlchemyMainProjectRepository
+from app.services.main_projects import (
+    MainProjectService,
+    ProjectProgressFunnel,
+    SqlAlchemyMainProjectRepository,
+)
 from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
 
 router = APIRouter(prefix="/main-projects", tags=["main-projects"])
@@ -37,6 +44,33 @@ async def get_main_project_service(
 
 def serialize_main_project(project: MainProject) -> dict[str, object]:
     return MainProjectRead.model_validate(project).model_dump(mode="json")
+
+
+def serialize_progress_funnel(funnel: ProjectProgressFunnel) -> dict[str, object]:
+    payload = ProjectProgressFunnelRead(
+        main_project_id=funnel.main_project_id,
+        total_sub_projects=funnel.total_sub_projects,
+        items=[
+            ProjectProgressFunnelItemRead(
+                phase_no=item.phase_no,
+                code=item.code,
+                name=item.name,
+                sub_project_count=item.sub_project_count,
+                sub_projects=[
+                    ProjectProgressFunnelSubProjectRead(
+                        id=sub_project.id,
+                        project_no=sub_project.project_no,
+                        name=sub_project.name,
+                        status=sub_project.status,
+                        phase_status=sub_project.phase_status,
+                    )
+                    for sub_project in item.sub_projects
+                ],
+            )
+            for item in funnel.items
+        ],
+    )
+    return payload.model_dump(mode="json")
 
 
 @router.get("")
@@ -78,6 +112,16 @@ async def get_main_project(
 ) -> dict[str, object]:
     project = await service.get_project(actor=current_user, project_id=project_id)
     return success_response(serialize_main_project(project))
+
+
+@router.get("/{project_id}/progress-funnel")
+async def get_project_progress_funnel(
+    project_id: UUID,
+    service: Annotated[MainProjectService, Depends(get_main_project_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    funnel = await service.get_progress_funnel(actor=current_user, project_id=project_id)
+    return success_response(serialize_progress_funnel(funnel))
 
 
 @router.put("/{project_id}")
