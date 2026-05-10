@@ -12,6 +12,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.departments import router as departments_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.main_projects import router as main_projects_router
+from app.api.v1.payments import router as payments_router
 from app.api.v1.phases import router as phases_router
 from app.api.v1.sub_projects import router as sub_projects_router
 from app.api.v1.system import router as system_router
@@ -130,6 +131,7 @@ def create_app(
         description="企业项目过程管理与资料归档系统后端接口。",
         lifespan=lifespan_context,
         openapi_tags=[
+            {"name": "payments", "description": "Payment creation and reversal endpoints."},
             {"name": "auth", "description": "Authentication endpoints."},
             {"name": "users", "description": "用户管理接口。"},
             {"name": "departments", "description": "部门管理接口。"},
@@ -166,6 +168,7 @@ def create_app(
     app.include_router(departments_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(main_projects_router, prefix="/api/v1")
+    app.include_router(payments_router, prefix="/api/v1")
     app.include_router(phases_router, prefix="/api/v1")
     app.include_router(sub_projects_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
