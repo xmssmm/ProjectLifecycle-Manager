@@ -1,13 +1,25 @@
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Cookie, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
+from app.core.deps import CurrentUserContext, get_auth_token_store, get_current_token_context
+from app.core.exceptions import AuthenticationError
 from app.core.responses import success_response
-from app.schemas.auth import LoginRequest, TokenPairRead
-from app.services.auth import AuthFailureStore, RedisAuthFailureStore, login_user
+from app.schemas.auth import AccessTokenRead, CurrentUserRead, LoginRequest, TokenPairRead
+from app.services.auth import (
+    AuthFailureStore,
+    AuthTokenStore,
+    RedisAuthFailureStore,
+    create_access_token,
+    get_active_user_by_id,
+    get_token_ttl_seconds,
+    login_user,
+    validate_token_claims,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,4 +60,51 @@ async def login(
             refresh_token=tokens.refresh_token,
             token_type=tokens.token_type,
         ).model_dump(),
+    )
+
+
+@router.post("/refresh")
+async def refresh(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    token_store: Annotated[AuthTokenStore, Depends(get_auth_token_store)],
+    refresh_token: Annotated[str | None, Cookie(alias="refresh_token")] = None,
+) -> dict[str, object]:
+    if refresh_token is None:
+        raise AuthenticationError("Missing refresh token")
+    claims = await validate_token_claims(
+        refresh_token,
+        expected_type="refresh",
+        token_store=token_store,
+        settings=settings,
+    )
+    user = await get_active_user_by_id(session, UUID(str(claims["sub"])))
+    access_token = create_access_token(user, settings)
+    return success_response(AccessTokenRead(access_token=access_token).model_dump())
+
+
+@router.post("/logout")
+async def logout(
+    response: Response,
+    context: Annotated[CurrentUserContext, Depends(get_current_token_context)],
+    token_store: Annotated[AuthTokenStore, Depends(get_auth_token_store)],
+) -> dict[str, object]:
+    jti = str(context.claims["jti"])
+    await token_store.blacklist_jti(jti, get_token_ttl_seconds(context.claims))
+    response.delete_cookie("refresh_token")
+    return success_response({"logged_out": True})
+
+
+@router.get("/me")
+async def me(
+    context: Annotated[CurrentUserContext, Depends(get_current_token_context)],
+) -> dict[str, object]:
+    user = context.user
+    return success_response(
+        CurrentUserRead(
+            id=user.id,
+            username=user.username,
+            role=user.role,
+            dept_id=user.dept_id,
+        ).model_dump(mode="json"),
     )
