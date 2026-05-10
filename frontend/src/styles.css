@@ -322,6 +322,94 @@ body {
   white-space: nowrap;
 }
 
+.dashboard-page {
+  max-width: 1360px;
+}
+
+.dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.dashboard-metric {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dashboard-metric dt {
+  color: #667085;
+  font-size: 12px;
+}
+
+.dashboard-metric dd {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.dashboard-grid,
+.dashboard-list-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dashboard-panel {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dashboard-chart {
+  width: 100%;
+  min-height: 280px;
+}
+
+.dashboard-list {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  color: inherit;
+  background: #fafbfc;
+  text-decoration: none;
+}
+
+.dashboard-list-item strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.dashboard-list-item p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 12px;
+}
+
 .data-table__pagination {
   display: flex;
   justify-content: flex-end;
@@ -1027,6 +1115,17 @@ body {
     grid-template-columns: 1fr;
     min-width: 0;
     margin-top: 20px;
+  }
+
+  .dashboard-metrics,
+  .dashboard-grid,
+  .dashboard-list-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-list-item {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .workspace-task-item,

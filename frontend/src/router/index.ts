@@ -10,6 +10,7 @@ import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
+import DashboardView from '@/views/dashboard/DashboardView.vue';
 import HomeView from '@/views/HomeView.vue';
 import MainProjectDetailView from '@/views/main-project/MainProjectDetail.vue';
 import MainProjectEditView from '@/views/main-project/MainProjectEdit.vue';
@@ -33,6 +34,12 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: DashboardView,
       meta: { requiresAuth: true },
     },
     {
