@@ -12,7 +12,9 @@ from app.models.documents import Document
 from app.models.phases import Phase
 from app.models.sub_projects import SubProject, SubProjectMember
 from app.models.users import User, UserRole
+from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter
 from app.storage.base import StorageBackend, StorageSecurityError
+from app.validators.file_validator import DefaultFileValidator, FileValidationError, FileValidator
 
 VIEW_ALL_DOCUMENT_ROLES = frozenset(
     {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
@@ -220,10 +222,12 @@ class DocumentService:
         repository: DocumentRepository,
         storage: StorageBackend,
         max_file_size_bytes: int,
+        file_validator: FileValidator | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._max_file_size_bytes = max_file_size_bytes
+        self._file_validator = file_validator or DefaultFileValidator()
 
     async def upload_document(
         self,
@@ -233,8 +237,11 @@ class DocumentService:
         phase_id: UUID,
         doc_type: str,
         file_name: str,
+        content_type: str | None = None,
         content: bytes,
         acceptance_step_id: UUID | None = None,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
     ) -> Document:
         cleaned_doc_type = self._clean_doc_type(doc_type)
         cleaned_file_name = self._clean_file_name(file_name)
@@ -244,6 +251,16 @@ class DocumentService:
             phase_id=phase_id,
         )
         await self._ensure_visible(actor, sub_project)
+        self._validate_file(
+            actor=actor,
+            phase=phase,
+            doc_type=cleaned_doc_type,
+            file_name=cleaned_file_name,
+            content_type=content_type,
+            content=content,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+        )
         group_documents = await self._repository.list_group_documents_for_update(
             sub_project_id=sub_project.id,
             phase_id=phase.id,
@@ -378,6 +395,72 @@ class DocumentService:
             )
         except StorageSecurityError as exc:
             raise ValidationFailedError("File name contains unsafe path characters") from exc
+
+    def _validate_file(
+        self,
+        *,
+        actor: User,
+        phase: Phase,
+        doc_type: str,
+        file_name: str,
+        content_type: str | None,
+        content: bytes,
+        audit_writer: AuditLogWriter | None,
+        audit_context: AuditContext | None,
+    ) -> None:
+        try:
+            self._file_validator.validate(
+                filename=file_name,
+                content_type=content_type,
+                content=content,
+            )
+        except FileValidationError as exc:
+            self._record_upload_rejected(
+                actor=actor,
+                phase=phase,
+                doc_type=doc_type,
+                file_name=file_name,
+                content_type=content_type,
+                reason=exc.reason,
+                audit_writer=audit_writer,
+                audit_context=audit_context,
+            )
+            raise
+
+    @staticmethod
+    def _record_upload_rejected(
+        *,
+        actor: User,
+        phase: Phase,
+        doc_type: str,
+        file_name: str,
+        content_type: str | None,
+        reason: str,
+        audit_writer: AuditLogWriter | None,
+        audit_context: AuditContext | None,
+    ) -> None:
+        if audit_writer is None:
+            return
+        context = audit_context or AuditContext(actor_id=actor.id)
+        audit_writer.enqueue(
+            AuditLogEntry(
+                actor_id=context.actor_id,
+                action="upload_rejected",
+                target_type="document",
+                target_id=str(phase.id),
+                before_state={},
+                after_state={},
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                extra={
+                    "rejection_reason": reason,
+                    "doc_type": doc_type,
+                    "file_name": file_name,
+                    "content_type": content_type or "",
+                },
+                request_id=context.request_id,
+            ),
+        )
 
     def _delete_saved_content(self, storage_key: str) -> None:
         try:

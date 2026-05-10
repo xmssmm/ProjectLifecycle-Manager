@@ -196,7 +196,8 @@ async def test_document_service_uploads_versions_and_flips_latest_atomically() -
         phase_id=phase.id,
         doc_type="meeting_material",
         file_name="Meeting.PDF",
-        content=b"first",
+        content_type="application/pdf",
+        content=b"%PDF-1.7\nfirst",
     )
     second = await service.upload_document(
         actor=leader,
@@ -204,7 +205,8 @@ async def test_document_service_uploads_versions_and_flips_latest_atomically() -
         phase_id=phase.id,
         doc_type="meeting_material",
         file_name="Meeting-v2.PDF",
-        content=b"second",
+        content_type="application/pdf",
+        content=b"%PDF-1.7\nsecond",
     )
 
     assert first.version == 1
@@ -213,8 +215,8 @@ async def test_document_service_uploads_versions_and_flips_latest_atomically() -
     assert second.is_latest is True
     assert second.file_path == f"{sub_project.id}/{phase.id}/2-meeting-v2.pdf"
     assert storage.saved == [
-        (str(sub_project.id), str(phase.id), "Meeting.PDF", b"first"),
-        (str(sub_project.id), str(phase.id), "Meeting-v2.PDF", b"second"),
+        (str(sub_project.id), str(phase.id), "Meeting.PDF", b"%PDF-1.7\nfirst"),
+        (str(sub_project.id), str(phase.id), "Meeting-v2.PDF", b"%PDF-1.7\nsecond"),
     ]
 
     latest = await service.list_documents(
@@ -257,6 +259,7 @@ async def test_document_service_rejects_outsider_oversize_and_unsafe_filename() 
             phase_id=phase.id,
             doc_type="meeting_material",
             file_name="meeting.pdf",
+            content_type="application/pdf",
             content=b"ok",
         )
 
@@ -267,6 +270,7 @@ async def test_document_service_rejects_outsider_oversize_and_unsafe_filename() 
             phase_id=phase.id,
             doc_type="meeting_material",
             file_name="meeting.pdf",
+            content_type="application/pdf",
             content=b"large",
         )
 
@@ -277,7 +281,8 @@ async def test_document_service_rejects_outsider_oversize_and_unsafe_filename() 
             phase_id=phase.id,
             doc_type="meeting_material",
             file_name="../evil.pdf",
-            content=b"ok",
+            content_type="application/pdf",
+            content=b"%PDF-1.7\nok",
         )
 
     assert repository.documents == []
@@ -300,16 +305,22 @@ def test_document_upload_and_list_endpoints_return_doc_id_and_version() -> None:
             phase_id: UUID,
             doc_type: str,
             file_name: str,
+            content_type: str | None,
             content: bytes,
             acceptance_step_id: UUID | None = None,
+            audit_writer: object | None = None,
+            audit_context: object | None = None,
         ) -> Document:
             assert actor.id == member.id
             assert sub_project_id == sub_project.id
             assert phase_id == phase.id
             assert doc_type == document.doc_type
             assert file_name == "meeting.pdf"
+            assert content_type == "application/pdf"
             assert content == b"file-bytes"
             assert acceptance_step_id is None
+            assert audit_writer is not None
+            assert audit_context is not None
             return document
 
         async def list_documents(
