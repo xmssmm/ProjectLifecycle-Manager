@@ -6,6 +6,7 @@ import {
   logout as logoutRequest,
   refreshAccessToken,
 } from '@/api/auth';
+import type { TokenPair } from '@/api/auth';
 import type { UserRole, UserStatus } from '@/types/users';
 
 export type { UserRole, UserStatus } from '@/types/users';
@@ -49,6 +50,9 @@ export const useAuthStore = defineStore('auth', {
     },
     async login(username: string, password: string) {
       const tokens = await loginRequest({ username, password });
+      await this.applyTokenPair(tokens);
+    },
+    async applyTokenPair(tokens: TokenPair) {
       this.setAccessToken(tokens.access_token);
       await this.loadCurrentUser();
     },

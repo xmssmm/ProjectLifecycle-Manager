@@ -2,22 +2,29 @@ from __future__ import annotations
 
 import json
 import secrets
+import urllib.error
+import urllib.request
+from asyncio import to_thread
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from time import monotonic
 from typing import Protocol
 from urllib.parse import urlencode
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AuthenticationError
+from app.core.exceptions import AuthenticationError, ResourceConflictError
 from app.models.oauth import OAuthBinding
+from app.models.users import User, UserStatus
 
 OAUTH_STATE_TTL_SECONDS = 10 * 60
+OAUTH_LOGIN_ALLOWED_STATUSES = frozenset(
+    {UserStatus.active, UserStatus.password_reset_required},
+)
 
 
 @dataclass(frozen=True)
@@ -30,6 +37,8 @@ class OAuthProviderConfig:
     userinfo_url: str
     redirect_uri: str
     scope: str
+    label: str = "企业账号"
+    bind_redirect_uri: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +106,42 @@ class OAuthBindingRepository(Protocol):
         provider: str,
         external_id: str,
     ) -> OAuthBinding | None:
+        ...
+
+    async def get_by_user_provider(
+        self,
+        *,
+        user_id: UUID,
+        provider: str,
+    ) -> OAuthBinding | None:
+        ...
+
+    async def get_user_by_id(self, user_id: UUID) -> User | None:
+        ...
+
+    async def get_user_by_email(self, email: str) -> User | None:
+        ...
+
+    async def list_by_user(self, user_id: UUID) -> Sequence[OAuthBinding]:
+        ...
+
+    async def upsert_binding(
+        self,
+        *,
+        user_id: UUID,
+        identity: OAuthExternalIdentity,
+    ) -> OAuthBinding:
+        ...
+
+    async def delete_by_user_provider(
+        self,
+        *,
+        user_id: UUID,
+        provider: str,
+    ) -> bool:
+        ...
+
+    async def commit(self) -> None:
         ...
 
 
@@ -189,10 +234,104 @@ class SqlAlchemyOAuthBindingRepository:
         )
         return result.first()
 
+    async def get_by_user_provider(
+        self,
+        *,
+        user_id: UUID,
+        provider: str,
+    ) -> OAuthBinding | None:
+        result = await self._session.scalars(
+            select(OAuthBinding).where(
+                OAuthBinding.user_id == user_id,
+                OAuthBinding.provider == provider,
+            ),
+        )
+        return result.first()
+
+    async def get_user_by_id(self, user_id: UUID) -> User | None:
+        user = await self._session.get(User, user_id)
+        return user if isinstance(user, User) else None
+
+    async def get_user_by_email(self, email: str) -> User | None:
+        result = await self._session.scalars(
+            select(User).where(User.email == email),
+        )
+        return result.first()
+
+    async def list_by_user(self, user_id: UUID) -> Sequence[OAuthBinding]:
+        result = await self._session.scalars(
+            select(OAuthBinding)
+            .where(OAuthBinding.user_id == user_id)
+            .order_by(OAuthBinding.provider),
+        )
+        return list(result.all())
+
+    async def upsert_binding(
+        self,
+        *,
+        user_id: UUID,
+        identity: OAuthExternalIdentity,
+    ) -> OAuthBinding:
+        binding = await self.get_by_provider_external_id(
+            provider=identity.provider,
+            external_id=identity.external_id,
+        )
+        if binding is not None and binding.user_id != user_id:
+            raise ResourceConflictError("OAuth account is already bound to another user")
+
+        if binding is None:
+            binding = await self.get_by_user_provider(
+                user_id=user_id,
+                provider=identity.provider,
+            )
+
+        if binding is None:
+            binding = OAuthBinding(
+                user_id=user_id,
+                provider=identity.provider,
+                external_id=identity.external_id,
+                email=identity.email,
+                access_token_ciphertext=identity.access_token_ciphertext,
+                refresh_token_ciphertext=identity.refresh_token_ciphertext,
+                expires_at=identity.expires_at,
+            )
+            self._session.add(binding)
+        else:
+            binding.external_id = identity.external_id
+            binding.email = identity.email
+            binding.access_token_ciphertext = identity.access_token_ciphertext
+            binding.refresh_token_ciphertext = identity.refresh_token_ciphertext
+            binding.expires_at = identity.expires_at
+
+        await self._session.flush()
+        return binding
+
+    async def delete_by_user_provider(
+        self,
+        *,
+        user_id: UUID,
+        provider: str,
+    ) -> bool:
+        binding = await self.get_by_user_provider(user_id=user_id, provider=provider)
+        if binding is None:
+            return False
+        await self._session.delete(binding)
+        await self._session.flush()
+        return True
+
+    async def commit(self) -> None:
+        await self._session.commit()
+
 
 class InMemoryOAuthBindingRepository:
-    def __init__(self, bindings: Sequence[OAuthBinding] | None = None) -> None:
+    def __init__(
+        self,
+        bindings: Sequence[OAuthBinding] | None = None,
+        *,
+        users: Sequence[User] | None = None,
+    ) -> None:
         self.bindings = list(bindings or [])
+        self.users = list(users or [])
 
     async def get_by_provider_external_id(
         self,
@@ -208,6 +347,162 @@ class InMemoryOAuthBindingRepository:
             ),
             None,
         )
+
+    async def get_by_user_provider(
+        self,
+        *,
+        user_id: UUID,
+        provider: str,
+    ) -> OAuthBinding | None:
+        return next(
+            (
+                binding
+                for binding in self.bindings
+                if binding.user_id == user_id and binding.provider == provider
+            ),
+            None,
+        )
+
+    async def get_user_by_id(self, user_id: UUID) -> User | None:
+        return next((user for user in self.users if user.id == user_id), None)
+
+    async def get_user_by_email(self, email: str) -> User | None:
+        normalized = email.lower()
+        return next(
+            (
+                user
+                for user in self.users
+                if user.email is not None and user.email.lower() == normalized
+            ),
+            None,
+        )
+
+    async def list_by_user(self, user_id: UUID) -> Sequence[OAuthBinding]:
+        return [binding for binding in self.bindings if binding.user_id == user_id]
+
+    async def upsert_binding(
+        self,
+        *,
+        user_id: UUID,
+        identity: OAuthExternalIdentity,
+    ) -> OAuthBinding:
+        binding = await self.get_by_provider_external_id(
+            provider=identity.provider,
+            external_id=identity.external_id,
+        )
+        if binding is not None and binding.user_id != user_id:
+            raise ResourceConflictError("OAuth account is already bound to another user")
+
+        if binding is None:
+            binding = await self.get_by_user_provider(
+                user_id=user_id,
+                provider=identity.provider,
+            )
+
+        now = datetime.now(UTC)
+        if binding is None:
+            binding = OAuthBinding(
+                id=uuid4(),
+                user_id=user_id,
+                provider=identity.provider,
+                external_id=identity.external_id,
+                email=identity.email,
+                access_token_ciphertext=identity.access_token_ciphertext,
+                refresh_token_ciphertext=identity.refresh_token_ciphertext,
+                expires_at=identity.expires_at,
+                created_at=now,
+                updated_at=now,
+            )
+            self.bindings.append(binding)
+        else:
+            binding.external_id = identity.external_id
+            binding.email = identity.email
+            binding.access_token_ciphertext = identity.access_token_ciphertext
+            binding.refresh_token_ciphertext = identity.refresh_token_ciphertext
+            binding.expires_at = identity.expires_at
+            binding.updated_at = now
+
+        return binding
+
+    async def delete_by_user_provider(
+        self,
+        *,
+        user_id: UUID,
+        provider: str,
+    ) -> bool:
+        binding = await self.get_by_user_provider(user_id=user_id, provider=provider)
+        if binding is None:
+            return False
+        self.bindings.remove(binding)
+        return True
+
+    async def commit(self) -> None:
+        return None
+
+
+class UrllibOAuthHttpClient:
+    def __init__(self, *, timeout_seconds: float = 10.0) -> None:
+        self._timeout_seconds = timeout_seconds
+
+    async def post_form(
+        self,
+        url: str,
+        *,
+        data: Mapping[str, object],
+        headers: Mapping[str, str] | None = None,
+    ) -> Mapping[str, object]:
+        return await to_thread(self._post_form_sync, url, data=data, headers=headers)
+
+    async def get_json(
+        self,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+    ) -> Mapping[str, object]:
+        return await to_thread(self._get_json_sync, url, headers=headers)
+
+    def _post_form_sync(
+        self,
+        url: str,
+        *,
+        data: Mapping[str, object],
+        headers: Mapping[str, str] | None,
+    ) -> Mapping[str, object]:
+        body = urlencode({key: str(value) for key, value in data.items()}).encode("utf-8")
+        request = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+                **dict(headers or {}),
+            },
+            method="POST",
+        )
+        return self._open_json(request)
+
+    def _get_json_sync(
+        self,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None,
+    ) -> Mapping[str, object]:
+        request = urllib.request.Request(
+            url,
+            headers={"Accept": "application/json", **dict(headers or {})},
+            method="GET",
+        )
+        return self._open_json(request)
+
+    def _open_json(self, request: urllib.request.Request) -> Mapping[str, object]:
+        try:
+            with urllib.request.urlopen(request, timeout=self._timeout_seconds) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (OSError, urllib.error.URLError, ValueError) as exc:
+            raise AuthenticationError("OAuth provider request failed") from exc
+        if not isinstance(payload, dict):
+            raise AuthenticationError("OAuth provider response is invalid")
+        return payload
 
 
 class OAuthService:
@@ -226,19 +521,32 @@ class OAuthService:
         self._binding_repository = binding_repository
         self._now_provider = now_provider
 
-    async def start_login(self, provider: str) -> OAuthAuthorizationStart:
+    def list_providers(self) -> Sequence[OAuthProviderConfig]:
+        return list(self._providers.values())
+
+    async def start_login(
+        self,
+        provider: str,
+        *,
+        purpose: str = "login",
+    ) -> OAuthAuthorizationStart:
         config = self._provider_config(provider)
+        redirect_uri = (
+            config.bind_redirect_uri
+            if purpose == "bind" and config.bind_redirect_uri is not None
+            else config.redirect_uri
+        )
         state = secrets.token_urlsafe(32)
         await self._state_store.store_state(
             state,
-            OAuthStatePayload(provider=provider, redirect_uri=config.redirect_uri),
+            OAuthStatePayload(provider=provider, redirect_uri=redirect_uri),
             ttl_seconds=OAUTH_STATE_TTL_SECONDS,
         )
         query = urlencode(
             {
                 "response_type": "code",
                 "client_id": config.client_id,
-                "redirect_uri": config.redirect_uri,
+                "redirect_uri": redirect_uri,
                 "scope": config.scope,
                 "state": state,
             },
@@ -306,11 +614,71 @@ class OAuthService:
             expires_at=expires_at,
         )
 
+    async def resolve_login_user(self, identity: OAuthExternalIdentity) -> User:
+        user = await self._resolve_existing_or_verified_email_user(identity)
+        await self._binding_repository.upsert_binding(user_id=user.id, identity=identity)
+        user.last_login_at = self._now_provider()
+        await self._binding_repository.commit()
+        return user
+
+    async def list_user_bindings(self, user_id: UUID) -> Sequence[OAuthBinding]:
+        return await self._binding_repository.list_by_user(user_id)
+
+    async def bind_identity(
+        self,
+        *,
+        user: User,
+        identity: OAuthExternalIdentity,
+    ) -> OAuthBinding:
+        if identity.bound_user_id is not None and identity.bound_user_id != user.id:
+            raise ResourceConflictError("OAuth account is already bound to another user")
+        if user.status not in OAUTH_LOGIN_ALLOWED_STATUSES:
+            raise AuthenticationError("Invalid user")
+        binding = await self._binding_repository.upsert_binding(
+            user_id=user.id,
+            identity=identity,
+        )
+        await self._binding_repository.commit()
+        return binding
+
+    async def delete_user_binding(
+        self,
+        *,
+        user_id: UUID,
+        provider: str,
+    ) -> bool:
+        deleted = await self._binding_repository.delete_by_user_provider(
+            user_id=user_id,
+            provider=provider,
+        )
+        await self._binding_repository.commit()
+        return deleted
+
     def _provider_config(self, provider: str) -> OAuthProviderConfig:
         config = self._providers.get(provider)
         if config is None:
             raise AuthenticationError("Unknown OAuth provider")
         return config
+
+    async def _resolve_existing_or_verified_email_user(
+        self,
+        identity: OAuthExternalIdentity,
+    ) -> User:
+        if identity.bound_user_id is not None:
+            user = await self._binding_repository.get_user_by_id(identity.bound_user_id)
+            if user is None:
+                raise AuthenticationError("OAuth bound user is unavailable")
+            if user.status not in OAUTH_LOGIN_ALLOWED_STATUSES:
+                raise AuthenticationError("Invalid user")
+            return user
+
+        if not identity.email_verified or identity.email is None:
+            raise AuthenticationError("OAuth account is not linked to a local user")
+
+        user = await self._binding_repository.get_user_by_email(identity.email)
+        if user is None or user.status not in OAUTH_LOGIN_ALLOWED_STATUSES:
+            raise AuthenticationError("OAuth account is not linked to a local user")
+        return user
 
     def _expires_at(self, expires_in: object) -> datetime | None:
         if expires_in is None:

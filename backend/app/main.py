@@ -16,6 +16,7 @@ from app.api.v1.departments import router as departments_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.main_projects import router as main_projects_router
 from app.api.v1.notifications import router as notifications_router
+from app.api.v1.oauth import router as oauth_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.phases import router as phases_router
 from app.api.v1.reports import router as reports_router
@@ -149,6 +150,7 @@ def create_app(
             {"name": "payments", "description": "Payment creation and reversal endpoints."},
             {"name": "reports", "description": "Report generation and progress endpoints."},
             {"name": "notifications", "description": "Notification query endpoints."},
+            {"name": "oauth", "description": "OAuth2/OIDC SSO endpoints."},
             {"name": "revoke-requests", "description": "Phase revoke request endpoints."},
             {"name": "auth", "description": "Authentication endpoints."},
             {"name": "users", "description": "用户管理接口。"},
@@ -181,6 +183,7 @@ def create_app(
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(PrometheusMetricsMiddleware, metrics=http_metrics)
     app.add_exception_handler(BusinessException, business_exception_handler)
+    app.dependency_overrides[get_settings] = lambda: resolved_settings
     app.dependency_overrides[get_auth_failure_store] = lambda: resolved_auth_failure_store
     app.dependency_overrides[get_auth_token_store] = lambda: resolved_auth_token_store
     app.include_router(acceptance_steps_router, prefix="/api/v1")
@@ -191,6 +194,7 @@ def create_app(
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(main_projects_router, prefix="/api/v1")
     app.include_router(notifications_router, prefix="/api/v1")
+    app.include_router(oauth_router, prefix="/api/v1")
     app.include_router(payments_router, prefix="/api/v1")
     app.include_router(phases_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")

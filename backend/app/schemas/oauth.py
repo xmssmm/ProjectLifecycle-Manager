@@ -20,3 +20,13 @@ class OAuthBindingRead(BaseModel):
 class OAuthAuthorizationStartRead(BaseModel):
     authorization_url: str
     state: str
+
+
+class OAuthProviderRead(BaseModel):
+    provider: str
+    label: str
+
+
+class OAuthCallbackRequest(BaseModel):
+    code: str
+    state: str

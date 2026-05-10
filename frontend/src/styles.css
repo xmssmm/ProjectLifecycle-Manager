@@ -1367,6 +1367,60 @@ body {
   margin-top: 4px;
 }
 
+.oauth-login-list {
+  display: grid;
+  gap: 10px;
+}
+
+.oauth-login-button {
+  width: 100%;
+}
+
+.oauth-callback-status {
+  margin: 14px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.oauth-bindings__list {
+  display: grid;
+  gap: 12px;
+}
+
+.oauth-bindings__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.oauth-bindings__item:last-child {
+  border-bottom: 0;
+}
+
+.oauth-bindings__text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.oauth-bindings__text strong {
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.oauth-bindings__text span {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 @media (width <= 768px) {
   .app-shell {
     display: block;
