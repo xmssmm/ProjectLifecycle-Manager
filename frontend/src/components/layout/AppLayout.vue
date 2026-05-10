@@ -1,17 +1,9 @@
 <script setup lang="ts">
-import {
-  Bell,
-  Box,
-  Folder,
-  House,
-  List,
-  Setting,
-  SwitchButton,
-  User,
-} from '@element-plus/icons-vue';
+import { Box, Folder, House, List, Setting, SwitchButton, User } from '@element-plus/icons-vue';
 import { computed, type Component } from 'vue';
 import { useRouter } from 'vue-router';
 
+import NotificationCenter from '@/components/notification/NotificationCenter.vue';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import type { UserRole } from '@/stores/useAuthStore';
@@ -40,7 +32,6 @@ const navItems: NavItem[] = [
     label: '撤销审批',
     requireRole: ['admin', 'dept_manager'],
   },
-  { disabled: true, icon: Bell, index: '/notifications', label: '通知' },
   { icon: User, index: '/admin/users', label: '用户', requireRole: ['admin'] },
   { icon: Setting, index: '/admin/departments', label: '部门', requireRole: ['admin'] },
   { icon: User, index: '/admin/handover', label: '转交', requireRole: ['admin'] },
@@ -83,6 +74,7 @@ async function logout() {
           <p>基础工作区</p>
         </div>
         <div class="header-account">
+          <NotificationCenter />
           <router-link class="header-account__name" to="/profile">
             {{ authStore.user?.username ?? '未登录' }}
           </router-link>

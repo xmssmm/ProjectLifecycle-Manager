@@ -42,6 +42,7 @@ describe('App', () => {
           ElMenu: { template: '<nav><slot /></nav>' },
           ElMenuItem: { template: '<a><slot /></a>' },
           ElTooltip: { template: '<span><slot /></span>' },
+          NotificationCenter: { template: '<button>通知</button>' },
         },
       },
     });

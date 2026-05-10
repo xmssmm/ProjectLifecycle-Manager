@@ -20,6 +20,7 @@ const layoutStubs = {
     template: '<a :href="index"><slot /></a>',
   },
   ElTooltip: { template: '<span><slot /></span>' },
+  NotificationCenter: { template: '<button>通知</button>' },
   RouterView: { template: '<div />' },
 };
 
