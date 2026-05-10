@@ -20,6 +20,7 @@ from app.services.documents import (
     SqlAlchemyDocumentRepository,
 )
 from app.storage.factory import create_storage_backend
+from app.tasks.document_scanning import CeleryDocumentScanScheduler
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -36,6 +37,7 @@ def get_document_service(
             binary_path=settings.office_preview_converter_binary,
             timeout_seconds=settings.office_preview_conversion_timeout_seconds,
         ),
+        scan_scheduler=CeleryDocumentScanScheduler(),
     )
 
 

@@ -1,15 +1,20 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import enum
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
@@ -17,11 +22,19 @@ from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UuidPrimaryKeyMixin
+from app.models.users import enum_values
 
 if TYPE_CHECKING:
     from app.models.phases import Phase
     from app.models.sub_projects import SubProject
     from app.models.users import User
+
+
+class DocumentScanStatus(enum.StrEnum):
+    pending = "pending"
+    clean = "clean"
+    infected = "infected"
+    failed = "failed"
 
 
 class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
@@ -38,6 +51,7 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("version >= 1", name="ck_documents_version_positive"),
         Index("ix_documents_sub_project_phase", "sub_project_id", "phase_id"),
         Index("ix_documents_doc_type", "doc_type"),
+        Index("ix_documents_scan_status", "scan_status"),
         Index(
             "uq_documents_latest_per_group",
             "sub_project_id",
@@ -47,6 +61,15 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
             postgresql_where=text("is_latest IS true"),
         ),
     )
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("scan_status", DocumentScanStatus.clean)
+        kwargs.setdefault("scan_result", None)
+        kwargs.setdefault("scanned_at", None)
+        for key, value in kwargs.items():
+            if not hasattr(type(self), key):
+                raise TypeError(f"{key!r} is an invalid keyword argument for Document")
+            setattr(self, key, value)
 
     doc_no: Mapped[str] = mapped_column(
         String(64),
@@ -78,6 +101,14 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     is_latest: Mapped[bool] = mapped_column(nullable=False, default=True, server_default="true")
     is_deleted: Mapped[bool] = mapped_column(nullable=False, default=False, server_default="false")
+    scan_status: Mapped[DocumentScanStatus] = mapped_column(
+        Enum(DocumentScanStatus, name="document_scan_status", values_callable=enum_values),
+        nullable=False,
+        default=DocumentScanStatus.pending,
+        server_default=DocumentScanStatus.clean.value,
+    )
+    scan_result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     uploader_id: Mapped[UUID] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),

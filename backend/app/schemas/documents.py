@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.documents import DocumentScanStatus
+
 
 class DocumentRead(BaseModel):
     id: UUID
@@ -16,6 +18,9 @@ class DocumentRead(BaseModel):
     version: int
     is_latest: bool
     is_deleted: bool
+    scan_status: DocumentScanStatus
+    scan_result: str | None
+    scanned_at: datetime | None
     uploader_id: UUID
     created_at: datetime
     updated_at: datetime

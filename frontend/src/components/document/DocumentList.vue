@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Clock, Collection, Download, View } from '@element-plus/icons-vue';
+import { CircleCheck, Clock, Collection, Download, View, Warning } from '@element-plus/icons-vue';
 import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
 
 import { previewDocument, previewOfficeDocument } from '@/api/documents';
@@ -128,6 +128,37 @@ function formatFileSize(bytes: number): string {
 function formatDate(value: string): string {
   return value ? value.replace('T', ' ').slice(0, 16) : '-';
 }
+
+function scanStatusLabel(document: DocumentRead): string {
+  const labels = {
+    pending: '扫描中',
+    clean: '已通过',
+    infected: '已隔离',
+    failed: '扫描失败',
+  } satisfies Record<DocumentRead['scan_status'], string>;
+  return labels[document.scan_status];
+}
+
+function scanStatusType(document: DocumentRead): 'danger' | 'info' | 'success' | 'warning' {
+  if (document.scan_status === 'clean') {
+    return 'success';
+  }
+  if (document.scan_status === 'infected') {
+    return 'danger';
+  }
+  if (document.scan_status === 'failed') {
+    return 'warning';
+  }
+  return 'info';
+}
+
+function scanStatusIcon(document: DocumentRead): typeof CircleCheck | typeof Warning {
+  return document.scan_status === 'clean' ? CircleCheck : Warning;
+}
+
+function canAccessFile(document: DocumentRead): boolean {
+  return document.scan_status === 'clean';
+}
 </script>
 
 <template>
@@ -168,12 +199,28 @@ function formatDate(value: string): string {
             <dt>上传时间</dt>
             <dd>{{ formatDate(selectedDocument(group).created_at) }}</dd>
           </div>
+          <div>
+            <dt>安全扫描</dt>
+            <dd>
+              <el-tag
+                :data-test="`scan-status-${group.docType}`"
+                :type="scanStatusType(selectedDocument(group))"
+              >
+                <component
+                  :is="scanStatusIcon(selectedDocument(group))"
+                  class="document-list__scan-icon"
+                />
+                {{ scanStatusLabel(selectedDocument(group)) }}
+              </el-tag>
+            </dd>
+          </div>
         </dl>
         <div class="document-list__actions">
           <button
             v-if="isPdfDocument(selectedDocument(group))"
             class="document-list__button"
             :data-test="`preview-${group.docType}`"
+            :disabled="!canAccessFile(selectedDocument(group))"
             type="button"
             @click="openPreview(selectedDocument(group))"
           >
@@ -184,6 +231,7 @@ function formatDate(value: string): string {
             v-if="isOfficeDocument(selectedDocument(group))"
             class="document-list__button"
             :data-test="`preview-office-${group.docType}`"
+            :disabled="!canAccessFile(selectedDocument(group))"
             type="button"
             @click="openOfficePreview(selectedDocument(group))"
           >
@@ -192,6 +240,7 @@ function formatDate(value: string): string {
           </button>
           <button
             class="document-list__button"
+            :disabled="!canAccessFile(selectedDocument(group))"
             type="button"
             @click="emit('download', selectedDocument(group))"
           >
@@ -301,7 +350,7 @@ function formatDate(value: string): string {
 .document-list__meta {
   display: grid;
   flex: 1;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
   gap: 10px;
   margin: 0;
 }
@@ -343,6 +392,12 @@ function formatDate(value: string): string {
   font-size: 13px;
 }
 
+.document-list__button:disabled {
+  color: #98a2b3;
+  background: #f2f4f7;
+  cursor: not-allowed;
+}
+
 .document-list__button--active {
   border-color: var(--el-color-primary);
   color: #fff;
@@ -352,6 +407,13 @@ function formatDate(value: string): string {
 .document-list__button-icon {
   width: 15px;
   height: 15px;
+}
+
+.document-list__scan-icon {
+  width: 13px;
+  height: 13px;
+  margin-right: 4px;
+  vertical-align: -2px;
 }
 
 @media (width <= 768px) {

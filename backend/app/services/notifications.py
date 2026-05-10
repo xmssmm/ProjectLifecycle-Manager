@@ -175,6 +175,12 @@ NOTIFICATION_SCENARIOS: tuple[NotificationScenarioDefinition, ...] = (
         description="子项目负责人转交完成",
         direct_related=True,
     ),
+    NotificationScenarioDefinition(
+        scenario="document_infected",
+        label="文档隔离告警",
+        description="上传文档被病毒扫描标记为风险文件",
+        direct_related=False,
+    ),
 )
 
 NOTIFICATION_SCENARIO_BY_CODE = {

@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     report_async_threshold_rows: int = 1000
     office_preview_converter_binary: str = "libreoffice"
     office_preview_conversion_timeout_seconds: int = 30
+    clamav_host: str = "clamav"
+    clamav_port: int = 3310
+    clamav_timeout_seconds: float = 10.0
     s3_endpoint_url: str = ""
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""
