@@ -10,6 +10,7 @@ from fastapi.openapi.utils import get_openapi
 from app.api.v1.auth import get_auth_failure_store
 from app.api.v1.auth import router as auth_router
 from app.api.v1.departments import router as departments_router
+from app.api.v1.main_projects import router as main_projects_router
 from app.api.v1.system import router as system_router
 from app.api.v1.users import router as users_router
 from app.core.config import Settings, get_settings
@@ -128,6 +129,7 @@ def create_app(
             {"name": "auth", "description": "Authentication endpoints."},
             {"name": "users", "description": "用户管理接口。"},
             {"name": "departments", "description": "部门管理接口。"},
+            {"name": "main-projects", "description": "主项目管理接口。"},
             {"name": "system", "description": "系统健康、版本与基础能力。"},
         ],
     )
@@ -154,6 +156,7 @@ def create_app(
     app.dependency_overrides[get_auth_token_store] = lambda: resolved_auth_token_store
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
+    app.include_router(main_projects_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
 
