@@ -33,6 +33,14 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return self.max_upload_size_mb * 1024 * 1024
+
 
 @lru_cache
 def get_settings() -> Settings:
