@@ -15,6 +15,7 @@ from app.api.v1.main_projects import router as main_projects_router
 from app.api.v1.phases import router as phases_router
 from app.api.v1.sub_projects import router as sub_projects_router
 from app.api.v1.system import router as system_router
+from app.api.v1.tasks import router as tasks_router
 from app.api.v1.users import router as users_router
 from app.core.config import Settings, get_settings
 from app.core.db import AsyncSessionLocal
@@ -136,6 +137,7 @@ def create_app(
             {"name": "sub-projects", "description": "子项目管理接口。"},
             {"name": "phases", "description": "环节查询与流转接口。"},
             {"name": "documents", "description": "文档上传、版本与归档接口。"},
+            {"name": "tasks", "description": "任务 CRUD、指派与完成接口。"},
             {"name": "system", "description": "系统健康、版本与基础能力。"},
         ],
     )
@@ -167,6 +169,7 @@ def create_app(
     app.include_router(phases_router, prefix="/api/v1")
     app.include_router(sub_projects_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
+    app.include_router(tasks_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
 
     @app.get("/health", tags=["system"])
