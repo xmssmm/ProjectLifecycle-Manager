@@ -2,6 +2,7 @@
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive } from 'vue';
 
+import { MobileReadOnlyNotice } from '@/components/common';
 import { useRevokeRequestStore } from '@/stores/useRevokeRequestStore';
 import {
   REVOKE_REVIEW_DECISION_LABELS,
@@ -49,6 +50,11 @@ function formatDate(value: string | null): string {
       </div>
     </div>
 
+    <MobileReadOnlyNotice
+      data-test="mobile-read-only-review"
+      message="移动端仅支持查看审核信息，请切换到 PC 端处理审核。"
+    />
+
     <section class="project-detail-band">
       <table class="revoke-table">
         <thead>
@@ -72,7 +78,7 @@ function formatDate(value: string | null): string {
             <td>
               <el-input v-model="reviewComments[request.id]" data-test="revoke-review-comment" />
             </td>
-            <td class="revoke-table__actions">
+            <td class="revoke-table__actions desktop-only-action">
               <el-button
                 data-test="approve-revoke-request"
                 :loading="revokeStore.reviewingId === request.id"

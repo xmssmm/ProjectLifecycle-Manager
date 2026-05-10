@@ -416,6 +416,42 @@ body {
   margin-top: 16px;
 }
 
+.data-table__mobile-list {
+  display: none;
+}
+
+.data-table__mobile-card {
+  padding: 14px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.data-table__mobile-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.data-table__mobile-field {
+  display: grid;
+  gap: 4px;
+}
+
+.data-table__mobile-field dt {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.data-table__mobile-field dd {
+  min-width: 0;
+  margin: 0;
+  color: #172033;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
 .search-bar {
   padding: 16px 16px 0;
   border: 1px solid #d8dde5;
@@ -427,6 +463,18 @@ body {
   margin: 0;
   color: #344054;
   line-height: 1.6;
+}
+
+.mobile-read-only-notice {
+  display: none;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  color: #93370d;
+  background: #fffcf5;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .status-tag {
@@ -1084,6 +1132,40 @@ body {
   font-size: 12px;
 }
 
+.task-executor-cards {
+  display: none;
+}
+
+.task-executor-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.task-executor-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.task-executor-card span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.task-executor-card strong {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  color: #172033;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
 .form-error {
   margin: 0;
   color: #b42318;
@@ -1173,15 +1255,90 @@ body {
   .app-sidebar {
     width: 100% !important;
     border-right: 0;
+    border-bottom: 1px solid #d8dde5;
+  }
+
+  .brand {
+    height: 56px;
+  }
+
+  .nav-menu {
+    display: flex;
+    overflow-x: auto;
+    border-bottom: 0;
+  }
+
+  .nav-menu .el-menu-item {
+    flex: 0 0 auto;
+    height: 44px;
+    min-width: 88px;
+    padding: 0 12px;
   }
 
   .app-header {
+    align-items: flex-start;
+    flex-direction: column;
     height: auto;
     padding: 16px;
   }
 
+  .header-account {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .app-main {
+    padding: 12px;
+  }
+
+  .notification-center__panel--touch {
+    position: fixed;
+    top: 76px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100dvh - 96px);
+  }
+
+  .notification-center__item {
+    grid-template-columns: 1fr;
+    gap: 10px;
     padding: 16px;
+  }
+
+  .notification-center__item-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .notification-center__item-actions a,
+  .notification-center__item-actions .el-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .data-table__desktop {
+    display: none;
+  }
+
+  .data-table__mobile-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .data-table__pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .mobile-read-only-notice {
+    display: block;
+  }
+
+  .desktop-only-action {
+    display: none !important;
   }
 
   .workspace-panel {
@@ -1221,6 +1378,10 @@ body {
     flex-direction: column;
   }
 
+  .admin-page__table {
+    padding: 12px;
+  }
+
   .project-member-toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -1236,9 +1397,32 @@ body {
   }
 
   .task-filter-band,
+  .payment-filter-band,
   .phase-progress__item,
   .task-summary {
     grid-template-columns: 1fr;
+  }
+
+  .task-table-band,
+  .payment-table-band,
+  .project-member-table {
+    margin-inline: -12px;
+    border-inline: 0;
+    border-radius: 0;
+  }
+
+  .task-page .project-member-table {
+    display: none;
+  }
+
+  .task-executor-cards {
+    display: grid;
+    gap: 10px;
+  }
+
+  .project-form-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .project-member-toolbar__input {

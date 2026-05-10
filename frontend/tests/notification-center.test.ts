@@ -47,6 +47,9 @@ describe('NotificationCenter', () => {
     await flushPromises();
 
     expect(listNotifications).toHaveBeenCalledWith({ page: 1, pageSize: 10 });
+    expect(wrapper.find('[data-test="notification-panel"]').classes()).toContain(
+      'notification-center__panel--touch',
+    );
     expect(wrapper.text()).toContain('任务指派');
     expect(wrapper.text()).toContain('Z-001-T-001');
     expect(wrapper.find('[data-test="notification-link-notif-1"]').attributes('to')).toBe(

@@ -159,7 +159,11 @@ function decisionLabel(value: string | null): string | null {
       />
     </el-badge>
 
-    <section v-if="panelOpen" class="notification-center__panel" data-test="notification-panel">
+    <section
+      v-if="panelOpen"
+      class="notification-center__panel notification-center__panel--touch"
+      data-test="notification-panel"
+    >
       <header class="notification-center__header">
         <div>
           <strong>通知中心</strong>

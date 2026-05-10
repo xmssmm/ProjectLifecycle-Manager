@@ -66,6 +66,27 @@ describe('common UI components', () => {
     expect(wrapper.emitted('update:pageSize')?.[0]).toEqual([50]);
   });
 
+  it('DataTable renders a mobile card list with column labels', () => {
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [
+          { key: 'project_no', label: '项目编号' },
+          { key: 'name', label: '项目名称' },
+          { key: 'status', label: '状态' },
+        ],
+        page: 1,
+        pageSize: 20,
+        rows: [{ id: '1', name: '主项目 A', project_no: 'Z-2026-0001', status: 'in_progress' }],
+        total: 1,
+      },
+      global: { directives: { loading: {} }, stubs: elementStubs },
+    });
+
+    expect(wrapper.find('[data-test="data-table-mobile-list"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="data-table-mobile-card"]').text()).toContain('项目编号');
+    expect(wrapper.find('[data-test="data-table-mobile-card"]').text()).toContain('Z-2026-0001');
+  });
+
   it('SearchBar updates fields, emits search, and resets values', async () => {
     const wrapper = mount(SearchBar, {
       props: {

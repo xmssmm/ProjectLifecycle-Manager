@@ -187,6 +187,9 @@ describe('PdfPreview', () => {
     const download = wrapper.find('[data-test="preview-download"]');
     expect(download.attributes('download')).toBe('contract-v2.pdf');
     expect(download.attributes('href')).toContain('blob:');
+    expect(wrapper.find('[data-test="pdf-preview-dialog"]').classes()).toContain(
+      'pdf-preview--mobile-fullscreen',
+    );
     getContext.mockRestore();
   });
 });

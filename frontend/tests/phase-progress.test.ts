@@ -45,6 +45,12 @@ describe('PhaseProgress', () => {
     const phaseItems = wrapper.findAll('[data-test="phase-item"]');
     expect(phaseItems).toHaveLength(3);
     expect(phaseItems[1].text()).toContain('合同签订');
+    expect(wrapper.find('[data-test="mobile-read-only-phase"]').text()).toContain(
+      '移动端仅支持查看环节进度',
+    );
+    expect(wrapper.find('[data-test="promote-phase-2"]').classes()).toContain(
+      'desktop-only-action',
+    );
 
     await wrapper.find('[data-test="promote-phase-2"]').trigger('click');
     await flushPromises();

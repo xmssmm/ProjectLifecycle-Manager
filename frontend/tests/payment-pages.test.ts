@@ -74,6 +74,13 @@ describe('PaymentList', () => {
       remark: 'second payment',
       subProjectId: 'sub-1',
     });
+
+    expect(wrapper.find('[data-test="mobile-read-only-payment"]').text()).toContain(
+      '移动端仅支持查看付款记录',
+    );
+    expect(wrapper.find('[data-test="open-create-payment"]').classes()).toContain(
+      'desktop-only-action',
+    );
   });
 
   it('confirms over-budget create and reverses normal payments with a reason', async () => {
