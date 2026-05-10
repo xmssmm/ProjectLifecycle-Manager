@@ -68,13 +68,23 @@ describe('notification store', () => {
 
     await store.fetchPreferences();
     await store.savePreferences([
-      { scenario: 'task_assigned', enabled: false, delivery_mode: 'daily_digest' },
+      {
+        channels: { dingtalk: false, email: true, in_app: false, wework: false },
+        scenario: 'task_assigned',
+        enabled: false,
+        delivery_mode: 'daily_digest',
+      },
     ]);
 
     expect(listNotificationPreferences).toHaveBeenCalled();
     expect(updateNotificationPreferences).toHaveBeenCalledWith({
       preferences: [
-        { delivery_mode: 'daily_digest', enabled: false, scenario: 'task_assigned' },
+        {
+          channels: { dingtalk: false, email: true, in_app: false, wework: false },
+          delivery_mode: 'daily_digest',
+          enabled: false,
+          scenario: 'task_assigned',
+        },
       ],
     });
     expect(store.preferences).toEqual([{ ...taskPreference, enabled: false }]);
@@ -102,6 +112,7 @@ const readNotification: NotificationRead = {
 };
 
 const taskPreference: NotificationPreferenceRead = {
+  channels: { dingtalk: false, email: false, in_app: true, wework: false },
   description: '任务执行人收到任务分配提醒',
   direct_related: true,
   delivery_mode: 'real_time',

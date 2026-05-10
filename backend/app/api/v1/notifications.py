@@ -10,6 +10,7 @@ from app.core.responses import success_response
 from app.models.notifications import Notification
 from app.models.users import User
 from app.schemas.notifications import (
+    NotificationChannelSettings,
     NotificationListRead,
     NotificationPreferenceListRead,
     NotificationPreferenceRead,
@@ -62,6 +63,12 @@ def serialize_notification_preferences(
                 direct_related=preference.direct_related,
                 enabled=preference.enabled,
                 delivery_mode=preference.delivery_mode.value,
+                channels=NotificationChannelSettings(
+                    **{
+                        channel.value: enabled
+                        for channel, enabled in preference.channels.items()
+                    },
+                ),
             )
             for preference in preferences
         ],
@@ -107,6 +114,7 @@ async def update_notification_preferences(
             item.scenario: StoredNotificationPreference(
                 enabled=item.enabled,
                 delivery_mode=NotificationDeliveryMode(item.delivery_mode),
+                channels=item.channels.model_dump() if item.channels is not None else None,
             )
             for item in payload.preferences
         },

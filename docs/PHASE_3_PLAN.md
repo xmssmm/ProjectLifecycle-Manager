@@ -157,9 +157,9 @@
 
 **Test plan:**
 
-- [ ] 关闭某 channel 后不触发该 channel。
-- [ ] 站内通知现有逻辑不回退。
-- [ ] Profile 页可保存 channel 偏好。
+- [x] 关闭某 channel 后不触发该 channel。
+- [x] 站内通知现有逻辑不回退。
+- [x] Profile 页可保存 channel 偏好。
 
 ### T-3-NOTIF-04 SMTP 邮件通知适配
 

@@ -98,13 +98,22 @@ describe('profile and password pages', () => {
     await wrapper
       .find('[data-test="notification-preference-task_assigned"] input')
       .setValue(false);
+    await wrapper
+      .find('[data-test="notification-channel-task_assigned-email"] input')
+      .setValue(true);
     await wrapper.find('[data-test="notification-preferences-save"]').trigger('click');
     await flushPromises();
 
     expect(updateNotificationPreferences).toHaveBeenCalledWith({
       preferences: [
-        { delivery_mode: 'real_time', enabled: false, scenario: 'task_assigned' },
         {
+          channels: { dingtalk: false, email: true, in_app: false, wework: false },
+          delivery_mode: 'real_time',
+          enabled: false,
+          scenario: 'task_assigned',
+        },
+        {
+          channels: { dingtalk: false, email: false, in_app: false, wework: false },
           delivery_mode: 'daily_digest',
           enabled: false,
           scenario: 'task_overdue_escalation',
@@ -141,6 +150,7 @@ const sampleUser = {
 } as const;
 
 const taskPreference = {
+  channels: { dingtalk: false, email: false, in_app: true, wework: false },
   description: '任务执行人收到任务分配提醒',
   direct_related: true,
   delivery_mode: 'real_time',
@@ -150,6 +160,7 @@ const taskPreference = {
 } as const;
 
 const overduePreference = {
+  channels: { dingtalk: false, email: false, in_app: false, wework: false },
   description: '项目管理人员收到逾期升级提醒',
   direct_related: false,
   delivery_mode: 'daily_digest',

@@ -13,7 +13,12 @@ import {
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 import { useProfileStore } from '@/stores/useProfileStore';
-import type { NotificationDeliveryMode, NotificationPreferenceRead } from '@/types/notifications';
+import type {
+  NotificationChannel,
+  NotificationChannels,
+  NotificationDeliveryMode,
+  NotificationPreferenceRead,
+} from '@/types/notifications';
 import type { OAuthBindingRead, OAuthProviderRead } from '@/types/oauth';
 import { ROLE_LABELS, STATUS_LABELS } from '@/types/users';
 
@@ -78,12 +83,18 @@ function applyNotificationMode(value: string | number | boolean): void {
   notificationPreferenceForm.value = notificationPreferenceForm.value.map((preference) => ({
     ...preference,
     enabled: mode === 'all' ? true : preference.direct_related,
+    channels: {
+      ...preference.channels,
+      in_app: mode === 'all' ? true : preference.direct_related,
+    },
   }));
 }
 
 function setNotificationPreference(scenario: string, enabled: boolean): void {
   notificationPreferenceForm.value = notificationPreferenceForm.value.map((preference) =>
-    preference.scenario === scenario ? { ...preference, enabled } : preference,
+    preference.scenario === scenario
+      ? { ...preference, enabled, channels: { ...preference.channels, in_app: enabled } }
+      : preference,
   );
   notificationMode.value = inferNotificationMode(notificationPreferenceForm.value);
 }
@@ -104,12 +115,40 @@ function applyNotificationDeliveryMode(value: string | number | boolean): void {
   }));
 }
 
+function setNotificationChannel(
+  scenario: string,
+  channel: NotificationChannel,
+  enabled: boolean,
+): void {
+  notificationPreferenceForm.value = notificationPreferenceForm.value.map((preference) => {
+    if (preference.scenario !== scenario) {
+      return preference;
+    }
+    const channels = { ...preference.channels, [channel]: enabled };
+    return {
+      ...preference,
+      channels,
+      enabled: channel === 'in_app' ? enabled : preference.enabled,
+    };
+  });
+  notificationMode.value = inferNotificationMode(notificationPreferenceForm.value);
+}
+
+function setNotificationChannelValue(
+  scenario: string,
+  channel: NotificationChannel,
+  value: unknown,
+): void {
+  setNotificationChannel(scenario, channel, Boolean(value));
+}
+
 async function saveNotificationPreferences(): Promise<void> {
   const result = await notificationStore.savePreferences(
     notificationPreferenceForm.value.map((preference) => ({
       scenario: preference.scenario,
       enabled: preference.enabled,
       delivery_mode: preference.delivery_mode,
+      channels: preference.channels,
     })),
   );
   notificationPreferenceForm.value = clonePreferences(result.items);
@@ -188,7 +227,10 @@ function routeQueryString(key: string): string | null {
 function clonePreferences(
   preferences: NotificationPreferenceRead[],
 ): NotificationPreferenceRead[] {
-  return preferences.map((preference) => ({ ...preference }));
+  return preferences.map((preference) => ({
+    ...preference,
+    channels: normalizeChannels(preference.channels, preference.enabled),
+  }));
 }
 
 function inferNotificationMode(
@@ -219,6 +261,25 @@ type NotificationPreferenceMode = 'all' | 'direct' | 'custom';
 
 const notificationModes: NotificationPreferenceMode[] = ['all', 'direct', 'custom'];
 const notificationDeliveryModes: NotificationDeliveryMode[] = ['real_time', 'daily_digest'];
+const notificationChannels: NotificationChannel[] = ['in_app', 'email', 'wework', 'dingtalk'];
+const notificationChannelLabels: Record<NotificationChannel, string> = {
+  dingtalk: '钉钉',
+  email: '邮件',
+  in_app: '站内',
+  wework: '企业微信',
+};
+
+function normalizeChannels(
+  channels: Partial<NotificationChannels> | undefined,
+  enabled: boolean,
+): NotificationChannels {
+  return {
+    dingtalk: channels?.dingtalk ?? false,
+    email: channels?.email ?? false,
+    in_app: channels?.in_app ?? enabled,
+    wework: channels?.wework ?? false,
+  };
+}
 </script>
 
 <template>
@@ -298,6 +359,18 @@ const notificationDeliveryModes: NotificationDeliveryMode[] = ['real_time', 'dai
             :model-value="preference.enabled"
             @update:model-value="setNotificationPreferenceValue(preference.scenario, $event)"
           />
+          <div class="notification-preferences__channels">
+            <el-switch
+              v-for="channel in notificationChannels"
+              :key="channel"
+              :active-text="notificationChannelLabels[channel]"
+              :data-test="`notification-channel-${preference.scenario}-${channel}`"
+              :model-value="preference.channels[channel]"
+              @update:model-value="
+                setNotificationChannelValue(preference.scenario, channel, $event)
+              "
+            />
+          </div>
         </div>
       </div>
 

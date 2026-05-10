@@ -1291,6 +1291,14 @@ body {
   border-bottom: 0;
 }
 
+.notification-preferences__channels {
+  display: flex;
+  flex: 0 1 420px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
 .notification-preferences__text {
   display: grid;
   gap: 4px;
@@ -1540,6 +1548,16 @@ body {
   .workspace-task-item__meta {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .notification-preferences__item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .notification-preferences__channels {
+    justify-content: flex-start;
+    max-width: 100%;
   }
 
   .component-demo__status {

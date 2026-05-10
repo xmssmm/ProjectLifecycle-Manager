@@ -75,6 +75,14 @@ class NotificationPreference(UuidPrimaryKeyMixin, TimestampMixin, Base):
         default="real_time",
         server_default="real_time",
     )
+    channels: Mapped[dict[str, bool]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text(
+            """'{"in_app": true, "email": false, "wework": false, "dingtalk": false}'::jsonb""",
+        ),
+    )
     enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
