@@ -10,6 +10,7 @@ from app.models.main_projects import (
     ProjectReviewDecision,
 )
 from app.models.notifications import Notification
+from app.models.payments import Payment, PaymentType, PaymentVoucher
 from app.models.phases import (
     Phase,
     PhaseDocRequirement,
@@ -47,6 +48,9 @@ __all__ = [
     "Task",
     "TaskExecutor",
     "TaskStatus",
+    "Payment",
+    "PaymentType",
+    "PaymentVoucher",
     "Notification",
     "Phase",
     "PhaseDocRequirement",
