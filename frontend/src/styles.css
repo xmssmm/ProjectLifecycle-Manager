@@ -430,6 +430,78 @@ body {
   background: #fff;
 }
 
+.audit-log-filter {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.audit-log-filter label {
+  display: grid;
+  gap: 6px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.audit-log-filter__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.audit-log-table {
+  overflow-x: auto;
+}
+
+.audit-log-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.audit-log-table th,
+.audit-log-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5e9f0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.audit-log-table th {
+  color: #475467;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.audit-log-detail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.audit-log-detail h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.audit-log-detail pre {
+  min-height: 220px;
+  max-height: 420px;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #e5e9f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;

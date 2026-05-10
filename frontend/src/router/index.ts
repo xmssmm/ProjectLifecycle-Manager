@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import ComponentDemoView from '@/views/admin/ComponentDemoView.vue';
+import AuditLogQueryView from '@/views/admin/AuditLogQuery.vue';
 import DepartmentListView from '@/views/admin/DepartmentList.vue';
 import HandoverHistoryView from '@/views/admin/HandoverHistory.vue';
 import UserHandoverView from '@/views/admin/UserHandover.vue';
@@ -51,6 +52,12 @@ const router = createRouter({
       name: 'admin-departments',
       component: DepartmentListView,
       meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/audit-logs',
+      name: 'admin-audit-logs',
+      component: AuditLogQueryView,
+      meta: { permission: 'audit_log.read', requiresAuth: true },
     },
     {
       path: '/admin/handover',
