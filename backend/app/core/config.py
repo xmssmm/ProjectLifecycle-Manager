@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     storage_root: str = Field(default="/app/storage")
     storage_public_url_prefix: str = "/storage"
     report_async_threshold_rows: int = 1000
+    office_preview_converter_binary: str = "libreoffice"
+    office_preview_conversion_timeout_seconds: int = 30
     s3_endpoint_url: str = ""
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""

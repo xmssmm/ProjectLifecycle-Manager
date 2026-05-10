@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { previewDocument, uploadDocument } from '@/api/documents';
+import { previewDocument, previewOfficeDocument, uploadDocument } from '@/api/documents';
 import DocumentList from '@/components/document/DocumentList.vue';
 import PdfPreview from '@/components/document/PdfPreview.vue';
 import DocumentUploader from '@/components/document/DocumentUploader.vue';
@@ -9,6 +9,7 @@ import type { DocumentRead } from '@/types/documents';
 
 vi.mock('@/api/documents', () => ({
   previewDocument: vi.fn(),
+  previewOfficeDocument: vi.fn(),
   uploadDocument: vi.fn(),
 }));
 
@@ -153,6 +154,33 @@ describe('DocumentList', () => {
 
     expect(wrapper.find('[data-test="pdf-preview"]').text()).toContain('contract-v2.pdf');
   });
+
+  it('shows Office preview for all supported Office extensions', async () => {
+    const wrapper = mount(DocumentList, {
+      global: {
+        stubs: {
+          ...stubs,
+          PdfPreview: {
+            props: ['document', 'modelValue', 'previewLoader'],
+            template:
+              '<section v-if="modelValue" data-test="office-preview" @click="previewLoader(document.id)">{{ document?.file_name }}</section>',
+          },
+        },
+      },
+      props: {
+        documents: officePreviewDocuments,
+      },
+    });
+
+    for (const extension of ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']) {
+      expect(wrapper.find(`[data-test="preview-office-office_${extension}"]`).exists()).toBe(true);
+    }
+
+    await wrapper.find('[data-test="preview-office-office_docx"]').trigger('click');
+    await wrapper.find('[data-test="office-preview"]').trigger('click');
+
+    expect(previewOfficeDocument).toHaveBeenCalledWith('office-docx');
+  });
 });
 
 describe('PdfPreview', () => {
@@ -189,6 +217,32 @@ describe('PdfPreview', () => {
     expect(download.attributes('href')).toContain('blob:');
     expect(wrapper.find('[data-test="pdf-preview-dialog"]').classes()).toContain(
       'pdf-preview--mobile-fullscreen',
+    );
+    getContext.mockRestore();
+  });
+
+  it('uses a custom preview loader and converted download filename', async () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockImplementation(() => ({}) as CanvasRenderingContext2D);
+    const previewLoader = vi.fn().mockResolvedValue(new Blob(['converted'], { type: 'application/pdf' }));
+    const wrapper = mount(PdfPreview, {
+      global: { stubs },
+      props: {
+        document: officePreviewDocuments[1],
+        downloadFileName: 'sample.pdf',
+        loadPdf: async () => pdfMocks.document,
+        modelValue: true,
+        previewLoader,
+      },
+    });
+
+    await flushPromises();
+
+    expect(previewLoader).toHaveBeenCalledWith('office-docx');
+    expect(previewDocument).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-test="preview-download"]').attributes('download')).toBe(
+      'sample.pdf',
     );
     getContext.mockRestore();
   });
@@ -253,6 +307,25 @@ const previewDocuments: DocumentRead[] = [
     file_name: 'meeting-v1.docx',
   },
 ];
+
+const officePreviewDocuments: DocumentRead[] = (
+  ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] as const
+).map((extension) => ({
+  acceptance_step_id: null,
+  created_at: '2026-05-10T04:00:00Z',
+  doc_no: `OFFICE-${extension}`,
+  doc_type: `office_${extension}`,
+  file_name: `sample.${extension}`,
+  file_size: 4096,
+  id: `office-${extension}`,
+  is_deleted: false,
+  is_latest: true,
+  phase_id: 'phase-1',
+  sub_project_id: 'sub-1',
+  updated_at: '2026-05-10T04:00:00Z',
+  uploader_id: 'user-office',
+  version: 1,
+}));
 
 const stubs = {
   ElAlert: {

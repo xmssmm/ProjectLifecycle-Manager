@@ -56,6 +56,12 @@ npm.cmd run test:unit
 npm.cmd run typecheck
 ```
 
+## 文档
+
+- Office 在线预览部署与使用：`docs/office-preview.md`
+- 日常运维：`docs/operations.md`
+- 故障排查：`docs/troubleshooting.md`
+
 ## 技术栈
 
 - 后端：FastAPI、SQLAlchemy 2.0、Pydantic v2、Alembic、Celery、Redis、PostgreSQL 16

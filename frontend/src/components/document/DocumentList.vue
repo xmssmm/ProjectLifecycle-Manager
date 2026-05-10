@@ -2,10 +2,13 @@
 import { Clock, Collection, Download, View } from '@element-plus/icons-vue';
 import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
 
+import { previewDocument, previewOfficeDocument } from '@/api/documents';
 import DocumentVersionDiff from '@/components/document/DocumentVersionDiff.vue';
 import type { DocumentRead } from '@/types/documents';
 
 const PdfPreview = defineAsyncComponent(() => import('@/components/document/PdfPreview.vue'));
+const officePreviewExtensions = new Set(['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx']);
+type PreviewLoader = (documentId: string) => Promise<Blob>;
 
 interface DocumentGroup {
   docType: string;
@@ -24,6 +27,8 @@ const emit = defineEmits<{
 
 const expandedTypes = ref<Set<string>>(new Set());
 const previewTarget = ref<DocumentRead | null>(null);
+const previewDownloadFileName = ref('');
+const previewLoader = ref<PreviewLoader>(previewDocument);
 const previewVisible = ref(false);
 const selectedDocumentIds = reactive<Record<string, string>>({});
 
@@ -77,6 +82,15 @@ function selectVersion(group: DocumentGroup, document: DocumentRead): void {
 
 function openPreview(document: DocumentRead): void {
   previewTarget.value = document;
+  previewDownloadFileName.value = document.file_name;
+  previewLoader.value = previewDocument;
+  previewVisible.value = true;
+}
+
+function openOfficePreview(document: DocumentRead): void {
+  previewTarget.value = document;
+  previewDownloadFileName.value = officePreviewPdfFileName(document.file_name);
+  previewLoader.value = previewOfficeDocument;
   previewVisible.value = true;
 }
 
@@ -84,6 +98,21 @@ function isPdfDocument(document: DocumentRead): boolean {
   return (
     document.file_name.toLowerCase().endsWith('.pdf') || document.doc_type.toLowerCase() === 'pdf'
   );
+}
+
+function isOfficeDocument(document: DocumentRead): boolean {
+  return officePreviewExtensions.has(fileExtension(document.file_name));
+}
+
+function fileExtension(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf('.');
+  return dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : '';
+}
+
+function officePreviewPdfFileName(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf('.');
+  const baseName = dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
+  return `${baseName}.pdf`;
 }
 
 function formatFileSize(bytes: number): string {
@@ -152,6 +181,16 @@ function formatDate(value: string): string {
             预览
           </button>
           <button
+            v-if="isOfficeDocument(selectedDocument(group))"
+            class="document-list__button"
+            :data-test="`preview-office-${group.docType}`"
+            type="button"
+            @click="openOfficePreview(selectedDocument(group))"
+          >
+            <View class="document-list__button-icon" />
+            Office 预览
+          </button>
+          <button
             class="document-list__button"
             type="button"
             @click="emit('download', selectedDocument(group))"
@@ -195,7 +234,12 @@ function formatDate(value: string): string {
       />
     </section>
 
-    <PdfPreview v-model="previewVisible" :document="previewTarget" />
+    <PdfPreview
+      v-model="previewVisible"
+      :document="previewTarget"
+      :download-file-name="previewDownloadFileName"
+      :preview-loader="previewLoader"
+    />
   </div>
 </template>
 

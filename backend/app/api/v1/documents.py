@@ -14,7 +14,11 @@ from app.models.documents import Document
 from app.models.users import User
 from app.schemas.documents import DocumentListRead, DocumentRead
 from app.services.audit import AuditContext, BackgroundAuditLogWriter, get_audit_context
-from app.services.documents import DocumentService, SqlAlchemyDocumentRepository
+from app.services.documents import (
+    DocumentService,
+    LibreOfficeDocumentConverter,
+    SqlAlchemyDocumentRepository,
+)
 from app.storage.factory import create_storage_backend
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -28,6 +32,10 @@ def get_document_service(
         repository=SqlAlchemyDocumentRepository(session),
         storage=create_storage_backend(settings),
         max_file_size_bytes=settings.max_upload_size_bytes,
+        office_converter=LibreOfficeDocumentConverter(
+            binary_path=settings.office_preview_converter_binary,
+            timeout_seconds=settings.office_preview_conversion_timeout_seconds,
+        ),
     )
 
 
@@ -39,6 +47,11 @@ def serialize_uploaded_document(document: Document) -> dict[str, object]:
     payload = serialize_document(document)
     payload["doc_id"] = payload["id"]
     return payload
+
+
+def office_preview_pdf_filename(file_name: str) -> str:
+    base_name = file_name.rsplit(".", 1)[0] if "." in file_name else file_name
+    return f"{base_name}.pdf"
 
 
 @router.post("")
@@ -128,6 +141,32 @@ async def preview_document(
         audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
     )
     encoded_filename = quote(preview.document.file_name)
+    return StreamingResponse(
+        iter([preview.content]),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+        },
+    )
+
+
+@router.get("/{document_id}/preview-office")
+async def preview_office_document(
+    document_id: UUID,
+    background_tasks: BackgroundTasks,
+    service: Annotated[DocumentService, Depends(get_document_service)],
+    current_user: Annotated[User, Depends(require_permission("document.download"))],
+) -> StreamingResponse:
+    preview = await service.preview_office_document(
+        actor=current_user,
+        document_id=document_id,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
+    encoded_filename = quote(office_preview_pdf_filename(preview.document.file_name))
     return StreamingResponse(
         iter([preview.content]),
         media_type="application/pdf",
