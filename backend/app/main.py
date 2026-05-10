@@ -18,6 +18,7 @@ from app.api.v1.main_projects import router as main_projects_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.phases import router as phases_router
+from app.api.v1.reports import router as reports_router
 from app.api.v1.revoke_requests import router as revoke_requests_router
 from app.api.v1.sub_projects import router as sub_projects_router
 from app.api.v1.system import router as system_router
@@ -146,6 +147,7 @@ def create_app(
             {"name": "audit-logs", "description": "Audit log query endpoints."},
             {"name": "dashboard", "description": "Role-scoped dashboard endpoints."},
             {"name": "payments", "description": "Payment creation and reversal endpoints."},
+            {"name": "reports", "description": "Report generation and progress endpoints."},
             {"name": "notifications", "description": "Notification query endpoints."},
             {"name": "revoke-requests", "description": "Phase revoke request endpoints."},
             {"name": "auth", "description": "Authentication endpoints."},
@@ -191,6 +193,7 @@ def create_app(
     app.include_router(notifications_router, prefix="/api/v1")
     app.include_router(payments_router, prefix="/api/v1")
     app.include_router(phases_router, prefix="/api/v1")
+    app.include_router(reports_router, prefix="/api/v1")
     app.include_router(revoke_requests_router, prefix="/api/v1")
     app.include_router(sub_projects_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")

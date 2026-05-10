@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     storage_backend: str = "local"
     storage_root: str = Field(default="/app/storage")
     storage_public_url_prefix: str = "/storage"
+    report_async_threshold_rows: int = 1000
     s3_endpoint_url: str = ""
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""

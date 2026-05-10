@@ -20,6 +20,7 @@ from app.models.phases import (
     PhaseStatus,
     ProcurementType,
 )
+from app.models.reports import ReportJob, ReportJobStatus, ReportType
 from app.models.revoke_requests import (
     RevokeRequest,
     RevokeRequestStatus,
@@ -62,6 +63,9 @@ __all__ = [
     "RevokeRequest",
     "RevokeRequestStatus",
     "RevokeReviewDecision",
+    "ReportJob",
+    "ReportJobStatus",
+    "ReportType",
     "Notification",
     "Phase",
     "PhaseDocRequirement",
