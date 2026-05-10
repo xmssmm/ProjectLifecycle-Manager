@@ -29,9 +29,17 @@ export interface PaymentListQuery {
 
 export interface PaymentCreatePayload {
   amount: string;
+  confirmOverBudget?: boolean;
   files: File[];
+  overBudgetReason?: string | null;
   paymentDate: string;
   remark?: string | null;
+  subProjectId: string;
+}
+
+export interface PaymentReversePayload {
+  remark: string;
+  reversesPaymentId: string;
   subProjectId: string;
 }
 

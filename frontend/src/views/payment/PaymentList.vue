@@ -2,12 +2,14 @@
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
+import { useAuthStore } from '@/stores/useAuthStore';
 import { usePaymentStore } from '@/stores/usePaymentStore';
 import {
   PAYMENT_TYPE_LABELS,
   PAYMENT_TYPE_OPTIONS,
   type PaymentCreatePayload,
   type PaymentListQuery,
+  type PaymentRead,
   type PaymentType,
 } from '@/types/payments';
 
@@ -15,9 +17,16 @@ const props = defineProps<{
   subProjectId: string;
 }>();
 
+const authStore = useAuthStore();
 const paymentStore = usePaymentStore();
 const createDialogVisible = ref(false);
 const errorMessage = ref('');
+const overBudgetDialogVisible = ref(false);
+const overBudgetReason = ref('');
+const pendingPaymentPayload = ref<PaymentCreatePayload | null>(null);
+const reversalDialogVisible = ref(false);
+const reversalReason = ref('');
+const reversalTarget = ref<PaymentRead | null>(null);
 const selectedFiles = ref<File[]>([]);
 const submitting = ref(false);
 const filterState = reactive({
@@ -58,13 +67,77 @@ async function submitPayment(): Promise<void> {
   submitting.value = true;
   try {
     await paymentStore.createPayment(payload);
-    resetCreateForm();
-    createDialogVisible.value = false;
-    ElMessage.success('付款已新增');
+    await afterPaymentMutation();
+  } catch (error) {
+    if (isOverBudgetError(error)) {
+      pendingPaymentPayload.value = payload;
+      overBudgetDialogVisible.value = true;
+      return;
+    }
+    throw error;
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function confirmOverBudgetPayment(): Promise<void> {
+  const reason = overBudgetReason.value.trim();
+  if (!pendingPaymentPayload.value || !reason) {
+    errorMessage.value = '超预算原因必填';
+    return;
+  }
+
+  submitting.value = true;
+  try {
+    await paymentStore.createPayment({
+      ...pendingPaymentPayload.value,
+      confirmOverBudget: true,
+      overBudgetReason: reason,
+    });
+    overBudgetDialogVisible.value = false;
+    overBudgetReason.value = '';
+    pendingPaymentPayload.value = null;
+    await afterPaymentMutation();
+  } finally {
+    submitting.value = false;
+  }
+}
+
+function openReversalDialog(payment: PaymentRead): void {
+  reversalTarget.value = payment;
+  reversalReason.value = '';
+  reversalDialogVisible.value = true;
+}
+
+async function submitReversal(): Promise<void> {
+  const reason = reversalReason.value.trim();
+  if (!reversalTarget.value || !reason) {
+    errorMessage.value = '红冲原因必填';
+    return;
+  }
+
+  submitting.value = true;
+  try {
+    await paymentStore.reversePayment({
+      remark: reason,
+      reversesPaymentId: reversalTarget.value.id,
+      subProjectId: props.subProjectId,
+    });
+    reversalDialogVisible.value = false;
+    reversalTarget.value = null;
+    reversalReason.value = '';
+    ElMessage.success('红冲已创建');
     await loadPayments(buildQuery());
   } finally {
     submitting.value = false;
   }
+}
+
+async function afterPaymentMutation(): Promise<void> {
+  resetCreateForm();
+  createDialogVisible.value = false;
+  ElMessage.success('付款已新增');
+  await loadPayments(buildQuery());
 }
 
 function buildQuery(): PaymentListQuery {
@@ -105,6 +178,8 @@ function resetCreateForm(): void {
   createForm.remark = '';
   selectedFiles.value = [];
   errorMessage.value = '';
+  pendingPaymentPayload.value = null;
+  overBudgetReason.value = '';
 }
 
 function resetFilter(): void {
@@ -128,6 +203,15 @@ function paymentTypeLabel(type: PaymentType): string {
 
 function paymentTypeTag(type: PaymentType): 'danger' | 'success' {
   return type === 'reversal' ? 'danger' : 'success';
+}
+
+function canReverse(payment: PaymentRead): boolean {
+  return authStore.user?.role === 'finance_manager' && payment.payment_type === 'normal';
+}
+
+function isOverBudgetError(error: unknown): boolean {
+  const response = (error as { response?: { data?: { code?: number } } }).response;
+  return response?.data?.code === 3001;
 }
 </script>
 
@@ -174,6 +258,7 @@ function paymentTypeTag(type: PaymentType): 'danger' | 'success' {
             <th>付款日期</th>
             <th>红冲来源</th>
             <th>备注</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -193,6 +278,17 @@ function paymentTypeTag(type: PaymentType): 'danger' | 'success' {
             <td>{{ formatDate(payment.payment_date) }}</td>
             <td>{{ payment.reverses_payment_id ?? '-' }}</td>
             <td>{{ payment.remark || '-' }}</td>
+            <td>
+              <el-button
+                v-if="canReverse(payment)"
+                data-test="reverse-payment"
+                size="small"
+                type="danger"
+                @click="openReversalDialog(payment)"
+              >
+                红冲
+              </el-button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -232,6 +328,48 @@ function paymentTypeTag(type: PaymentType): 'danger' | 'success' {
             @click="submitPayment"
           >
             保存
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="overBudgetDialogVisible" title="超预算确认" width="520px">
+      <el-form label-position="top" class="payment-form" @submit.prevent>
+        <el-form-item label="超预算原因">
+          <el-input v-model="overBudgetReason" data-test="over-budget-reason" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="project-form-actions">
+          <el-button @click="overBudgetDialogVisible = false">取消</el-button>
+          <el-button
+            data-test="confirm-over-budget"
+            :loading="submitting"
+            type="primary"
+            @click="confirmOverBudgetPayment"
+          >
+            确认付款
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="reversalDialogVisible" title="红冲付款" width="520px">
+      <el-form label-position="top" class="payment-form" @submit.prevent>
+        <el-form-item label="红冲原因">
+          <el-input v-model="reversalReason" data-test="reversal-reason" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="project-form-actions">
+          <el-button @click="reversalDialogVisible = false">取消</el-button>
+          <el-button
+            data-test="submit-reversal"
+            :loading="submitting"
+            type="danger"
+            @click="submitReversal"
+          >
+            创建红冲
           </el-button>
         </div>
       </template>

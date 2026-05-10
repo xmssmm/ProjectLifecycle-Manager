@@ -6,6 +6,7 @@ import type {
   PaymentListQuery,
   PaymentListRead,
   PaymentRead,
+  PaymentReversePayload,
 } from '@/types/payments';
 
 interface ApiResponse<T> {
@@ -39,12 +40,35 @@ export async function createPayment(
   const form = new FormData();
   form.append('amount', payload.amount);
   form.append('payment_date', payload.paymentDate);
+  if (payload.confirmOverBudget) {
+    form.append('confirm_over_budget', 'true');
+  }
+  if (payload.overBudgetReason) {
+    form.append('over_budget_reason', payload.overBudgetReason);
+  }
   if (payload.remark) {
     form.append('remark', payload.remark);
   }
   for (const file of payload.files) {
     form.append('files', file);
   }
+
+  const response = await client.post<ApiResponse<PaymentRead>>(
+    `/sub-projects/${payload.subProjectId}/payments`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return response.data.data;
+}
+
+export async function reversePayment(
+  payload: PaymentReversePayload,
+  client: AxiosInstance = apiClient,
+): Promise<PaymentRead> {
+  const form = new FormData();
+  form.append('payment_type', 'reversal');
+  form.append('reverses_payment_id', payload.reversesPaymentId);
+  form.append('remark', payload.remark);
 
   const response = await client.post<ApiResponse<PaymentRead>>(
     `/sub-projects/${payload.subProjectId}/payments`,

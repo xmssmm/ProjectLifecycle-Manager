@@ -1,7 +1,17 @@
 import { defineStore } from 'pinia';
 
-import { createPayment as createPaymentRequest, getPayment, listPayments } from '@/api/payments';
-import type { PaymentCreatePayload, PaymentListQuery, PaymentRead } from '@/types/payments';
+import {
+  createPayment as createPaymentRequest,
+  getPayment,
+  listPayments,
+  reversePayment as reversePaymentRequest,
+} from '@/api/payments';
+import type {
+  PaymentCreatePayload,
+  PaymentListQuery,
+  PaymentRead,
+  PaymentReversePayload,
+} from '@/types/payments';
 
 interface PaymentState {
   currentPayment: PaymentRead | null;
@@ -54,6 +64,12 @@ export const usePaymentStore = defineStore('payments', {
     },
     async createPayment(payload: PaymentCreatePayload) {
       const payment = await createPaymentRequest(payload);
+      this.currentPayment = payment;
+      this.upsertPayment(payment);
+      return payment;
+    },
+    async reversePayment(payload: PaymentReversePayload) {
+      const payment = await reversePaymentRequest(payload);
       this.currentPayment = payment;
       this.upsertPayment(payment);
       return payment;

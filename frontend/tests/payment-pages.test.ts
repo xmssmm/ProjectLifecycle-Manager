@@ -2,7 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createPayment, listPayments } from '@/api/payments';
+import { createPayment, listPayments, reversePayment } from '@/api/payments';
+import { useAuthStore } from '@/stores/useAuthStore';
 import type { PaymentRead } from '@/types/payments';
 import PaymentList from '@/views/payment/PaymentList.vue';
 
@@ -10,12 +11,23 @@ vi.mock('@/api/payments', () => ({
   createPayment: vi.fn(),
   getPayment: vi.fn(),
   listPayments: vi.fn(),
+  reversePayment: vi.fn(),
 }));
 
 describe('PaymentList', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+    const authStore = useAuthStore();
+    authStore.setAccessToken('finance-token');
+    authStore.setUser({
+      deptId: 'dept-a',
+      email: null,
+      id: 'finance-1',
+      role: 'finance_manager',
+      status: 'active',
+      username: 'finance',
+    });
     vi.mocked(listPayments).mockResolvedValue({
       items: [samplePayment, reversalPayment],
       page: 1,
@@ -23,6 +35,7 @@ describe('PaymentList', () => {
       total: 2,
     });
     vi.mocked(createPayment).mockResolvedValue(newPayment);
+    vi.mocked(reversePayment).mockResolvedValue(reversalPayment);
   });
 
   it('lists payments, filters by type, and creates a payment with voucher', async () => {
@@ -59,6 +72,59 @@ describe('PaymentList', () => {
       files: [expect.objectContaining({ name: 'voucher.pdf' })],
       paymentDate: '2026-05-12',
       remark: 'second payment',
+      subProjectId: 'sub-1',
+    });
+  });
+
+  it('confirms over-budget create and reverses normal payments with a reason', async () => {
+    vi.mocked(createPayment)
+      .mockRejectedValueOnce({
+        response: {
+          data: {
+            code: 3001,
+            data: { budget: '100.00', over_amount: '20.50' },
+            message: 'over budget',
+          },
+        },
+      })
+      .mockResolvedValueOnce(newPayment);
+    const wrapper = mount(PaymentList, {
+      global: { stubs },
+      props: { subProjectId: 'sub-1' },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="open-create-payment"]').trigger('click');
+    await wrapper.find('[data-test="payment-amount"]').setValue('120.50');
+    await wrapper.find('[data-test="payment-date"]').setValue('2026-05-12');
+    await setFile(wrapper.find('[data-test="payment-file"]').element as HTMLInputElement);
+    await wrapper.find('[data-test="submit-payment"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="over-budget-reason"]').exists()).toBe(true);
+
+    await wrapper.find('[data-test="over-budget-reason"]').setValue('approved');
+    await wrapper.find('[data-test="confirm-over-budget"]').trigger('click');
+    await flushPromises();
+
+    expect(createPayment).toHaveBeenLastCalledWith({
+      amount: '120.50',
+      confirmOverBudget: true,
+      files: [expect.objectContaining({ name: 'voucher.pdf' })],
+      overBudgetReason: 'approved',
+      paymentDate: '2026-05-12',
+      remark: null,
+      subProjectId: 'sub-1',
+    });
+
+    await wrapper.find('[data-test="reverse-payment"]').trigger('click');
+    await wrapper.find('[data-test="reversal-reason"]').setValue('wrong amount');
+    await wrapper.find('[data-test="submit-reversal"]').trigger('click');
+    await flushPromises();
+
+    expect(reversePayment).toHaveBeenCalledWith({
+      remark: 'wrong amount',
+      reversesPaymentId: 'pay-1',
       subProjectId: 'sub-1',
     });
   });

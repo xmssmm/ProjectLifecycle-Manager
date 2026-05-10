@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createPayment, getPayment, listPayments } from '@/api/payments';
+import { createPayment, getPayment, listPayments, reversePayment } from '@/api/payments';
 import { usePaymentStore } from '@/stores/usePaymentStore';
 import type { PaymentRead } from '@/types/payments';
 
@@ -9,6 +9,7 @@ vi.mock('@/api/payments', () => ({
   createPayment: vi.fn(),
   getPayment: vi.fn(),
   listPayments: vi.fn(),
+  reversePayment: vi.fn(),
 }));
 
 describe('payment store', () => {
@@ -26,6 +27,7 @@ describe('payment store', () => {
     });
     vi.mocked(getPayment).mockResolvedValue(samplePayment);
     vi.mocked(createPayment).mockResolvedValue(newPayment);
+    vi.mocked(reversePayment).mockResolvedValue(reversalPayment);
     const store = usePaymentStore();
 
     await store.fetchPayments('sub-1', { page: 1, pageSize: 20, paymentType: 'normal' });
@@ -37,6 +39,11 @@ describe('payment store', () => {
       remark: 'second payment',
       subProjectId: 'sub-1',
     });
+    await store.reversePayment({
+      remark: 'wrong amount',
+      reversesPaymentId: 'pay-1',
+      subProjectId: 'sub-1',
+    });
 
     expect(listPayments).toHaveBeenCalledWith('sub-1', {
       page: 1,
@@ -44,9 +51,14 @@ describe('payment store', () => {
       paymentType: 'normal',
     });
     expect(getPayment).toHaveBeenCalledWith('sub-1', 'pay-1');
-    expect(store.currentPayment?.id).toBe('pay-2');
-    expect(store.payments.map((payment) => payment.id)).toEqual(['pay-2', 'pay-1']);
-    expect(store.total).toBe(2);
+    expect(reversePayment).toHaveBeenCalledWith({
+      remark: 'wrong amount',
+      reversesPaymentId: 'pay-1',
+      subProjectId: 'sub-1',
+    });
+    expect(store.currentPayment?.id).toBe('pay-3');
+    expect(store.payments.map((payment) => payment.id)).toEqual(['pay-3', 'pay-2', 'pay-1']);
+    expect(store.total).toBe(3);
   });
 });
 
@@ -71,4 +83,14 @@ const newPayment: PaymentRead = {
   payment_date: '2026-05-12',
   payment_no: 'Z-2026-0001-ZX-001-PAY-002',
   remark: 'second payment',
+};
+
+const reversalPayment: PaymentRead = {
+  ...samplePayment,
+  amount: '-120.50',
+  id: 'pay-3',
+  payment_no: 'Z-2026-0001-ZX-001-PAY-003',
+  payment_type: 'reversal',
+  remark: 'wrong amount',
+  reverses_payment_id: 'pay-1',
 };

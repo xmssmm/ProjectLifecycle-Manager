@@ -2,7 +2,7 @@ import type { AxiosAdapter, AxiosRequestConfig } from 'axios';
 import { describe, expect, it } from 'vitest';
 
 import { createApiClient } from '../src/api/client';
-import { createPayment, getPayment, listPayments } from '../src/api/payments';
+import { createPayment, getPayment, listPayments, reversePayment } from '../src/api/payments';
 
 describe('payments api', () => {
   it('supports list, multipart create, and detail endpoints', async () => {
@@ -24,9 +24,19 @@ describe('payments api', () => {
     await createPayment(
       {
         amount: '120.50',
+        confirmOverBudget: true,
         files: [new File(['%PDF-1.7'], 'voucher.pdf', { type: 'application/pdf' })],
+        overBudgetReason: 'approved budget',
         paymentDate: '2026-05-10',
         remark: 'first payment',
+        subProjectId: 'sub-1',
+      },
+      client,
+    );
+    await reversePayment(
+      {
+        remark: 'wrong amount',
+        reversesPaymentId: 'pay-1',
         subProjectId: 'sub-1',
       },
       client,
@@ -43,7 +53,16 @@ describe('payments api', () => {
       url: '/sub-projects/sub-1/payments',
     });
     expect(calls[1].data).toBeInstanceOf(FormData);
+    expect((calls[1].data as FormData).get('confirm_over_budget')).toBe('true');
+    expect((calls[1].data as FormData).get('over_budget_reason')).toBe('approved budget');
     expect(calls[2]).toMatchObject({
+      method: 'post',
+      url: '/sub-projects/sub-1/payments',
+    });
+    expect((calls[2].data as FormData).get('payment_type')).toBe('reversal');
+    expect((calls[2].data as FormData).get('reverses_payment_id')).toBe('pay-1');
+    expect((calls[2].data as FormData).get('remark')).toBe('wrong amount');
+    expect(calls[3]).toMatchObject({
       method: 'get',
       url: '/sub-projects/sub-1/payments/pay-1',
     });
