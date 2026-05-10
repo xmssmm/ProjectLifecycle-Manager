@@ -21,6 +21,7 @@ const STATUS_MAP: Record<
   reviewing: { label: '审核中', type: 'primary' },
   submitted: { label: '已提交', type: 'primary' },
   terminated: { label: '已中止', type: 'danger' },
+  waiting: { label: '待开始', type: 'info' },
 };
 
 const props = defineProps<{

@@ -287,6 +287,7 @@ const stubs = {
       '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
   },
   ElSkeleton: { template: '<section><slot /></section>' },
+  PhaseProgress: { template: '<section />' },
   RouterLink: { props: ['to'], template: '<a><slot /></a>' },
   SearchBar: {
     template:

@@ -421,6 +421,79 @@ body {
   margin-top: 24px;
 }
 
+.phase-progress {
+  gap: 18px;
+}
+
+.phase-progress__bar {
+  width: min(100%, 280px);
+}
+
+.phase-progress__list {
+  display: grid;
+  gap: 10px;
+}
+
+.phase-progress__item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.phase-progress__item--in_progress {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--el-color-primary-light-9);
+}
+
+.phase-progress__item--completed {
+  border-color: #abefc6;
+  background: #f6fef9;
+}
+
+.phase-progress__badge {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  color: #344054;
+  background: #eef2f7;
+  font-weight: 700;
+}
+
+.phase-progress__body {
+  display: grid;
+  gap: 4px;
+}
+
+.phase-progress__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.phase-progress__title h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.phase-progress__body p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.phase-progress__code {
+  color: #667085;
+  font-size: 12px;
+}
+
 .handover-panel {
   display: grid;
   gap: 8px;
@@ -659,6 +732,7 @@ body {
   }
 
   .task-filter-band,
+  .phase-progress__item,
   .task-summary {
     grid-template-columns: 1fr;
   }
