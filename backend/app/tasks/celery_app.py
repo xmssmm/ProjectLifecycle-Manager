@@ -5,6 +5,7 @@ from celery.schedules import crontab  # type: ignore[import-untyped]
 
 from app.core.config import Settings, get_settings
 from app.tasks.task_names import (
+    AUDIT_PARTITION_TASK_NAME,
     CELERY_SMOKE_TASK_NAME,
     FILE_CLEANUP_TASK_NAME,
     TASK_DEADLINE_SCAN_TASK_NAME,
@@ -17,7 +18,11 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
         "project_management",
         broker=resolved_settings.effective_celery_broker_url,
         backend=resolved_settings.effective_celery_result_backend,
-        include=["app.tasks.task_deadlines", "app.tasks.file_cleanup"],
+        include=[
+            "app.tasks.task_deadlines",
+            "app.tasks.file_cleanup",
+            "app.tasks.audit_partitions",
+        ],
     )
     app.conf.update(
         accept_content=["json"],
@@ -33,6 +38,10 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "file-cleanup-weekly-monday-0300": {
                 "task": FILE_CLEANUP_TASK_NAME,
                 "schedule": crontab(minute=0, hour=3, day_of_week="monday"),
+            },
+            "audit-partition-maintenance-monthly-0030": {
+                "task": AUDIT_PARTITION_TASK_NAME,
+                "schedule": crontab(minute=30, hour=0, day_of_month=1),
             },
         },
         result_serializer="json",
