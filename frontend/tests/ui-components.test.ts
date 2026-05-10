@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import { describe, expect, it } from 'vitest';
 
 import ConfirmDialog from '../src/components/common/ConfirmDialog.vue';
@@ -6,6 +7,7 @@ import DataTable from '../src/components/common/DataTable.vue';
 import PermissionGate from '../src/components/permission/PermissionGate.vue';
 import SearchBar from '../src/components/common/SearchBar.vue';
 import StatusTag from '../src/components/common/StatusTag.vue';
+import { useAuthStore } from '../src/stores/useAuthStore';
 
 const elementStubs = {
   ElButton: { template: '<button type="button" @click="$emit(\'click\')"><slot /></button>' },
@@ -111,18 +113,21 @@ describe('common UI components', () => {
   });
 
   it('PermissionGate renders allowed content and fallback content', () => {
+    setActivePinia(createPinia());
+    const authStore = useAuthStore();
+    authStore.setUser({
+      id: 'finance-1',
+      username: 'finance',
+      role: 'finance_manager',
+      deptId: null,
+    });
+
     const allowed = mount(PermissionGate, {
-      props: { allowedRoles: ['admin'], currentRole: 'admin', permission: 'project.view' },
+      props: { permission: 'payment.create' },
       slots: { default: 'allowed', fallback: 'fallback' },
     });
     const denied = mount(PermissionGate, {
-      props: {
-        allowedRoles: ['admin'],
-        currentRole: 'viewer',
-        ownedResourceIds: ['other'],
-        permission: 'project.edit',
-        resourceId: 'project-1',
-      },
+      props: { permission: 'user.manage' },
       slots: { default: 'allowed', fallback: 'fallback' },
     });
 

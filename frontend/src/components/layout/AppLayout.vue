@@ -1,11 +1,33 @@
 <script setup lang="ts">
 import { Bell, Box, Folder, House, Setting, SwitchButton } from '@element-plus/icons-vue';
+import { computed, type Component } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
+import type { UserRole } from '@/stores/useAuthStore';
+
+interface NavItem {
+  disabled?: boolean;
+  icon: Component;
+  index: string;
+  label: string;
+  requireRole?: UserRole[];
+}
 
 const authStore = useAuthStore();
+const { hasRole } = usePermission();
 const router = useRouter();
+
+const navItems: NavItem[] = [
+  { icon: House, index: '/', label: '工作台' },
+  { disabled: true, icon: Folder, index: '/main-projects', label: '项目' },
+  { disabled: true, icon: Bell, index: '/notifications', label: '通知' },
+  { icon: Box, index: '/component-demo', label: '组件', requireRole: ['admin'] },
+  { disabled: true, icon: Setting, index: '/admin', label: '管理', requireRole: ['admin'] },
+];
+
+const visibleNavItems = computed(() => navItems.filter((item) => hasRole(item.requireRole)));
 
 async function logout() {
   await authStore.logout();
@@ -21,25 +43,14 @@ async function logout() {
         <span class="brand-text">项目归档</span>
       </div>
       <el-menu class="nav-menu" default-active="/" router>
-        <el-menu-item index="/">
-          <el-icon><House /></el-icon>
-          <span>工作台</span>
-        </el-menu-item>
-        <el-menu-item disabled index="/main-projects">
-          <el-icon><Folder /></el-icon>
-          <span>项目</span>
-        </el-menu-item>
-        <el-menu-item disabled index="/notifications">
-          <el-icon><Bell /></el-icon>
-          <span>通知</span>
-        </el-menu-item>
-        <el-menu-item index="/component-demo">
-          <el-icon><Box /></el-icon>
-          <span>组件</span>
-        </el-menu-item>
-        <el-menu-item disabled index="/admin">
-          <el-icon><Setting /></el-icon>
-          <span>管理</span>
+        <el-menu-item
+          v-for="item in visibleNavItems"
+          :key="item.index"
+          :disabled="item.disabled"
+          :index="item.index"
+        >
+          <el-icon><component :is="item.icon" /></el-icon>
+          <span>{{ item.label }}</span>
         </el-menu-item>
       </el-menu>
     </el-aside>

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
+import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import ComponentDemoView from '@/views/admin/ComponentDemoView.vue';
 import LoginView from '@/views/auth/LoginView.vue';
@@ -18,7 +19,7 @@ const router = createRouter({
       path: '/component-demo',
       name: 'component-demo',
       component: ComponentDemoView,
-      meta: { requiresAuth: true },
+      meta: { requireRole: ['admin'], requiresAuth: true },
     },
     {
       path: '/login',
@@ -31,6 +32,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const authStore = useAuthStore();
+  const { canAccessRoute } = usePermission();
   const isPublic = to.meta.public === true;
 
   if (to.name === 'login' && authStore.isAuthenticated) {
@@ -42,6 +44,10 @@ router.beforeEach((to) => {
       name: 'login',
       query: { redirect: to.fullPath },
     };
+  }
+
+  if (!isPublic && !canAccessRoute(to.meta)) {
+    return { name: 'home' };
   }
 
   return true;

@@ -1,33 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import { usePermission, type PermissionCode } from '@/composables/usePermission';
+
 const props = withDefaults(
   defineProps<{
-    allowedRoles?: string[];
-    currentRole?: string | null;
     ownedResourceIds?: string[];
-    permission: string;
+    permission: PermissionCode;
     resourceId?: string;
   }>(),
   {
-    allowedRoles: () => [],
-    currentRole: null,
     ownedResourceIds: () => [],
     resourceId: undefined,
   },
 );
 
-const canAccess = computed(() => {
-  if (!props.permission || !props.currentRole) {
-    return false;
-  }
-
-  if (props.currentRole === 'admin' || props.allowedRoles.includes(props.currentRole)) {
-    return true;
-  }
-
-  return Boolean(props.resourceId && props.ownedResourceIds.includes(props.resourceId));
-});
+const { can } = usePermission();
+const canAccess = computed(() =>
+  can(props.permission, {
+    ownedResourceIds: props.ownedResourceIds,
+    resourceId: props.resourceId,
+  }),
+);
 </script>
 
 <template>

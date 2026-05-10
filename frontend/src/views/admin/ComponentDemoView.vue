@@ -40,7 +40,7 @@ const searchFields = [
     <div class="component-demo__status">
       <StatusTag status="pending_review" />
       <StatusTag status="approved" />
-      <PermissionGate :allowed-roles="['admin']" current-role="admin" permission="component.demo">
+      <PermissionGate permission="user.manage">
         <el-button type="primary" @click="confirmVisible = true"> 打开确认 </el-button>
       </PermissionGate>
     </div>

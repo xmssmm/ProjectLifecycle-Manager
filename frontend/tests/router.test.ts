@@ -36,4 +36,19 @@ describe('router', () => {
 
     expect(router.currentRoute.value.name).toBe('home');
   });
+
+  it('redirects authenticated users away from routes outside their role', async () => {
+    const authStore = useAuthStore();
+    authStore.setAccessToken('member-token');
+    authStore.setUser({
+      id: 'member-1',
+      username: 'member',
+      role: 'proj_member',
+      deptId: null,
+    });
+
+    await router.push('/component-demo');
+
+    expect(router.currentRoute.value.name).toBe('home');
+  });
 });
