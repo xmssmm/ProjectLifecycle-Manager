@@ -10,6 +10,7 @@ from app.models.main_projects import (
     ProjectReview,
     ProjectReviewDecision,
 )
+from app.models.notification_deliveries import NotificationDelivery, NotificationDeliveryStatus
 from app.models.notifications import Notification, NotificationPreference
 from app.models.oauth import OAuthBinding
 from app.models.payments import Payment, PaymentType, PaymentVoucher
@@ -68,6 +69,8 @@ __all__ = [
     "ReportJobStatus",
     "ReportType",
     "Notification",
+    "NotificationDelivery",
+    "NotificationDeliveryStatus",
     "NotificationPreference",
     "OAuthBinding",
     "Phase",

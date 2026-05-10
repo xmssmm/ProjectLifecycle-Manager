@@ -245,9 +245,9 @@
 
 **Test plan:**
 
-- [ ] 失败后 attempt_count 增加。
-- [ ] 到达上限进入 dead_letter。
-- [ ] 成功后状态为 delivered。
+- [x] 失败后 attempt_count 增加。
+- [x] 到达上限进入 dead_letter。
+- [x] 成功后状态为 delivered。
 
 ### T-3-DOC-01 ClamAV 主动扫描
 

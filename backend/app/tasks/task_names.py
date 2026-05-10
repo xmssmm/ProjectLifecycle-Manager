@@ -7,3 +7,6 @@ AUDIT_PARTITION_TASK_NAME = "app.tasks.audit_partitions.ensure_audit_partitions"
 REPORT_GENERATE_TASK_NAME = "app.tasks.reports.generate_report"
 REPORT_CLEANUP_TASK_NAME = "app.tasks.reports.cleanup_expired_reports"
 NOTIFICATION_DIGEST_TASK_NAME = "app.tasks.notifications.generate_notification_digest"
+NOTIFICATION_DELIVERY_RETRY_TASK_NAME = (
+    "app.tasks.notification_delivery.retry_notification_deliveries"
+)

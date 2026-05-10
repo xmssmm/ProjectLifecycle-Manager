@@ -15,7 +15,7 @@ from app.core.responses import success_response
 from app.models.payments import Payment, PaymentType
 from app.models.users import User
 from app.schemas.payments import PaymentRead
-from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
+from app.services.notification_runtime import build_notification_service
 from app.services.payments import (
     PaymentService,
     PaymentVoucherUpload,
@@ -34,9 +34,7 @@ def get_payment_service(
         repository=SqlAlchemyPaymentRepository(session),
         storage=create_storage_backend(settings),
         max_file_size_bytes=settings.max_upload_size_bytes,
-        notification_service=NotificationService(
-            repository=SqlAlchemyNotificationRepository(session),
-        ),
+        notification_service=build_notification_service(session=session, settings=settings),
     )
 
 

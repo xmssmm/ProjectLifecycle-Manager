@@ -3,16 +3,14 @@ from __future__ import annotations
 import asyncio
 
 from app.core.db import AsyncSessionLocal
-from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
+from app.services.notification_runtime import build_notification_service
 from app.tasks.celery_app import celery_app
 from app.tasks.task_names import NOTIFICATION_DIGEST_TASK_NAME
 
 
 async def run_notification_digest() -> dict[str, int | str]:
     async with AsyncSessionLocal() as session:
-        service = NotificationService(
-            repository=SqlAlchemyNotificationRepository(session),
-        )
+        service = build_notification_service(session=session)
         result = await service.generate_daily_digest()
         return result.to_dict()
 

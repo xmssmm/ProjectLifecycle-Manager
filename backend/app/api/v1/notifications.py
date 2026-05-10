@@ -19,12 +19,12 @@ from app.schemas.notifications import (
     NotificationReadAllResult,
     NotificationUnreadCountRead,
 )
+from app.services.notification_runtime import build_notification_service
 from app.services.notifications import (
     NotificationDeliveryMode,
     NotificationPage,
     NotificationPreferenceState,
     NotificationService,
-    SqlAlchemyNotificationRepository,
     StoredNotificationPreference,
 )
 
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 async def get_notification_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> NotificationService:
-    return NotificationService(repository=SqlAlchemyNotificationRepository(session))
+    return build_notification_service(session=session)
 
 
 def serialize_notification(notification: Notification) -> dict[str, object]:
