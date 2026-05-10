@@ -11,6 +11,7 @@ from app.models.main_projects import (
     ProjectReviewDecision,
 )
 from app.models.notifications import Notification, NotificationPreference
+from app.models.oauth import OAuthBinding
 from app.models.payments import Payment, PaymentType, PaymentVoucher
 from app.models.phases import (
     Phase,
@@ -68,6 +69,7 @@ __all__ = [
     "ReportType",
     "Notification",
     "NotificationPreference",
+    "OAuthBinding",
     "Phase",
     "PhaseDocRequirement",
     "PhaseDocTemplate",
