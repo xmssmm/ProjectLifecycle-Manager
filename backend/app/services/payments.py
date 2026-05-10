@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -47,6 +47,12 @@ class PaymentRepository(Protocol):
         ...
 
     async def get_payment_phase(self, sub_project_id: UUID) -> Phase | None:
+        ...
+
+    async def get_payment_for_update(self, payment_id: UUID) -> Payment | None:
+        ...
+
+    async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None:
         ...
 
     async def list_group_documents_for_update(
@@ -123,6 +129,23 @@ class SqlAlchemyPaymentRepository:
             .with_for_update(),
         )
         return phase if isinstance(phase, Phase) else None
+
+    async def get_payment_for_update(self, payment_id: UUID) -> Payment | None:
+        payment = await self._session.scalar(
+            select(Payment).where(Payment.id == payment_id).with_for_update(),
+        )
+        return payment if isinstance(payment, Payment) else None
+
+    async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None:
+        payment = await self._session.scalar(
+            select(Payment)
+            .where(
+                Payment.reverses_payment_id == payment_id,
+                Payment.payment_type == PaymentType.reversal,
+            )
+            .with_for_update(),
+        )
+        return payment if isinstance(payment, Payment) else None
 
     async def list_group_documents_for_update(
         self,
@@ -258,6 +281,20 @@ class InMemoryPaymentRepository:
             None,
         )
 
+    async def get_payment_for_update(self, payment_id: UUID) -> Payment | None:
+        return next((payment for payment in self.payments if payment.id == payment_id), None)
+
+    async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None:
+        return next(
+            (
+                payment
+                for payment in self.payments
+                if payment.reverses_payment_id == payment_id
+                and payment.payment_type == PaymentType.reversal
+            ),
+            None,
+        )
+
     async def list_group_documents_for_update(
         self,
         *,
@@ -358,12 +395,14 @@ class PaymentService:
         max_file_size_bytes: int,
         notification_service: NotificationService | None = None,
         file_validator: FileValidator | None = None,
+        today_provider: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._max_file_size_bytes = max_file_size_bytes
         self._notification_service = notification_service
         self._file_validator = file_validator or DefaultFileValidator()
+        self._today_provider = today_provider
 
     async def create_payment(
         self,
@@ -455,6 +494,68 @@ class PaymentService:
         )
         return payment
 
+    async def reverse_payment(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        reverses_payment_id: UUID,
+        remark: str | None,
+    ) -> Payment:
+        self._ensure_can_create(actor)
+        cleaned_remark = self._clean_optional_text(remark)
+        if cleaned_remark is None:
+            raise ValidationFailedError("Reversal remark is required")
+
+        try:
+            sub_project = await self._get_sub_project_for_update(sub_project_id)
+            main_project = await self._get_main_project_for_update(sub_project.main_project_id)
+            original = await self._get_reversible_payment(
+                sub_project=sub_project,
+                payment_id=reverses_payment_id,
+            )
+            existing_reversal = await self._repository.get_reversal_for_payment(original.id)
+            if existing_reversal is not None:
+                raise BusinessException(
+                    code=3003,
+                    message="Payment has already been reversed",
+                    status_code=409,
+                    data={
+                        "payment_id": str(original.id),
+                        "reversal_payment_id": str(existing_reversal.id),
+                    },
+                )
+
+            sequence = await self._repository.next_payment_sequence(sub_project.id)
+            now = datetime.now(UTC)
+            payment = Payment(
+                id=uuid4(),
+                payment_no=f"{sub_project.project_no}-PAY-{sequence:03d}",
+                sub_project_id=sub_project.id,
+                amount=-to_money(original.amount),
+                payment_date=self._today_provider(),
+                remark=cleaned_remark,
+                payment_type=PaymentType.reversal,
+                reverses_payment_id=original.id,
+                operator_id=actor.id,
+                created_at=now,
+                updated_at=now,
+            )
+            self._repository.add_payment(payment)
+            await self._repository.flush()
+            await self._recalculate_spending(
+                sub_project=sub_project,
+                main_project=main_project,
+                now=now,
+            )
+            await self._repository.commit()
+        except Exception:
+            await self._repository.rollback()
+            raise
+
+        await self._repository.refresh_payment(payment)
+        return payment
+
     @staticmethod
     def _ensure_can_create(actor: User) -> None:
         if actor.role != UserRole.finance_manager:
@@ -477,6 +578,40 @@ class PaymentService:
         if phase is None:
             raise ResourceNotFoundError("Payment phase does not exist")
         return phase
+
+    async def _get_reversible_payment(
+        self,
+        *,
+        sub_project: SubProject,
+        payment_id: UUID,
+    ) -> Payment:
+        payment = await self._repository.get_payment_for_update(payment_id)
+        if payment is None or payment.sub_project_id != sub_project.id:
+            raise ResourceNotFoundError("Original payment does not exist")
+        if payment.payment_type == PaymentType.reversal:
+            raise BusinessException(
+                code=3003,
+                message="Reversal payment cannot be reversed",
+                status_code=409,
+                data={
+                    "payment_id": str(payment.id),
+                    "payment_type": payment.payment_type.value,
+                },
+            )
+        return payment
+
+    async def _recalculate_spending(
+        self,
+        *,
+        sub_project: SubProject,
+        main_project: MainProject,
+        now: datetime,
+    ) -> None:
+        sub_project.spent_amount = await self._repository.sum_payments(sub_project.id)
+        sub_project.updated_at = now
+        await self._repository.flush()
+        main_project.spent_amount = await self._repository.sum_sub_project_spent(main_project.id)
+        main_project.updated_at = now
 
     @classmethod
     def _clean_amount(cls, amount: Decimal) -> Decimal:

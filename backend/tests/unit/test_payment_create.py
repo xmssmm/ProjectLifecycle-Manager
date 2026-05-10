@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app.api.v1.payments import get_payment_service
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
-from app.core.exceptions import BusinessException, ValidationFailedError
+from app.core.exceptions import BusinessException, ResourceNotFoundError, ValidationFailedError
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.main_projects import MainProject, MainProjectStatus
@@ -151,6 +151,7 @@ def make_service() -> tuple[
         storage=storage,
         max_file_size_bytes=1024,
         notification_service=NotificationService(repository=notifications),
+        today_provider=lambda: date(2026, 5, 11),
     )
     return service, repository, storage, finance, sub_project, main_project, notifications
 
@@ -365,3 +366,168 @@ def test_create_payment_endpoint_accepts_multipart_payload() -> None:
     payload = response.json()["data"]
     assert payload["payment_no"] == "Z-2026-0001-ZX-001-PAY-001"
     assert payload["amount"] == "120.50"
+
+
+@pytest.mark.asyncio
+async def test_reverse_payment_creates_reversal_and_reduces_spent_amount() -> None:
+    service, repository, _storage, finance, sub_project, main_project, _notifications = (
+        make_service()
+    )
+    original = await service.create_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        amount=Decimal("120.50"),
+        payment_date=date(2026, 5, 10),
+        remark="origin",
+        voucher_files=[
+            PaymentVoucherUpload(
+                file_name="voucher.pdf",
+                content_type="application/pdf",
+                content=b"%PDF-1.7\nvoucher",
+            ),
+        ],
+    )
+
+    reversal = await service.reverse_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        reverses_payment_id=original.id,
+        remark="wrong amount",
+    )
+
+    assert reversal.payment_no == "Z-2026-0001-ZX-001-PAY-002"
+    assert reversal.payment_type == PaymentType.reversal
+    assert reversal.reverses_payment_id == original.id
+    assert reversal.amount == Decimal("-120.50")
+    assert reversal.payment_date == date(2026, 5, 11)
+    assert sub_project.spent_amount == Decimal("0.00")
+    assert main_project.spent_amount == Decimal("0.00")
+    assert [payment.amount for payment in repository.payments] == [
+        Decimal("120.50"),
+        Decimal("-120.50"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reverse_payment_rejects_missing_original_and_missing_remark() -> None:
+    service, _repository, _storage, finance, sub_project, _main_project, _notifications = (
+        make_service()
+    )
+
+    with pytest.raises(ValidationFailedError):
+        await service.reverse_payment(
+            actor=finance,
+            sub_project_id=sub_project.id,
+            reverses_payment_id=uuid4(),
+            remark=" ",
+        )
+
+    with pytest.raises(ResourceNotFoundError):
+        await service.reverse_payment(
+            actor=finance,
+            sub_project_id=sub_project.id,
+            reverses_payment_id=uuid4(),
+            remark="wrong payment",
+        )
+
+
+@pytest.mark.asyncio
+async def test_reverse_payment_rejects_reversal_payment_reference() -> None:
+    service, _repository, _storage, finance, sub_project, _main_project, _notifications = (
+        make_service()
+    )
+    original = await service.create_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        amount=Decimal("120.50"),
+        payment_date=date(2026, 5, 10),
+        voucher_files=[
+            PaymentVoucherUpload(
+                file_name="voucher.pdf",
+                content_type="application/pdf",
+                content=b"%PDF-1.7\nvoucher",
+            ),
+        ],
+    )
+    reversal = await service.reverse_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        reverses_payment_id=original.id,
+        remark="wrong payment",
+    )
+
+    with pytest.raises(BusinessException) as exc_info:
+        await service.reverse_payment(
+            actor=finance,
+            sub_project_id=sub_project.id,
+            reverses_payment_id=reversal.id,
+            remark="reverse reversal",
+        )
+
+    assert exc_info.value.code == 3003
+    assert exc_info.value.data["payment_type"] == PaymentType.reversal.value
+
+
+def test_create_payment_endpoint_accepts_reversal_branch() -> None:
+    finance = make_user(UserRole.finance_manager, username="finance")
+    sub_project_id = uuid4()
+    original_payment_id = uuid4()
+    expected_sub_project_id = sub_project_id
+    payment = Payment(
+        id=uuid4(),
+        payment_no="Z-2026-0001-ZX-001-PAY-002",
+        sub_project_id=sub_project_id,
+        amount=Decimal("-120.50"),
+        payment_date=date(2026, 5, 11),
+        remark="wrong amount",
+        payment_type=PaymentType.reversal,
+        reverses_payment_id=original_payment_id,
+        operator_id=finance.id,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    class FakePaymentService:
+        async def reverse_payment(
+            self,
+            *,
+            actor: User,
+            sub_project_id: UUID,
+            reverses_payment_id: UUID,
+            remark: str | None,
+        ) -> Payment:
+            assert actor.id == finance.id
+            assert sub_project_id == expected_sub_project_id
+            assert reverses_payment_id == original_payment_id
+            assert remark == "wrong amount"
+            return payment
+
+    async def fake_db_session() -> AsyncIterator[object]:
+        yield object()
+
+    async def fake_current_user() -> User:
+        return finance
+
+    async def fake_payment_service() -> FakePaymentService:
+        return FakePaymentService()
+
+    app = create_app(rate_limit_store=InMemoryRateLimitStore())
+    app.dependency_overrides[get_db_session] = fake_db_session
+    app.dependency_overrides[get_current_user] = fake_current_user
+    app.dependency_overrides[get_payment_service] = fake_payment_service
+    client = TestClient(app)
+
+    response = client.post(
+        f"/api/v1/sub-projects/{sub_project_id}/payments",
+        data={
+            "payment_type": "reversal",
+            "reverses_payment_id": str(original_payment_id),
+            "remark": "wrong amount",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["payment_no"] == "Z-2026-0001-ZX-001-PAY-002"
+    assert payload["amount"] == "-120.50"
+    assert payload["payment_type"] == PaymentType.reversal.value
