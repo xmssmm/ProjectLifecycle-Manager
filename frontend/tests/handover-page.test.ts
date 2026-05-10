@@ -99,6 +99,7 @@ const baseUser = {
   last_login_at: null,
   password_changed_at: '2026-05-10T00:00:00Z',
   role: 'proj_leader',
+  sso_required: false,
   status: 'active',
   updated_at: '2026-05-10T00:00:00Z',
 } as const;

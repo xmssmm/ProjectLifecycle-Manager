@@ -16,7 +16,8 @@ from app.core.middleware import InMemoryRateLimitStore
 from app.core.security import hash_password, verify_password
 from app.main import create_app
 from app.models.users import User, UserRole, UserStatus
-from app.schemas.users import PasswordChangeRequest, PasswordResetRequest, UserCreate
+from app.schemas.users import PasswordChangeRequest, PasswordResetRequest, UserCreate, UserUpdate
+from app.services.audit import AuditContext, InMemoryAuditLogWriter
 from app.services.auth import InMemoryAuthTokenStore
 from app.services.users import (
     InMemoryProjectAssignmentReader,
@@ -28,6 +29,7 @@ from app.services.users import (
 def make_user(
     *,
     role: UserRole = UserRole.admin,
+    sso_required: bool = False,
     status: UserStatus = UserStatus.active,
     username: str = "admin",
 ) -> User:
@@ -40,6 +42,7 @@ def make_user(
         role=role,
         dept_id=None,
         status=status,
+        sso_required=sso_required,
         password_changed_at=now,
         last_login_at=None,
         created_at=now,
@@ -160,6 +163,46 @@ async def test_reset_password_marks_user_for_required_change_and_revokes_tokens(
     assert reset.status == UserStatus.password_reset_required
     assert verify_password("ResetPass1!", reset.password_hash)
     assert str(member.id) in token_store.revoked_user_ids
+
+
+@pytest.mark.asyncio
+async def test_admin_updates_sso_required_policy_and_records_audit() -> None:
+    admin = make_user()
+    member = make_user(role=UserRole.proj_member, username="member")
+    service, _repository, _token_store = make_service(admin, member)
+    audit_writer = InMemoryAuditLogWriter()
+
+    updated = await service.update_user(
+        actor=admin,
+        user_id=member.id,
+        payload=UserUpdate(sso_required=True),
+        audit_writer=audit_writer,
+        audit_context=AuditContext(actor_id=admin.id, request_id="req-sso-policy"),
+    )
+
+    assert updated.sso_required is True
+    assert len(audit_writer.entries) == 1
+    entry = audit_writer.entries[0]
+    assert entry.action == "user.sso_policy.update"
+    assert entry.target_id == str(member.id)
+    assert entry.before_state["sso_required"] is False
+    assert entry.after_state["sso_required"] is True
+    assert entry.extra["modified_fields"] == {
+        "sso_required": {"before": False, "after": True},
+    }
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_update_sso_required_policy() -> None:
+    member = make_user(role=UserRole.proj_member, username="member")
+    service, _repository, _token_store = make_service(member)
+
+    with pytest.raises(PermissionDeniedError):
+        await service.update_user(
+            actor=member,
+            user_id=member.id,
+            payload=UserUpdate(sso_required=True),
+        )
 
 
 def test_user_list_endpoint_requires_admin_role() -> None:

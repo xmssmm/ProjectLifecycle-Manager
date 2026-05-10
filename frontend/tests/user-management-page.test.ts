@@ -34,6 +34,7 @@ describe('UserList', () => {
 
     expect(listUsers).toHaveBeenCalledWith({ page: 1, pageSize: 20, role: undefined });
     expect(wrapper.text()).toContain('admin');
+    expect(wrapper.text()).toContain('仅 SSO');
     expect(wrapper.text()).toContain('系统会在停用前检查在途项目');
     expect(wrapper.find('[data-test="edit-user"]').exists()).toBe(true);
     expect(wrapper.find('[data-test="disable-user"]').exists()).toBe(true);
@@ -57,6 +58,7 @@ const sampleUser = {
   last_login_at: null,
   password_changed_at: '2026-05-10T00:00:00Z',
   role: 'admin',
+  sso_required: true,
   status: 'active',
   updated_at: '2026-05-10T00:00:00Z',
   username: 'admin',
@@ -70,7 +72,7 @@ const stubs = {
   DataTable: {
     props: ['columns', 'loading', 'page', 'pageSize', 'rows', 'total'],
     template:
-      '<section><article v-for="row in rows" :key="row.id"><span>{{ row.username }}</span><slot name="role" :row="row" :value="row.role" /><slot name="status" :row="row" :value="row.status" /><slot name="actions" :row="row" /></article></section>',
+      '<section><article v-for="row in rows" :key="row.id"><span>{{ row.username }}</span><slot name="role" :row="row" :value="row.role" /><slot name="status" :row="row" :value="row.status" /><slot name="sso_required" :row="row" :value="row.sso_required" /><slot name="actions" :row="row" /></article></section>',
   },
   ElButton: { template: '<button type="button" @click="$emit(\'click\')"><slot /></button>' },
   ElDialog: {
@@ -90,6 +92,7 @@ const stubs = {
     template:
       '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
   },
+  ElTag: { props: ['type'], template: '<span><slot /></span>' },
   ElTooltip: { template: '<span><slot />{{ content }}</span>', props: ['content'] },
   SearchBar: { template: '<section><slot /></section>' },
   StatusTag: { props: ['status'], template: '<span>{{ status }}</span>' },

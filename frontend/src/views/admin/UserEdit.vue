@@ -32,6 +32,7 @@ const form = reactive({
   email: '',
   password: '',
   role: 'proj_member' as UserRole,
+  ssoRequired: false,
   username: '',
 });
 
@@ -49,6 +50,7 @@ watch(
     form.email = props.user?.email ?? '';
     form.password = '';
     form.role = props.user?.role ?? 'proj_member';
+    form.ssoRequired = props.user?.sso_required ?? false;
     form.username = props.user?.username ?? '';
   },
   { immediate: true },
@@ -64,6 +66,7 @@ function submitForm(): void {
     dept_id: normalizeNullable(form.deptId),
     email: normalizeNullable(form.email),
     role: form.role,
+    sso_required: form.ssoRequired,
     username: form.username.trim(),
   };
 
@@ -104,6 +107,14 @@ function submitForm(): void {
           autocomplete="off"
           data-test="user-dept-input"
           placeholder="可留空"
+        />
+      </el-form-item>
+      <el-form-item label="登录策略">
+        <el-switch
+          v-model="form.ssoRequired"
+          active-text="仅 SSO"
+          data-test="user-sso-required"
+          inactive-text="本地+SSO"
         />
       </el-form-item>
       <el-form-item v-if="!isEditMode" label="初始密码">

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, false
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,13 @@ def enum_values(enum_type: type[enum.Enum]) -> list[str]:
 class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("sso_required", False)
+        for key, value in kwargs.items():
+            if not hasattr(type(self), key):
+                raise TypeError(f"{key!r} is an invalid keyword argument for User")
+            setattr(self, key, value)
+
     username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -54,6 +61,12 @@ class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=UserStatus.active,
         server_default=UserStatus.active.value,
+    )
+    sso_required: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
     )
     password_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

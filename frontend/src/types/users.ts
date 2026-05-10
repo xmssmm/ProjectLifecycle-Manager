@@ -10,6 +10,7 @@ export interface UserRead {
   last_login_at: string | null;
   password_changed_at: string | null;
   role: UserRole;
+  sso_required: boolean;
   status: UserStatus;
   updated_at: string;
   username: string;
@@ -33,6 +34,7 @@ export interface UserCreatePayload {
   email: string | null;
   password: string;
   role: UserRole;
+  sso_required?: boolean;
   username: string;
 }
 
@@ -40,6 +42,7 @@ export interface UserUpdatePayload {
   dept_id?: string | null;
   email?: string | null;
   role?: UserRole;
+  sso_required?: boolean;
   username?: string;
 }
 

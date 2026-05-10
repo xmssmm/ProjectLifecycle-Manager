@@ -12,6 +12,7 @@ class UserCreate(BaseModel):
     role: UserRole
     email: str | None = Field(default=None, max_length=255)
     dept_id: UUID | None = None
+    sso_required: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -19,6 +20,7 @@ class UserUpdate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     role: UserRole | None = None
     dept_id: UUID | None = None
+    sso_required: bool | None = None
 
 
 class PasswordResetRequest(BaseModel):
@@ -37,6 +39,7 @@ class UserRead(BaseModel):
     role: UserRole
     dept_id: UUID | None
     status: UserStatus
+    sso_required: bool
     password_changed_at: datetime | None
     last_login_at: datetime | None
     created_at: datetime

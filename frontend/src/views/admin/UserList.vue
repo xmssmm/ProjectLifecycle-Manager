@@ -38,6 +38,7 @@ const columns = [
   { key: 'email', label: '邮箱', minWidth: 180 },
   { key: 'role', label: '角色', width: 150 },
   { key: 'status', label: '状态', width: 110 },
+  { key: 'sso_required', label: '登录策略', width: 120 },
   { key: 'updated_at', label: '更新时间', width: 180 },
   { key: 'actions', label: '操作', width: 260 },
 ];
@@ -220,6 +221,11 @@ function readErrorMessage(error: unknown, fallback: string): string {
       </template>
       <template #status="{ value }">
         <StatusTag :status="String(value)" />
+      </template>
+      <template #sso_required="{ value }">
+        <el-tag :type="value ? 'warning' : 'info'">
+          {{ value ? '仅 SSO' : '本地+SSO' }}
+        </el-tag>
       </template>
       <template #updated_at="{ value }">
         {{ formatDate(value) }}
