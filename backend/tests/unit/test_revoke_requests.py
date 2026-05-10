@@ -37,7 +37,7 @@ from app.services.notifications import InMemoryNotificationRepository, Notificat
 from app.services.revoke_requests import InMemoryRevokeRequestRepository, RevokeRequestService
 
 
-def make_user(role: UserRole, *, username: str) -> User:
+def make_user(role: UserRole, *, username: str, dept_id: UUID | None = None) -> User:
     now = datetime.now(UTC)
     return User(
         id=uuid4(),
@@ -45,7 +45,7 @@ def make_user(role: UserRole, *, username: str) -> User:
         email=f"{username}@example.local",
         password_hash="hashed",
         role=role,
-        dept_id=None,
+        dept_id=dept_id,
         status=UserStatus.active,
         password_changed_at=now,
         last_login_at=None,
@@ -298,6 +298,49 @@ async def test_submit_revoke_request_requires_completed_phase_and_project_leader
             actor=outsider,
             payload=RevokeRequestCreate(phase_id=target.id, reason="not manager"),
         )
+
+
+@pytest.mark.asyncio
+async def test_submit_revoke_request_notifies_admin_and_same_dept_manager_only() -> None:
+    (
+        service,
+        repository,
+        notification_repository,
+        leader,
+        _uploader,
+        other_member,
+        admin,
+        sub_project,
+        target,
+        _next,
+        _doc,
+        _task,
+    ) = make_service()
+    dept_manager = make_user(
+        UserRole.dept_manager,
+        dept_id=sub_project.dept_id,
+        username="dept-manager",
+    )
+    other_dept_manager = make_user(
+        UserRole.dept_manager,
+        dept_id=uuid4(),
+        username="other-dept-manager",
+    )
+    repository.users.extend([admin, dept_manager, other_dept_manager, other_member])
+
+    request = await service.submit_request(
+        actor=leader,
+        payload=RevokeRequestCreate(phase_id=target.id, reason="wrong document uploaded"),
+    )
+
+    assert {item.scenario for item in notification_repository.notifications} == {
+        "revoke_request_pending",
+    }
+    assert {item.receiver_id for item in notification_repository.notifications} == {
+        admin.id,
+        dept_manager.id,
+    }
+    assert all(item.source_id == str(request.id) for item in notification_repository.notifications)
 
 
 @pytest.mark.asyncio

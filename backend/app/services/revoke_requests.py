@@ -25,7 +25,7 @@ from app.models.revoke_requests import (
 )
 from app.models.sub_projects import SubProject, SubProjectMember
 from app.models.tasks import Task
-from app.models.users import User, UserRole
+from app.models.users import User, UserRole, UserStatus
 from app.schemas.revoke_requests import RevokeRequestCreate, RevokeRequestReview
 from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter
 from app.services.notifications import NotificationService
@@ -59,6 +59,14 @@ class RevokeRequestRepository(Protocol):
         sub_project_ids: Sequence[UUID] | None = None,
         requester_id: UUID | None = None,
     ) -> list[RevokeRequest]:
+        ...
+
+    async def list_active_user_ids_by_role(
+        self,
+        *,
+        role: UserRole,
+        dept_id: UUID | None = None,
+    ) -> list[UUID]:
         ...
 
     async def list_phases_for_update(self, sub_project_id: UUID) -> list[Phase]:
@@ -152,6 +160,18 @@ class SqlAlchemyRevokeRequestRepository:
         )
         return list(result.all())
 
+    async def list_active_user_ids_by_role(
+        self,
+        *,
+        role: UserRole,
+        dept_id: UUID | None = None,
+    ) -> list[UUID]:
+        conditions = [User.role == role, User.status == UserStatus.active]
+        if dept_id is not None:
+            conditions.append(User.dept_id == dept_id)
+        result = await self._session.scalars(select(User.id).where(*conditions))
+        return list(result.all())
+
     async def list_phases_for_update(self, sub_project_id: UUID) -> list[Phase]:
         result = await self._session.scalars(
             select(Phase)
@@ -204,6 +224,7 @@ class InMemoryRevokeRequestRepository:
         revoke_requests: Sequence[RevokeRequest] | None = None,
         sub_projects: Sequence[SubProject] | None = None,
         tasks: Sequence[Task] | None = None,
+        users: Sequence[User] | None = None,
     ) -> None:
         self.documents = list(documents or [])
         self.histories = list(histories or [])
@@ -212,6 +233,7 @@ class InMemoryRevokeRequestRepository:
         self.revoke_requests = list(revoke_requests or [])
         self.sub_projects = list(sub_projects or [])
         self.tasks = list(tasks or [])
+        self.users = list(users or [])
 
     async def get_phase(self, phase_id: UUID) -> Phase | None:
         return next((phase for phase in self.phases if phase.id == phase_id), None)
@@ -274,6 +296,20 @@ class InMemoryRevokeRequestRepository:
                 or (requester_id is not None and request.requester_id == requester_id)
             ]
         return sorted(requests, key=lambda request: request.created_at, reverse=True)
+
+    async def list_active_user_ids_by_role(
+        self,
+        *,
+        role: UserRole,
+        dept_id: UUID | None = None,
+    ) -> list[UUID]:
+        return [
+            user.id
+            for user in self.users
+            if user.role == role
+            and user.status == UserStatus.active
+            and (dept_id is None or user.dept_id == dept_id)
+        ]
 
     async def list_phases_for_update(self, sub_project_id: UUID) -> list[Phase]:
         phases = [phase for phase in self.phases if phase.sub_project_id == sub_project_id]
@@ -366,6 +402,11 @@ class RevokeRequestService:
         self._repository.add_request(request)
         await self._repository.commit()
         await self._repository.refresh_request(request)
+        await self._send_revoke_request_pending_notification(
+            phase=phase,
+            request=request,
+            sub_project=sub_project,
+        )
         return request
 
     async def review_request(
@@ -472,6 +513,34 @@ class RevokeRequestService:
                 "decision": request.status.value,
                 "phase_id": str(phase.id),
                 "phase_no": phase.phase_no,
+                "sub_project_id": str(sub_project.id),
+            },
+        )
+
+    async def _send_revoke_request_pending_notification(
+        self,
+        *,
+        phase: Phase,
+        request: RevokeRequest,
+        sub_project: SubProject,
+    ) -> None:
+        if self._notification_service is None:
+            return
+        receivers = self._unique_receivers(
+            await self._repository.list_active_user_ids_by_role(role=UserRole.admin)
+            + await self._repository.list_active_user_ids_by_role(
+                role=UserRole.dept_manager,
+                dept_id=sub_project.dept_id,
+            ),
+        )
+        await self._notification_service.send(
+            scenario="revoke_request_pending",
+            receivers=receivers,
+            source_id=request.id,
+            payload={
+                "phase_id": str(phase.id),
+                "phase_no": phase.phase_no,
+                "request_id": str(request.id),
                 "sub_project_id": str(sub_project.id),
             },
         )
