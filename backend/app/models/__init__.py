@@ -20,6 +20,11 @@ from app.models.phases import (
     PhaseStatus,
     ProcurementType,
 )
+from app.models.revoke_requests import (
+    RevokeRequest,
+    RevokeRequestStatus,
+    RevokeReviewDecision,
+)
 from app.models.sub_projects import (
     SubProject,
     SubProjectHandover,
@@ -54,6 +59,9 @@ __all__ = [
     "Payment",
     "PaymentType",
     "PaymentVoucher",
+    "RevokeRequest",
+    "RevokeRequestStatus",
+    "RevokeReviewDecision",
     "Notification",
     "Phase",
     "PhaseDocRequirement",

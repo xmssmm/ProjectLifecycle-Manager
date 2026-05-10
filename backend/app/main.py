@@ -15,6 +15,7 @@ from app.api.v1.documents import router as documents_router
 from app.api.v1.main_projects import router as main_projects_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.phases import router as phases_router
+from app.api.v1.revoke_requests import router as revoke_requests_router
 from app.api.v1.sub_projects import router as sub_projects_router
 from app.api.v1.system import router as system_router
 from app.api.v1.tasks import router as tasks_router
@@ -134,6 +135,7 @@ def create_app(
         openapi_tags=[
             {"name": "acceptance-steps", "description": "Acceptance step endpoints."},
             {"name": "payments", "description": "Payment creation and reversal endpoints."},
+            {"name": "revoke-requests", "description": "Phase revoke request endpoints."},
             {"name": "auth", "description": "Authentication endpoints."},
             {"name": "users", "description": "用户管理接口。"},
             {"name": "departments", "description": "部门管理接口。"},
@@ -173,6 +175,7 @@ def create_app(
     app.include_router(main_projects_router, prefix="/api/v1")
     app.include_router(payments_router, prefix="/api/v1")
     app.include_router(phases_router, prefix="/api/v1")
+    app.include_router(revoke_requests_router, prefix="/api/v1")
     app.include_router(sub_projects_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
     app.include_router(tasks_router, prefix="/api/v1")
