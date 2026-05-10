@@ -1,10 +1,18 @@
 import { mount } from '@vue/test-utils';
 import { createPinia } from 'pinia';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
 import App from '../src/App.vue';
 import HomeView from '../src/views/HomeView.vue';
+
+vi.mock('@/api/tasks', () => ({
+  completeTask: vi.fn(),
+  createTask: vi.fn(),
+  getTask: vi.fn(),
+  listTasks: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  updateTask: vi.fn(),
+}));
 
 describe('App', () => {
   it('renders the workspace shell and placeholder route', async () => {
@@ -13,6 +21,7 @@ describe('App', () => {
       routes: [
         { path: '/', component: HomeView },
         { path: '/profile', component: { template: '<div />' } },
+        { path: '/tasks', name: 'tasks', component: { template: '<div />' } },
       ],
     });
 
@@ -26,6 +35,7 @@ describe('App', () => {
           ElAside: { template: '<aside><slot /></aside>' },
           ElButton: { template: '<button><slot /></button>' },
           ElContainer: { template: '<section><slot /></section>' },
+          ElEmpty: { props: ['description'], template: '<section>{{ description }}</section>' },
           ElHeader: { template: '<header><slot /></header>' },
           ElIcon: { template: '<i><slot /></i>' },
           ElMain: { template: '<main><slot /></main>' },
