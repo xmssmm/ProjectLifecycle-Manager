@@ -23,6 +23,7 @@ from app.models.users import User, UserRole, UserStatus
 from app.services.notifications import InMemoryNotificationRepository, NotificationService
 from app.services.payments import (
     InMemoryPaymentRepository,
+    PaymentPage,
     PaymentService,
     PaymentVoucherUpload,
 )
@@ -531,3 +532,168 @@ def test_create_payment_endpoint_accepts_reversal_branch() -> None:
     assert payload["payment_no"] == "Z-2026-0001-ZX-001-PAY-002"
     assert payload["amount"] == "-120.50"
     assert payload["payment_type"] == PaymentType.reversal.value
+
+
+@pytest.mark.asyncio
+async def test_list_payments_paginates_and_filters_by_type() -> None:
+    service, _repository, _storage, finance, sub_project, _main_project, _notifications = (
+        make_service()
+    )
+    first = await service.create_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        amount=Decimal("120.50"),
+        payment_date=date(2026, 5, 10),
+        voucher_files=[
+            PaymentVoucherUpload(
+                file_name="voucher-1.pdf",
+                content_type="application/pdf",
+                content=b"%PDF-1.7\nvoucher",
+            ),
+        ],
+    )
+    second = await service.create_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        amount=Decimal("50.00"),
+        payment_date=date(2026, 5, 12),
+        voucher_files=[
+            PaymentVoucherUpload(
+                file_name="voucher-2.pdf",
+                content_type="application/pdf",
+                content=b"%PDF-1.7\nvoucher",
+            ),
+        ],
+    )
+    await service.reverse_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        reverses_payment_id=first.id,
+        remark="wrong amount",
+    )
+
+    page = await service.list_payments(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        payment_type=PaymentType.normal,
+        page=1,
+        page_size=10,
+    )
+
+    assert page.total == 2
+    assert page.page == 1
+    assert page.page_size == 10
+    assert [payment.id for payment in page.items] == [second.id, first.id]
+
+
+@pytest.mark.asyncio
+async def test_get_payment_returns_detail_and_rejects_wrong_sub_project() -> None:
+    service, _repository, _storage, finance, sub_project, _main_project, _notifications = (
+        make_service()
+    )
+    payment = await service.create_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        amount=Decimal("120.50"),
+        payment_date=date(2026, 5, 10),
+        voucher_files=[
+            PaymentVoucherUpload(
+                file_name="voucher.pdf",
+                content_type="application/pdf",
+                content=b"%PDF-1.7\nvoucher",
+            ),
+        ],
+    )
+
+    detail = await service.get_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        payment_id=payment.id,
+    )
+
+    assert detail.id == payment.id
+    with pytest.raises(ResourceNotFoundError):
+        await service.get_payment(
+            actor=finance,
+            sub_project_id=uuid4(),
+            payment_id=payment.id,
+        )
+
+
+def test_payment_query_endpoints_return_paginated_and_detail_payloads() -> None:
+    finance = make_user(UserRole.finance_manager, username="finance")
+    sub_project_id = uuid4()
+    expected_sub_project_id = sub_project_id
+    payment_id = uuid4()
+    payment = Payment(
+        id=payment_id,
+        payment_no="Z-2026-0001-ZX-001-PAY-001",
+        sub_project_id=sub_project_id,
+        amount=Decimal("120.50"),
+        payment_date=date(2026, 5, 10),
+        remark="origin",
+        payment_type=PaymentType.normal,
+        reverses_payment_id=None,
+        operator_id=finance.id,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    class FakePaymentService:
+        async def list_payments(
+            self,
+            *,
+            actor: User,
+            sub_project_id: UUID,
+            payment_type: PaymentType | None,
+            page: int,
+            page_size: int,
+        ) -> PaymentPage:
+            assert actor.id == finance.id
+            assert sub_project_id == expected_sub_project_id
+            assert payment_type == PaymentType.normal
+            assert page == 1
+            assert page_size == 20
+            return PaymentPage(items=[payment], page=page, page_size=page_size, total=1)
+
+        async def get_payment(
+            self,
+            *,
+            actor: User,
+            sub_project_id: UUID,
+            payment_id: UUID,
+        ) -> Payment:
+            assert actor.id == finance.id
+            assert sub_project_id == expected_sub_project_id
+            assert payment_id == payment.id
+            return payment
+
+    async def fake_db_session() -> AsyncIterator[object]:
+        yield object()
+
+    async def fake_current_user() -> User:
+        return finance
+
+    async def fake_payment_service() -> FakePaymentService:
+        return FakePaymentService()
+
+    app = create_app(rate_limit_store=InMemoryRateLimitStore())
+    app.dependency_overrides[get_db_session] = fake_db_session
+    app.dependency_overrides[get_current_user] = fake_current_user
+    app.dependency_overrides[get_payment_service] = fake_payment_service
+    client = TestClient(app)
+
+    list_response = client.get(
+        f"/api/v1/sub-projects/{sub_project_id}/payments",
+        params={"payment_type": "normal", "page": "1", "page_size": "20"},
+    )
+    detail_response = client.get(
+        f"/api/v1/sub-projects/{sub_project_id}/payments/{payment_id}",
+    )
+
+    assert list_response.status_code == 200
+    list_payload = list_response.json()["data"]
+    assert list_payload["total"] == 1
+    assert list_payload["items"][0]["payment_no"] == "Z-2026-0001-ZX-001-PAY-001"
+    assert detail_response.status_code == 200
+    assert detail_response.json()["data"]["id"] == str(payment_id)

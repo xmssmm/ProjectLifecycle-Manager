@@ -3,11 +3,12 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
+from app.core.deps import get_current_user
 from app.core.exceptions import ValidationFailedError
 from app.core.permissions import require_permission
 from app.core.responses import success_response
@@ -41,6 +42,32 @@ def get_payment_service(
 
 def serialize_payment(payment: Payment) -> dict[str, object]:
     return PaymentRead.model_validate(payment).model_dump(mode="json")
+
+
+@router.get("")
+async def list_payments(
+    sub_project_id: UUID,
+    service: Annotated[PaymentService, Depends(get_payment_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    payment_type: Annotated[PaymentType | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> dict[str, object]:
+    payment_page = await service.list_payments(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+        payment_type=payment_type,
+        page=page,
+        page_size=page_size,
+    )
+    return success_response(
+        {
+            "items": [serialize_payment(payment) for payment in payment_page.items],
+            "page": payment_page.page,
+            "page_size": payment_page.page_size,
+            "total": payment_page.total,
+        },
+    )
 
 
 @router.post("")
@@ -90,5 +117,20 @@ async def create_payment(
         confirm_over_budget=confirm_over_budget,
         over_budget_reason=over_budget_reason,
         voucher_files=voucher_files,
+    )
+    return success_response(serialize_payment(payment))
+
+
+@router.get("/{payment_id}")
+async def get_payment(
+    sub_project_id: UUID,
+    payment_id: UUID,
+    service: Annotated[PaymentService, Depends(get_payment_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    payment = await service.get_payment(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+        payment_id=payment_id,
     )
     return success_response(serialize_payment(payment))

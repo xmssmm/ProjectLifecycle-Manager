@@ -21,7 +21,7 @@ from app.models.documents import Document
 from app.models.main_projects import MainProject
 from app.models.payments import Payment, PaymentType, PaymentVoucher
 from app.models.phases import Phase
-from app.models.sub_projects import SubProject
+from app.models.sub_projects import SubProject, SubProjectMember
 from app.models.users import User, UserRole, UserStatus
 from app.services.notifications import NotificationService
 from app.storage.base import StorageBackend, StorageSecurityError
@@ -30,6 +30,9 @@ from app.validators.file_validator import DefaultFileValidator, FileValidationEr
 PAYMENT_PHASE_NO = 5
 PAYMENT_VOUCHER_DOC_TYPE = "payment_voucher"
 TWO_PLACES = Decimal("0.01")
+VIEW_ALL_PAYMENT_ROLES = frozenset(
+    {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+)
 
 
 @dataclass(frozen=True)
@@ -39,8 +42,22 @@ class PaymentVoucherUpload:
     content: bytes
 
 
+@dataclass(frozen=True)
+class PaymentPage:
+    items: list[Payment]
+    page: int
+    page_size: int
+    total: int
+
+
 class PaymentRepository(Protocol):
+    async def get_sub_project(self, sub_project_id: UUID) -> SubProject | None:
+        ...
+
     async def get_sub_project_for_update(self, sub_project_id: UUID) -> SubProject | None:
+        ...
+
+    async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
         ...
 
     async def get_main_project_for_update(self, main_project_id: UUID) -> MainProject | None:
@@ -52,7 +69,20 @@ class PaymentRepository(Protocol):
     async def get_payment_for_update(self, payment_id: UUID) -> Payment | None:
         ...
 
+    async def get_payment(self, payment_id: UUID) -> Payment | None:
+        ...
+
     async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None:
+        ...
+
+    async def list_payments(
+        self,
+        *,
+        sub_project_id: UUID,
+        payment_type: PaymentType | None,
+        page: int,
+        page_size: int,
+    ) -> PaymentPage:
         ...
 
     async def list_group_documents_for_update(
@@ -107,11 +137,24 @@ class SqlAlchemyPaymentRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def get_sub_project(self, sub_project_id: UUID) -> SubProject | None:
+        sub_project = await self._session.get(SubProject, sub_project_id)
+        return sub_project if isinstance(sub_project, SubProject) else None
+
     async def get_sub_project_for_update(self, sub_project_id: UUID) -> SubProject | None:
         sub_project = await self._session.scalar(
             select(SubProject).where(SubProject.id == sub_project_id).with_for_update(),
         )
         return sub_project if isinstance(sub_project, SubProject) else None
+
+    async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
+        member = await self._session.scalar(
+            select(SubProjectMember).where(
+                SubProjectMember.sub_project_id == sub_project_id,
+                SubProjectMember.user_id == user_id,
+            ),
+        )
+        return member if isinstance(member, SubProjectMember) else None
 
     async def get_main_project_for_update(self, main_project_id: UUID) -> MainProject | None:
         main_project = await self._session.scalar(
@@ -136,6 +179,10 @@ class SqlAlchemyPaymentRepository:
         )
         return payment if isinstance(payment, Payment) else None
 
+    async def get_payment(self, payment_id: UUID) -> Payment | None:
+        payment = await self._session.get(Payment, payment_id)
+        return payment if isinstance(payment, Payment) else None
+
     async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None:
         payment = await self._session.scalar(
             select(Payment)
@@ -146,6 +193,38 @@ class SqlAlchemyPaymentRepository:
             .with_for_update(),
         )
         return payment if isinstance(payment, Payment) else None
+
+    async def list_payments(
+        self,
+        *,
+        sub_project_id: UUID,
+        payment_type: PaymentType | None,
+        page: int,
+        page_size: int,
+    ) -> PaymentPage:
+        conditions = [Payment.sub_project_id == sub_project_id]
+        if payment_type is not None:
+            conditions.append(Payment.payment_type == payment_type)
+        total = await self._session.scalar(
+            select(func.count()).select_from(Payment).where(*conditions),
+        )
+        result = await self._session.scalars(
+            select(Payment)
+            .where(*conditions)
+            .order_by(
+                Payment.payment_date.desc(),
+                Payment.created_at.desc(),
+                Payment.payment_no.desc(),
+            )
+            .offset((page - 1) * page_size)
+            .limit(page_size),
+        )
+        return PaymentPage(
+            items=list(result.all()),
+            page=page,
+            page_size=page_size,
+            total=int(total or 0),
+        )
 
     async def list_group_documents_for_update(
         self,
@@ -233,6 +312,7 @@ class InMemoryPaymentRepository:
         documents: Sequence[Document] | None = None,
         main_projects: Sequence[MainProject] | None = None,
         sub_projects: Sequence[SubProject] | None = None,
+        members: Sequence[SubProjectMember] | None = None,
         phases: Sequence[Phase] | None = None,
         users: Sequence[User] | None = None,
     ) -> None:
@@ -241,6 +321,7 @@ class InMemoryPaymentRepository:
         self.documents = list(documents or [])
         self.main_projects = list(main_projects or [])
         self.sub_projects = list(sub_projects or [])
+        self.members = list(members or [])
         self.phases = list(phases or [])
         self.users = list(users or [])
         self._lock = asyncio.Lock()
@@ -253,11 +334,27 @@ class InMemoryPaymentRepository:
             raise ResourceNotFoundError("Payment phase does not exist")
         return phase
 
+    async def get_sub_project(self, sub_project_id: UUID) -> SubProject | None:
+        return next(
+            (sub_project for sub_project in self.sub_projects if sub_project.id == sub_project_id),
+            None,
+        )
+
     async def get_sub_project_for_update(self, sub_project_id: UUID) -> SubProject | None:
         await self._lock.acquire()
         self._locked = True
         return next(
             (sub_project for sub_project in self.sub_projects if sub_project.id == sub_project_id),
+            None,
+        )
+
+    async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
+        return next(
+            (
+                member
+                for member in self.members
+                if member.sub_project_id == sub_project_id and member.user_id == user_id
+            ),
             None,
         )
 
@@ -284,6 +381,9 @@ class InMemoryPaymentRepository:
     async def get_payment_for_update(self, payment_id: UUID) -> Payment | None:
         return next((payment for payment in self.payments if payment.id == payment_id), None)
 
+    async def get_payment(self, payment_id: UUID) -> Payment | None:
+        return next((payment for payment in self.payments if payment.id == payment_id), None)
+
     async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None:
         return next(
             (
@@ -293,6 +393,34 @@ class InMemoryPaymentRepository:
                 and payment.payment_type == PaymentType.reversal
             ),
             None,
+        )
+
+    async def list_payments(
+        self,
+        *,
+        sub_project_id: UUID,
+        payment_type: PaymentType | None,
+        page: int,
+        page_size: int,
+    ) -> PaymentPage:
+        payments = [
+            payment for payment in self.payments if payment.sub_project_id == sub_project_id
+        ]
+        if payment_type is not None:
+            payments = [
+                payment for payment in payments if payment.payment_type == payment_type
+            ]
+        payments = sorted(
+            payments,
+            key=lambda payment: (payment.payment_date, payment.created_at, payment.payment_no),
+            reverse=True,
+        )
+        start = (page - 1) * page_size
+        return PaymentPage(
+            items=payments[start : start + page_size],
+            page=page,
+            page_size=page_size,
+            total=len(payments),
         )
 
     async def list_group_documents_for_update(
@@ -556,6 +684,39 @@ class PaymentService:
         await self._repository.refresh_payment(payment)
         return payment
 
+    async def list_payments(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        payment_type: PaymentType | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> PaymentPage:
+        cleaned_page, cleaned_page_size = self._clean_page(page=page, page_size=page_size)
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        await self._ensure_visible(actor, sub_project)
+        return await self._repository.list_payments(
+            sub_project_id=sub_project.id,
+            payment_type=payment_type,
+            page=cleaned_page,
+            page_size=cleaned_page_size,
+        )
+
+    async def get_payment(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        payment_id: UUID,
+    ) -> Payment:
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        await self._ensure_visible(actor, sub_project)
+        payment = await self._repository.get_payment(payment_id)
+        if payment is None or payment.sub_project_id != sub_project.id:
+            raise ResourceNotFoundError("Payment does not exist")
+        return payment
+
     @staticmethod
     def _ensure_can_create(actor: User) -> None:
         if actor.role != UserRole.finance_manager:
@@ -563,6 +724,12 @@ class PaymentService:
 
     async def _get_sub_project_for_update(self, sub_project_id: UUID) -> SubProject:
         sub_project = await self._repository.get_sub_project_for_update(sub_project_id)
+        if sub_project is None:
+            raise ResourceNotFoundError("Sub project does not exist")
+        return sub_project
+
+    async def _get_existing_sub_project(self, sub_project_id: UUID) -> SubProject:
+        sub_project = await self._repository.get_sub_project(sub_project_id)
         if sub_project is None:
             raise ResourceNotFoundError("Sub project does not exist")
         return sub_project
@@ -613,6 +780,17 @@ class PaymentService:
         main_project.spent_amount = await self._repository.sum_sub_project_spent(main_project.id)
         main_project.updated_at = now
 
+    async def _ensure_visible(self, actor: User, sub_project: SubProject) -> None:
+        if actor.role in VIEW_ALL_PAYMENT_ROLES or sub_project.manager_id == actor.id:
+            return
+        member = await self._repository.get_member(
+            sub_project_id=sub_project.id,
+            user_id=actor.id,
+        )
+        if member is not None:
+            return
+        raise PermissionDeniedError()
+
     @classmethod
     def _clean_amount(cls, amount: Decimal) -> Decimal:
         cleaned = to_money(amount)
@@ -626,6 +804,14 @@ class PaymentService:
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    @staticmethod
+    def _clean_page(*, page: int, page_size: int) -> tuple[int, int]:
+        if page < 1:
+            raise ValidationFailedError("Page must be greater than zero")
+        if page_size < 1 or page_size > 100:
+            raise ValidationFailedError("Page size must be between 1 and 100")
+        return page, page_size
 
     def _clean_voucher_uploads(
         self,
