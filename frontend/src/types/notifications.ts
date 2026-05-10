@@ -1,6 +1,10 @@
+export type NotificationDeliveryMode = 'real_time' | 'daily_digest';
+
 export interface NotificationRead {
   created_at: string;
   dedup_key: string;
+  delivery_mode: NotificationDeliveryMode;
+  digest_sent_at: string | null;
   id: string;
   payload: Record<string, unknown>;
   read_at: string | null;
@@ -32,6 +36,7 @@ export interface NotificationReadAllResult {
 }
 
 export interface NotificationPreferenceRead {
+  delivery_mode: NotificationDeliveryMode;
   description: string;
   direct_related: boolean;
   enabled: boolean;
@@ -44,6 +49,7 @@ export interface NotificationPreferenceListRead {
 }
 
 export interface NotificationPreferenceUpdateItem {
+  delivery_mode: NotificationDeliveryMode;
   enabled: boolean;
   scenario: string;
 }

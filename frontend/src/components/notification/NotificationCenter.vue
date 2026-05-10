@@ -45,6 +45,7 @@ function scenarioLabel(notification: NotificationRead): string {
       phase_promoted: '环节推进',
       project_pending_review: '项目待审核',
       project_review_result: '审核结果',
+      daily_digest: '每日摘要',
       revoke_request_pending: '撤销待审核',
       revoke_result: '撤销结果',
       task_assigned: '任务指派',
@@ -63,7 +64,12 @@ function notificationSummary(notification: NotificationRead): string {
   const amount = valueText(payload.amount);
   const phaseNo = valueText(payload.phase_no ?? payload.completed_phase_no);
   const decision = decisionLabel(valueText(payload.decision));
+  const total = valueText(payload.total);
+  const businessDate = valueText(payload.business_date);
 
+  if (notification.scenario === 'daily_digest') {
+    return businessDate && total ? `${businessDate} 共 ${total} 条通知` : '通知摘要';
+  }
   if (taskNo) {
     return `任务 ${taskNo}`;
   }
