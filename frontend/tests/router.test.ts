@@ -12,6 +12,7 @@ describe('router', () => {
 
   it('registers the workspace home route', () => {
     const homeRoute = router.getRoutes().find((route) => route.name === 'home');
+    const dashboardRoute = router.getRoutes().find((route) => route.name === 'dashboard');
     const componentDemoRoute = router.getRoutes().find((route) => route.name === 'component-demo');
     const userManagementRoute = router.getRoutes().find((route) => route.name === 'admin-users');
     const departmentRoute = router.getRoutes().find((route) => route.name === 'admin-departments');
@@ -59,6 +60,7 @@ describe('router', () => {
     const loginRoute = router.getRoutes().find((route) => route.name === 'login');
 
     expect(homeRoute?.path).toBe('/');
+    expect(dashboardRoute?.path).toBe('/dashboard');
     expect(componentDemoRoute?.path).toBe('/component-demo');
     expect(userManagementRoute?.path).toBe('/admin/users');
     expect(departmentRoute?.path).toBe('/admin/departments');
