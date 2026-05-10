@@ -64,6 +64,16 @@ class InFlightProjectsBlockDisableError(BusinessException):
         )
 
 
+class DepartmentHasActiveUsersError(BusinessException):
+    def __init__(self, active_user_count: int) -> None:
+        super().__init__(
+            code=3003,
+            message="部门下存在活跃用户，不能删除",
+            status_code=409,
+            data={"active_user_count": active_user_count},
+        )
+
+
 class ResourceNotFoundError(BusinessException):
     def __init__(self, message: str = "资源不存在", data: Any = None) -> None:
         super().__init__(code=4001, message=message, status_code=404, data=data)
