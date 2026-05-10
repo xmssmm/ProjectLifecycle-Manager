@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import enum
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
 from typing import Any, Protocol
@@ -14,7 +15,7 @@ from reportlab.pdfgen import canvas  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import PermissionDeniedError, ResourceNotFoundError
+from app.core.exceptions import BusinessException, PermissionDeniedError, ResourceNotFoundError
 from app.models.departments import Department
 from app.models.main_projects import MainProject, MainProjectStatus
 from app.models.payments import Payment
@@ -30,12 +31,30 @@ REPORT_GENERATOR_ROLES = frozenset(
 ReportTable = tuple[list[str], list[list[object]]]
 
 
+class ReportFileFormat(enum.StrEnum):
+    xlsx = "xlsx"
+    pdf = "pdf"
+
+
 @dataclass(frozen=True)
 class ReportSnapshot:
     departments: Sequence[Department]
     main_projects: Sequence[MainProject]
     sub_projects: Sequence[SubProject]
     payments: Sequence[Payment]
+
+
+@dataclass(frozen=True)
+class ReportDownload:
+    file_name: str
+    content_type: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class ReportCleanupResult:
+    deleted_jobs: int
+    deleted_files: int
 
 
 class ReportTaskDispatcher(Protocol):
@@ -59,6 +78,9 @@ class ReportRepository(Protocol):
         ...
 
     async def save_job(self, job: ReportJob) -> ReportJob:
+        ...
+
+    async def list_expired_completed_jobs(self, cutoff: datetime) -> list[ReportJob]:
         ...
 
 
@@ -96,6 +118,16 @@ class InMemoryReportRepository:
         self.jobs[job.id] = job
         return job
 
+    async def list_expired_completed_jobs(self, cutoff: datetime) -> list[ReportJob]:
+        return [
+            job
+            for job in self.jobs.values()
+            if job.status == ReportJobStatus.completed
+            and job.finished_at is not None
+            and job.finished_at < cutoff
+            and (job.xlsx_storage_key is not None or job.pdf_storage_key is not None)
+        ]
+
 
 class SqlAlchemyReportRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -126,6 +158,17 @@ class SqlAlchemyReportRepository:
         await self._session.commit()
         await self._session.refresh(job)
         return job
+
+    async def list_expired_completed_jobs(self, cutoff: datetime) -> list[ReportJob]:
+        result = await self._session.scalars(
+            select(ReportJob).where(
+                ReportJob.status == ReportJobStatus.completed,
+                ReportJob.finished_at.is_not(None),
+                ReportJob.finished_at < cutoff,
+                (ReportJob.xlsx_storage_key.is_not(None) | ReportJob.pdf_storage_key.is_not(None)),
+            ),
+        )
+        return list(result.all())
 
 
 class ReportService:
@@ -191,6 +234,49 @@ class ReportService:
         )
         job.row_count = len(rows)
         return await self._generate_and_store(job=job, headers=headers, rows=rows)
+
+    async def download_report(
+        self,
+        *,
+        actor: User,
+        job_id: UUID,
+        file_format: ReportFileFormat,
+    ) -> ReportDownload:
+        job = await self._get_existing_job(job_id)
+        if job.requested_by_id != actor.id:
+            raise PermissionDeniedError()
+        if job.status != ReportJobStatus.completed:
+            raise BusinessException(
+                code=3031,
+                message="Report is not ready",
+                status_code=409,
+            )
+        storage_key = (
+            job.xlsx_storage_key if file_format == ReportFileFormat.xlsx else job.pdf_storage_key
+        )
+        if storage_key is None:
+            raise ResourceNotFoundError("Report file does not exist")
+        return ReportDownload(
+            file_name=f"{job.report_type.value}.{file_format.value}",
+            content_type=self._content_type(file_format),
+            content=self._storage.read(storage_key),
+        )
+
+    async def cleanup_expired_reports(self, *, retention_days: int = 7) -> ReportCleanupResult:
+        cutoff = self._now_provider() - timedelta(days=retention_days)
+        jobs = await self._repository.list_expired_completed_jobs(cutoff)
+        deleted_files = 0
+        for job in jobs:
+            for storage_key in (job.xlsx_storage_key, job.pdf_storage_key):
+                if storage_key is None:
+                    continue
+                self._storage.delete(storage_key)
+                deleted_files += 1
+            job.xlsx_storage_key = None
+            job.pdf_storage_key = None
+            job.updated_at = self._now_provider()
+            await self._repository.save_job(job)
+        return ReportCleanupResult(deleted_jobs=len(jobs), deleted_files=deleted_files)
 
     async def _generate_and_store(
         self,
@@ -518,3 +604,9 @@ class ReportService:
         if isinstance(value, (date, datetime)):
             return value.isoformat()
         return value
+
+    @staticmethod
+    def _content_type(file_format: ReportFileFormat) -> str:
+        if file_format == ReportFileFormat.xlsx:
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        return "application/pdf"

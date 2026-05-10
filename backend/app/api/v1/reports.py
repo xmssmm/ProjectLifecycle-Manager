@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from typing import Annotated
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -14,7 +16,12 @@ from app.core.responses import success_response
 from app.models.reports import ReportJob
 from app.models.users import User
 from app.schemas.reports import ReportCreate, ReportJobRead
-from app.services.reports import ReportService, ReportTaskDispatcher, SqlAlchemyReportRepository
+from app.services.reports import (
+    ReportFileFormat,
+    ReportService,
+    ReportTaskDispatcher,
+    SqlAlchemyReportRepository,
+)
 from app.storage.factory import create_storage_backend
 from app.tasks.celery_app import celery_app
 from app.tasks.task_names import REPORT_GENERATE_TASK_NAME
@@ -81,3 +88,28 @@ async def get_report_job(
 ) -> dict[str, object]:
     job = await service.get_report_job(actor=current_user, job_id=job_id)
     return success_response(serialize_report_job(job))
+
+
+@router.get("/{job_id}/download")
+async def download_report(
+    job_id: UUID,
+    service: Annotated[ReportService, Depends(get_report_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    file_format: Annotated[ReportFileFormat, Query(alias="format")] = ReportFileFormat.xlsx,
+) -> StreamingResponse:
+    download = await service.download_report(
+        actor=current_user,
+        job_id=job_id,
+        file_format=file_format,
+    )
+    encoded_filename = quote(download.file_name)
+    return StreamingResponse(
+        iter([download.content]),
+        media_type=download.content_type,
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename*=UTF-8''{encoded_filename}; "
+                f'filename="{download.file_name}"'
+            ),
+        },
+    )
