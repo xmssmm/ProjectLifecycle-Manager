@@ -1,4 +1,5 @@
 """SQLAlchemy models package."""
+from app.models.audit_logs import AuditLog
 from app.models.base import Base
 from app.models.departments import Department
 from app.models.notifications import Notification
@@ -14,6 +15,7 @@ from app.models.users import User, UserRole, UserStatus
 
 __all__ = [
     "Base",
+    "AuditLog",
     "Department",
     "Notification",
     "Phase",

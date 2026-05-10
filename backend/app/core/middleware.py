@@ -13,6 +13,7 @@ from starlette.types import ASGIApp
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from app.core.responses import error_response
+from app.services.audit import AuditContext, bind_audit_context, reset_audit_context
 
 
 def configure_logging() -> None:
@@ -38,6 +39,14 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get("X-Request-ID") or str(uuid4())
         request.state.request_id = request_id
         bind_contextvars(request_id=request_id, user_id=None)
+        audit_token = bind_audit_context(
+            AuditContext(
+                actor_id=None,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                request_id=request_id,
+            ),
+        )
 
         started_at = perf_counter()
         logger = structlog.get_logger("app.request")
@@ -51,17 +60,19 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                 duration_ms=round((perf_counter() - started_at) * 1000, 2),
             )
             raise
-
-        response.headers["X-Request-ID"] = request_id
-        logger.info(
-            "request_completed",
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration_ms=round((perf_counter() - started_at) * 1000, 2),
-        )
-        clear_contextvars()
-        return response
+        else:
+            response.headers["X-Request-ID"] = request_id
+            logger.info(
+                "request_completed",
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            )
+            return response
+        finally:
+            reset_audit_context(audit_token)
+            clear_contextvars()
 
 
 class RateLimitStore(Protocol):

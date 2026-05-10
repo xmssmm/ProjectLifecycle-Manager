@@ -12,6 +12,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.core.exceptions import AuthenticationError
 from app.models.users import User
+from app.services.audit import set_audit_actor
 from app.services.auth import (
     AuthTokenStore,
     RedisAuthTokenStore,
@@ -56,6 +57,7 @@ async def get_current_token_context(
         raise AuthenticationError("Invalid token subject") from exc
 
     user = await get_active_user_by_id(session, user_id)
+    set_audit_actor(user.id)
     return CurrentUserContext(user=user, claims=claims, token=credentials.credentials)
 
 
