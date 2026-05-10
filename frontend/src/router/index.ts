@@ -12,6 +12,7 @@ import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
 import DashboardView from '@/views/dashboard/DashboardView.vue';
 import HomeView from '@/views/HomeView.vue';
+import SelfServiceHandoverView from '@/views/handover/SelfServiceHandover.vue';
 import MainProjectDetailView from '@/views/main-project/MainProjectDetail.vue';
 import MainProjectEditView from '@/views/main-project/MainProjectEdit.vue';
 import MainProjectListView from '@/views/main-project/MainProjectList.vue';
@@ -162,6 +163,12 @@ const router = createRouter({
       name: 'revoke-review',
       component: RevokeReviewView,
       meta: { permission: 'revoke_request.review', requiresAuth: true },
+    },
+    {
+      path: '/handover',
+      name: 'self-service-handover',
+      component: SelfServiceHandoverView,
+      meta: { requireRole: ['admin', 'dept_manager', 'proj_leader'], requiresAuth: true },
     },
     {
       path: '/sub-projects/:id',
