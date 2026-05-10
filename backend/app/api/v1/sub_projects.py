@@ -1,10 +1,10 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.db import get_db_session
+from app.core.db import AsyncSessionLocal, get_db_session
 from app.core.deps import get_current_user
 from app.core.permissions import require_role
 from app.core.responses import success_response
@@ -14,8 +14,11 @@ from app.schemas.sub_projects import (
     SubProjectCreate,
     SubProjectListRead,
     SubProjectRead,
+    SubProjectReviewRequest,
     SubProjectUpdate,
 )
+from app.services.audit import AuditContext, BackgroundAuditLogWriter, get_audit_context
+from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
 from app.services.sub_projects import SqlAlchemySubProjectRepository, SubProjectService
 
 router = APIRouter(prefix="/sub-projects", tags=["sub-projects"])
@@ -24,7 +27,12 @@ router = APIRouter(prefix="/sub-projects", tags=["sub-projects"])
 async def get_sub_project_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SubProjectService:
-    return SubProjectService(repository=SqlAlchemySubProjectRepository(session))
+    return SubProjectService(
+        repository=SqlAlchemySubProjectRepository(session),
+        notification_service=NotificationService(
+            repository=SqlAlchemyNotificationRepository(session),
+        ),
+    )
 
 
 def serialize_sub_project(sub_project: SubProject) -> dict[str, object]:
@@ -83,5 +91,45 @@ async def update_sub_project(
         actor=current_user,
         sub_project_id=sub_project_id,
         payload=payload,
+    )
+    return success_response(serialize_sub_project(sub_project))
+
+
+@router.post("/{sub_project_id}/submit")
+async def submit_sub_project(
+    sub_project_id: UUID,
+    background_tasks: BackgroundTasks,
+    service: Annotated[SubProjectService, Depends(get_sub_project_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    sub_project = await service.submit_sub_project(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
+    return success_response(serialize_sub_project(sub_project))
+
+
+@router.post("/{sub_project_id}/review")
+async def review_sub_project(
+    sub_project_id: UUID,
+    payload: SubProjectReviewRequest,
+    background_tasks: BackgroundTasks,
+    service: Annotated[SubProjectService, Depends(get_sub_project_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    sub_project = await service.review_sub_project(
+        actor=current_user,
+        sub_project_id=sub_project_id,
+        payload=payload,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
     )
     return success_response(serialize_sub_project(sub_project))

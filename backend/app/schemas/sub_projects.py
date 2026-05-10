@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.main_projects import ProjectReviewDecision
 from app.models.sub_projects import SubProjectStatus
 
 
@@ -29,6 +30,31 @@ class SubProjectUpdate(BaseModel):
     )
     plan_end_date: date | None = None
     remark: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SubProjectReviewUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    dept_id: UUID | None = None
+    budget: Decimal | None = Field(
+        default=None,
+        ge=Decimal("0.00"),
+        max_digits=15,
+        decimal_places=2,
+    )
+    plan_end_date: date | None = None
+    remark: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SubProjectReviewRequest(BaseModel):
+    decision: ProjectReviewDecision
+    review_comment: str | None = None
+    updates: SubProjectReviewUpdate | None = None
+    confirm_over_budget: bool = False
+    over_budget_reason: str | None = None
 
     model_config = ConfigDict(extra="forbid")
 

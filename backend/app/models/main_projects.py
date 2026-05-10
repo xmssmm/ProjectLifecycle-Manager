@@ -27,6 +27,7 @@ from app.models.users import enum_values
 
 if TYPE_CHECKING:
     from app.models.departments import Department
+    from app.models.sub_projects import SubProject
     from app.models.users import User
 
 
@@ -95,13 +96,19 @@ class ProjectReview(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "project_reviews"
     __table_args__ = (
         Index("ix_project_reviews_main_created", "main_project_id", "created_at"),
+        Index("ix_project_reviews_sub_created", "sub_project_id", "created_at"),
         Index("ix_project_reviews_reviewer_id", "reviewer_id"),
     )
 
-    main_project_id: Mapped[UUID] = mapped_column(
+    main_project_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey("main_projects.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    sub_project_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("sub_projects.id", ondelete="CASCADE"),
+        nullable=True,
     )
     reviewer_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True),
@@ -134,5 +141,6 @@ class ProjectReview(UuidPrimaryKeyMixin, TimestampMixin, Base):
     )
     reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    main_project: Mapped[MainProject] = relationship(back_populates="reviews")
+    main_project: Mapped[MainProject | None] = relationship(back_populates="reviews")
+    sub_project: Mapped[SubProject | None] = relationship()
     reviewer: Mapped[User | None] = relationship()

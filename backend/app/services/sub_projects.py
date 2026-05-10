@@ -10,16 +10,40 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessException, PermissionDeniedError, ResourceNotFoundError
-from app.models.main_projects import MainProject, MainProjectStatus
+from app.models.main_projects import (
+    MainProject,
+    MainProjectStatus,
+    ProjectReview,
+    ProjectReviewDecision,
+)
+from app.models.phases import Phase, PhaseStatus
 from app.models.sub_projects import SubProject, SubProjectStatus
-from app.models.users import User, UserRole
-from app.schemas.sub_projects import SubProjectCreate, SubProjectUpdate
+from app.models.users import User, UserRole, UserStatus
+from app.schemas.sub_projects import SubProjectCreate, SubProjectReviewRequest, SubProjectUpdate
+from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter, to_audit_state
+from app.services.notifications import NotificationService
 
 VIEW_ALL_SUB_PROJECT_ROLES = frozenset(
     {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
 )
 OPEN_MAIN_PROJECT_STATUSES = frozenset(
     {MainProjectStatus.not_started, MainProjectStatus.in_progress},
+)
+APPROVED_SUB_PROJECT_STATUSES = frozenset(
+    {
+        SubProjectStatus.not_started,
+        SubProjectStatus.in_progress,
+        SubProjectStatus.completed,
+        SubProjectStatus.closed,
+    },
+)
+DEFAULT_PHASES = (
+    (1, "initiation", "立项"),
+    (2, "procurement", "采购"),
+    (3, "contract", "合同"),
+    (4, "acceptance", "验收"),
+    (5, "payment", "付款"),
+    (6, "post_review", "后评价"),
 )
 
 
@@ -42,7 +66,29 @@ class SubProjectRepository(Protocol):
     async def next_sub_project_sequence(self, main_project_id: UUID) -> int:
         ...
 
+    async def sum_approved_budget(
+        self,
+        *,
+        main_project_id: UUID,
+        excluding_sub_project_id: UUID,
+    ) -> Decimal:
+        ...
+
+    async def list_active_user_ids_by_role(
+        self,
+        role: UserRole,
+        *,
+        excluding_user_id: UUID | None = None,
+    ) -> list[UUID]:
+        ...
+
     def add(self, sub_project: SubProject) -> None:
+        ...
+
+    def add_review(self, review: ProjectReview) -> None:
+        ...
+
+    def add_phase(self, phase: Phase) -> None:
         ...
 
     async def commit(self) -> None:
@@ -103,8 +149,48 @@ class SqlAlchemySubProjectRepository:
         )
         return int(value or 1)
 
+    async def sum_approved_budget(
+        self,
+        *,
+        main_project_id: UUID,
+        excluding_sub_project_id: UUID,
+    ) -> Decimal:
+        value = await self._session.scalar(
+            select(func.coalesce(func.sum(SubProject.budget), 0)).where(
+                SubProject.main_project_id == main_project_id,
+                SubProject.id != excluding_sub_project_id,
+                SubProject.status.in_(
+                    [
+                        SubProjectStatus.not_started,
+                        SubProjectStatus.in_progress,
+                        SubProjectStatus.completed,
+                        SubProjectStatus.closed,
+                    ],
+                ),
+            ),
+        )
+        return Decimal(value or 0)
+
+    async def list_active_user_ids_by_role(
+        self,
+        role: UserRole,
+        *,
+        excluding_user_id: UUID | None = None,
+    ) -> list[UUID]:
+        conditions = [User.role == role, User.status == UserStatus.active]
+        if excluding_user_id is not None:
+            conditions.append(User.id != excluding_user_id)
+        result = await self._session.scalars(select(User.id).where(*conditions))
+        return list(result.all())
+
     def add(self, sub_project: SubProject) -> None:
         self._session.add(sub_project)
+
+    def add_review(self, review: ProjectReview) -> None:
+        self._session.add(review)
+
+    def add_phase(self, phase: Phase) -> None:
+        self._session.add(phase)
 
     async def commit(self) -> None:
         await self._session.commit()
@@ -119,10 +205,14 @@ class InMemorySubProjectRepository:
         *,
         main_projects: Sequence[MainProject],
         sub_projects: Sequence[SubProject] | None = None,
+        users: Sequence[User] | None = None,
         next_sequences: dict[UUID, int] | None = None,
     ) -> None:
         self.main_projects = list(main_projects)
         self.sub_projects = list(sub_projects or [])
+        self.users = list(users or [])
+        self.reviews: list[ProjectReview] = []
+        self.phases: list[Phase] = []
         self.next_sequences = dict(next_sequences or {})
 
     async def list_sub_projects(
@@ -161,8 +251,51 @@ class InMemorySubProjectRepository:
         self.next_sequences[main_project_id] = sequence + 1
         return sequence
 
+    async def sum_approved_budget(
+        self,
+        *,
+        main_project_id: UUID,
+        excluding_sub_project_id: UUID,
+    ) -> Decimal:
+        return sum(
+            (
+                sub_project.budget
+                for sub_project in self.sub_projects
+                if sub_project.main_project_id == main_project_id
+                and sub_project.id != excluding_sub_project_id
+                and sub_project.status
+                in {
+                    SubProjectStatus.not_started,
+                    SubProjectStatus.in_progress,
+                    SubProjectStatus.completed,
+                    SubProjectStatus.closed,
+                }
+            ),
+            Decimal("0.00"),
+        )
+
+    async def list_active_user_ids_by_role(
+        self,
+        role: UserRole,
+        *,
+        excluding_user_id: UUID | None = None,
+    ) -> list[UUID]:
+        return [
+            user.id
+            for user in self.users
+            if user.role == role
+            and user.status == UserStatus.active
+            and user.id != excluding_user_id
+        ]
+
     def add(self, sub_project: SubProject) -> None:
         self.sub_projects.append(sub_project)
+
+    def add_review(self, review: ProjectReview) -> None:
+        self.reviews.append(review)
+
+    def add_phase(self, phase: Phase) -> None:
+        self.phases.append(phase)
 
     async def commit(self) -> None:
         return None
@@ -172,8 +305,14 @@ class InMemorySubProjectRepository:
 
 
 class SubProjectService:
-    def __init__(self, *, repository: SubProjectRepository) -> None:
+    def __init__(
+        self,
+        *,
+        repository: SubProjectRepository,
+        notification_service: NotificationService | None = None,
+    ) -> None:
         self._repository = repository
+        self._notification_service = notification_service
 
     async def list_sub_projects(
         self,
@@ -253,6 +392,127 @@ class SubProjectService:
         await self._repository.refresh(sub_project)
         return sub_project
 
+    async def submit_sub_project(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> SubProject:
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        if sub_project.creator_id != actor.id:
+            raise PermissionDeniedError()
+        if sub_project.status not in {SubProjectStatus.pending_review, SubProjectStatus.rejected}:
+            raise self._invalid_status(sub_project.status.value, "当前状态不允许提交子项目")
+
+        before_state = to_audit_state(sub_project)
+        sub_project.status = SubProjectStatus.pending_review
+        await self._repository.commit()
+        await self._repository.refresh(sub_project)
+
+        receivers = await self._repository.list_active_user_ids_by_role(UserRole.dept_manager)
+        await self._send_notification(
+            scenario="project_pending_review",
+            receivers=receivers,
+            source_id=sub_project.id,
+            payload={
+                "project_no": sub_project.project_no,
+                "project_name": sub_project.name,
+            },
+        )
+        self._record_audit(
+            action="sub_project.submit",
+            actor=actor,
+            sub_project=sub_project,
+            before_state=before_state,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            extra={},
+        )
+        return sub_project
+
+    async def review_sub_project(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        payload: SubProjectReviewRequest,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> SubProject:
+        if actor.role not in {UserRole.admin, UserRole.dept_manager}:
+            raise PermissionDeniedError()
+
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        if sub_project.creator_id == actor.id:
+            raise PermissionDeniedError()
+        if sub_project.status != SubProjectStatus.pending_review:
+            raise self._invalid_status(sub_project.status.value, "当前状态不允许审核子项目")
+
+        main_project = await self._get_existing_main_project(sub_project.main_project_id)
+        before_state = to_audit_state(sub_project)
+        over_budget_data = await self._validate_over_budget(
+            main_project=main_project,
+            sub_project=sub_project,
+            payload=payload,
+        )
+        from_status = sub_project.status
+        if payload.decision == ProjectReviewDecision.approve:
+            sub_project.status = SubProjectStatus.in_progress
+            self._create_default_phases(sub_project_id=sub_project.id, actor_id=actor.id)
+        else:
+            sub_project.status = SubProjectStatus.rejected
+
+        now = datetime.now(UTC)
+        review = ProjectReview(
+            id=uuid4(),
+            main_project_id=None,
+            sub_project_id=sub_project.id,
+            reviewer_id=actor.id,
+            decision=payload.decision,
+            from_status=MainProjectStatus(from_status.value),
+            to_status=MainProjectStatus.in_progress
+            if sub_project.status == SubProjectStatus.in_progress
+            else MainProjectStatus.rejected,
+            review_comment=payload.review_comment,
+            modified_fields={},
+            admin_override=actor.role == UserRole.admin,
+            reviewed_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        self._repository.add_review(review)
+        await self._repository.commit()
+        await self._repository.refresh(sub_project)
+
+        await self._send_notification(
+            scenario="project_review_result",
+            receivers=[sub_project.manager_id],
+            source_id=sub_project.id,
+            payload={
+                "project_no": sub_project.project_no,
+                "project_name": sub_project.name,
+                "decision": payload.decision.value,
+                "review_comment": payload.review_comment,
+            },
+        )
+        self._record_audit(
+            action="sub_project.review",
+            actor=actor,
+            sub_project=sub_project,
+            before_state=before_state,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            extra={
+                "admin_override": actor.role == UserRole.admin,
+                "decision": payload.decision.value,
+                "over_budget_warning": over_budget_data is not None,
+                "over_budget_reason": payload.over_budget_reason,
+            },
+        )
+        return sub_project
+
     async def _get_existing_sub_project(self, sub_project_id: UUID) -> SubProject:
         sub_project = await self._repository.get_by_id(sub_project_id)
         if sub_project is None:
@@ -270,6 +530,105 @@ class SubProjectService:
         if actor.role in VIEW_ALL_SUB_PROJECT_ROLES or sub_project.manager_id == actor.id:
             return
         raise PermissionDeniedError()
+
+    async def _validate_over_budget(
+        self,
+        *,
+        main_project: MainProject,
+        sub_project: SubProject,
+        payload: SubProjectReviewRequest,
+    ) -> dict[str, str] | None:
+        if payload.decision != ProjectReviewDecision.approve:
+            return None
+
+        current_allocated = await self._repository.sum_approved_budget(
+            main_project_id=main_project.id,
+            excluding_sub_project_id=sub_project.id,
+        )
+        new_total = current_allocated + sub_project.budget
+        if new_total <= main_project.total_budget:
+            return None
+
+        over_budget_amount = new_total - main_project.total_budget
+        data = {
+            "budget": f"{main_project.total_budget:.2f}",
+            "current_allocated": f"{current_allocated:.2f}",
+            "this_amount": f"{sub_project.budget:.2f}",
+            "over_budget_amount": f"{over_budget_amount:.2f}",
+        }
+        if payload.confirm_over_budget and payload.over_budget_reason:
+            return data
+        raise BusinessException(
+            code=3001,
+            message="子项目预算超出主项目剩余预算，需二次确认",
+            status_code=409,
+            data=data,
+        )
+
+    def _create_default_phases(self, *, sub_project_id: UUID, actor_id: UUID) -> None:
+        now = datetime.now(UTC)
+        for phase_no, code, name in DEFAULT_PHASES:
+            self._repository.add_phase(
+                Phase(
+                    id=uuid4(),
+                    sub_project_id=sub_project_id,
+                    phase_no=phase_no,
+                    code=code,
+                    name=name,
+                    status=PhaseStatus.in_progress if phase_no == 1 else PhaseStatus.waiting,
+                    enter_at=now if phase_no == 1 else None,
+                    finish_at=None,
+                    procurement_type=None,
+                    created_at=now,
+                    updated_at=now,
+                ),
+            )
+
+    async def _send_notification(
+        self,
+        *,
+        scenario: str,
+        receivers: Sequence[UUID],
+        source_id: UUID,
+        payload: dict[str, object],
+    ) -> None:
+        if self._notification_service is None or not receivers:
+            return
+        await self._notification_service.send(
+            scenario=scenario,
+            receivers=receivers,
+            source_id=source_id,
+            payload=payload,
+        )
+
+    @staticmethod
+    def _record_audit(
+        *,
+        action: str,
+        actor: User,
+        sub_project: SubProject,
+        before_state: dict[str, object],
+        audit_writer: AuditLogWriter | None,
+        audit_context: AuditContext | None,
+        extra: dict[str, object],
+    ) -> None:
+        if audit_writer is None:
+            return
+        context = audit_context or AuditContext(actor_id=actor.id)
+        audit_writer.enqueue(
+            AuditLogEntry(
+                actor_id=context.actor_id or actor.id,
+                action=action,
+                target_type="sub_project",
+                target_id=str(sub_project.id),
+                before_state=before_state,
+                after_state=to_audit_state(sub_project),
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                extra=extra,
+                request_id=context.request_id,
+            ),
+        )
 
     @staticmethod
     def _invalid_status(status: str, message: str) -> BusinessException:
