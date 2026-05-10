@@ -6,6 +6,7 @@ import type {
   MainProjectListQuery,
   MainProjectListRead,
   MainProjectRead,
+  MainProjectReviewPayload,
   MainProjectUpdatePayload,
 } from '@/types/projects';
 
@@ -62,6 +63,18 @@ export async function submitMainProject(
 ): Promise<MainProjectRead> {
   const response = await client.post<ApiResponse<MainProjectRead>>(
     `/main-projects/${projectId}/submit`,
+  );
+  return response.data.data;
+}
+
+export async function reviewMainProject(
+  projectId: string,
+  payload: MainProjectReviewPayload,
+  client: AxiosInstance = apiClient,
+): Promise<MainProjectRead> {
+  const response = await client.post<ApiResponse<MainProjectRead>>(
+    `/main-projects/${projectId}/review`,
+    payload,
   );
   return response.data.data;
 }

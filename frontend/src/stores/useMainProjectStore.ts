@@ -4,6 +4,7 @@ import {
   createMainProject as createMainProjectRequest,
   getMainProject,
   listMainProjects,
+  reviewMainProject as reviewMainProjectRequest,
   submitMainProject as submitMainProjectRequest,
   updateMainProject as updateMainProjectRequest,
 } from '@/api/mainProjects';
@@ -12,6 +13,7 @@ import type {
   MainProjectCreatePayload,
   MainProjectListQuery,
   MainProjectRead,
+  MainProjectReviewPayload,
   MainProjectUpdatePayload,
   SubProjectRead,
 } from '@/types/projects';
@@ -83,6 +85,11 @@ export const useMainProjectStore = defineStore('main-projects', {
     },
     async submitMainProject(projectId: string) {
       const project = await submitMainProjectRequest(projectId);
+      this.currentProject = project;
+      return project;
+    },
+    async reviewMainProject(projectId: string, payload: MainProjectReviewPayload) {
+      const project = await reviewMainProjectRequest(projectId, payload);
       this.currentProject = project;
       return project;
     },

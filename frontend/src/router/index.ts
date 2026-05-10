@@ -11,6 +11,7 @@ import HomeView from '@/views/HomeView.vue';
 import MainProjectDetailView from '@/views/main-project/MainProjectDetail.vue';
 import MainProjectEditView from '@/views/main-project/MainProjectEdit.vue';
 import MainProjectListView from '@/views/main-project/MainProjectList.vue';
+import MainProjectReviewView from '@/views/main-project/MainProjectReview.vue';
 import ProfileView from '@/views/Profile.vue';
 
 const router = createRouter({
@@ -53,17 +54,24 @@ const router = createRouter({
       meta: { permission: 'main_project.create', requiresAuth: true },
     },
     {
-      path: '/main-projects/:id',
-      name: 'main-project-detail',
-      component: MainProjectDetailView,
-      meta: { permission: 'project.view_all', requiresAuth: true },
-      props: (route) => ({ projectId: String(route.params.id) }),
-    },
-    {
       path: '/main-projects/:id/edit',
       name: 'main-project-edit',
       component: MainProjectEditView,
       meta: { permission: 'main_project.edit', requiresAuth: true },
+      props: (route) => ({ projectId: String(route.params.id) }),
+    },
+    {
+      path: '/main-projects/:id/review',
+      name: 'main-project-review',
+      component: MainProjectReviewView,
+      meta: { permission: 'main_project.review', requiresAuth: true },
+      props: (route) => ({ projectId: String(route.params.id) }),
+    },
+    {
+      path: '/main-projects/:id',
+      name: 'main-project-detail',
+      component: MainProjectDetailView,
+      meta: { permission: 'project.view_all', requiresAuth: true },
       props: (route) => ({ projectId: String(route.params.id) }),
     },
     {

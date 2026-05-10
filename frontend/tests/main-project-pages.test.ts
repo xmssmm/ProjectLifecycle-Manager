@@ -6,6 +6,7 @@ import {
   createMainProject,
   getMainProject,
   listMainProjects,
+  reviewMainProject,
   submitMainProject,
   updateMainProject,
 } from '@/api/mainProjects';
@@ -14,11 +15,13 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import MainProjectDetail from '@/views/main-project/MainProjectDetail.vue';
 import MainProjectEdit from '@/views/main-project/MainProjectEdit.vue';
 import MainProjectList from '@/views/main-project/MainProjectList.vue';
+import MainProjectReview from '@/views/main-project/MainProjectReview.vue';
 
 vi.mock('@/api/mainProjects', () => ({
   createMainProject: vi.fn(),
   getMainProject: vi.fn(),
   listMainProjects: vi.fn(),
+  reviewMainProject: vi.fn(),
   submitMainProject: vi.fn(),
   updateMainProject: vi.fn(),
 }));
@@ -53,6 +56,10 @@ describe('main project pages', () => {
     vi.mocked(submitMainProject).mockResolvedValue({
       ...rejectedProject,
       status: 'pending_review',
+    });
+    vi.mocked(reviewMainProject).mockResolvedValue({
+      ...pendingProject,
+      status: 'not_started',
     });
     vi.mocked(listSubProjects).mockResolvedValue({
       items: [sampleSubProject, otherSubProject],
@@ -146,6 +153,84 @@ describe('main project pages', () => {
     );
     expect(submitMainProject).toHaveBeenCalledWith('main-1');
   });
+
+  it('blocks a department manager from reviewing their own main project', async () => {
+    vi.mocked(getMainProject).mockResolvedValue(pendingProject);
+
+    const wrapper = mount(MainProjectReview, {
+      global: { stubs },
+      props: { projectId: 'main-1' },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('不能审核自己创建的主项目');
+    expect(wrapper.find('[data-test="approve-review"]').exists()).toBe(false);
+    expect(reviewMainProject).not.toHaveBeenCalled();
+  });
+
+  it('shows modified fields and lets admin approve a main project', async () => {
+    const authStore = useAuthStore();
+    authStore.setUser({
+      deptId: null,
+      email: null,
+      id: 'admin-1',
+      role: 'admin',
+      status: 'active',
+      username: 'admin',
+    });
+    vi.mocked(getMainProject).mockResolvedValue(pendingProject);
+
+    const wrapper = mount(MainProjectReview, {
+      global: { stubs },
+      props: { projectId: 'main-1' },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="review-name"]').setValue('智慧档案平台二期');
+    await wrapper.find('[data-test="review-comment"]').setValue('同意立项');
+
+    expect(wrapper.text()).toContain('修改字段');
+    expect(wrapper.text()).toContain('项目名称');
+    expect(wrapper.text()).toContain('智慧档案平台二期');
+
+    await wrapper.find('[data-test="approve-review"]').trigger('click');
+    await flushPromises();
+
+    expect(reviewMainProject).toHaveBeenCalledWith('main-1', {
+      decision: 'approve',
+      review_comment: '同意立项',
+      updates: { name: '智慧档案平台二期' },
+    });
+  });
+
+  it('submits a rejection with review comment', async () => {
+    const authStore = useAuthStore();
+    authStore.setUser({
+      deptId: 'dept-b',
+      email: null,
+      id: 'reviewer-1',
+      role: 'dept_manager',
+      status: 'active',
+      username: 'reviewer',
+    });
+    vi.mocked(getMainProject).mockResolvedValue(pendingProject);
+
+    const wrapper = mount(MainProjectReview, {
+      global: { stubs },
+      props: { projectId: 'main-1' },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="review-comment"]').setValue('预算依据不足');
+    await wrapper.find('[data-test="reject-review"]').trigger('click');
+    await flushPromises();
+
+    expect(reviewMainProject).toHaveBeenCalledWith('main-1', {
+      decision: 'reject',
+      review_comment: '预算依据不足',
+      updates: null,
+    });
+  });
 });
 
 const sampleMainProject = {
@@ -176,6 +261,11 @@ const rejectedProject = {
   status: 'rejected',
 } as const;
 
+const pendingProject = {
+  ...sampleMainProject,
+  status: 'pending_review',
+} as const;
+
 const sampleSubProject = {
   actual_end_date: null,
   budget: '100000.00',
@@ -202,6 +292,7 @@ const otherSubProject = {
 } as const;
 
 const stubs = {
+  ElAlert: { props: ['title'], template: '<section>{{ title }}</section>' },
   DataTable: {
     props: ['columns', 'loading', 'page', 'pageSize', 'rows', 'total'],
     template:

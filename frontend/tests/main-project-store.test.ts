@@ -5,6 +5,7 @@ import {
   createMainProject,
   getMainProject,
   listMainProjects,
+  reviewMainProject,
   submitMainProject,
   updateMainProject,
 } from '@/api/mainProjects';
@@ -15,6 +16,7 @@ vi.mock('@/api/mainProjects', () => ({
   createMainProject: vi.fn(),
   getMainProject: vi.fn(),
   listMainProjects: vi.fn(),
+  reviewMainProject: vi.fn(),
   submitMainProject: vi.fn(),
   updateMainProject: vi.fn(),
 }));
@@ -39,6 +41,10 @@ describe('useMainProjectStore', () => {
     vi.mocked(submitMainProject).mockResolvedValue({
       ...sampleMainProject,
       status: 'pending_review',
+    });
+    vi.mocked(reviewMainProject).mockResolvedValue({
+      ...sampleMainProject,
+      status: 'not_started',
     });
     vi.mocked(listSubProjects).mockResolvedValue({
       items: [sampleSubProject],
@@ -77,6 +83,11 @@ describe('useMainProjectStore', () => {
       remark: null,
     });
     const submitted = await store.submitMainProject('main-1');
+    const reviewed = await store.reviewMainProject('main-1', {
+      decision: 'approve',
+      review_comment: '同意立项',
+      updates: { name: '智慧档案平台二期' },
+    });
 
     expect(createMainProject).toHaveBeenCalledWith({
       dept_id: 'dept-a',
@@ -90,10 +101,16 @@ describe('useMainProjectStore', () => {
       remark: null,
     });
     expect(submitMainProject).toHaveBeenCalledWith('main-1');
+    expect(reviewMainProject).toHaveBeenCalledWith('main-1', {
+      decision: 'approve',
+      review_comment: '同意立项',
+      updates: { name: '智慧档案平台二期' },
+    });
     expect(created.id).toBe('main-1');
     expect(updated.name).toBe('更新后项目');
     expect(submitted.status).toBe('pending_review');
-    expect(store.currentProject?.status).toBe('pending_review');
+    expect(reviewed.status).toBe('not_started');
+    expect(store.currentProject?.status).toBe('not_started');
   });
 });
 

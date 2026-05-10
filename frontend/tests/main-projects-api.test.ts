@@ -6,6 +6,7 @@ import {
   createMainProject,
   getMainProject,
   listMainProjects,
+  reviewMainProject,
   submitMainProject,
   updateMainProject,
 } from '../src/api/mainProjects';
@@ -100,6 +101,15 @@ describe('project api', () => {
       client,
     );
     await submitMainProject('main-1', client);
+    await reviewMainProject(
+      'main-1',
+      {
+        decision: 'approve',
+        review_comment: '同意立项',
+        updates: { name: '智慧档案平台二期' },
+      },
+      client,
+    );
 
     expect(calls[0]).toMatchObject({
       data: JSON.stringify({
@@ -125,6 +135,15 @@ describe('project api', () => {
     expect(calls[2]).toMatchObject({
       method: 'post',
       url: '/main-projects/main-1/submit',
+    });
+    expect(calls[3]).toMatchObject({
+      data: JSON.stringify({
+        decision: 'approve',
+        review_comment: '同意立项',
+        updates: { name: '智慧档案平台二期' },
+      }),
+      method: 'post',
+      url: '/main-projects/main-1/review',
     });
   });
 });

@@ -45,6 +45,14 @@ export interface MainProjectCreatePayload {
 
 export type MainProjectUpdatePayload = Partial<MainProjectCreatePayload>;
 
+export type ProjectReviewDecision = 'approve' | 'reject';
+
+export interface MainProjectReviewPayload {
+  decision: ProjectReviewDecision;
+  review_comment: string | null;
+  updates: MainProjectUpdatePayload | null;
+}
+
 export interface SubProjectRead {
   actual_end_date: string | null;
   budget: string;

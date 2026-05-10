@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref, watch } from 'vue';
 
 import { ConfirmDialog, DataTable, StatusTag } from '@/components/common';
+import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
 import { MAIN_PROJECT_TIMELINE, PROJECT_STATUS_LABELS, type ProjectStatus } from '@/types/projects';
@@ -13,6 +14,7 @@ const props = defineProps<{
 
 const mainProjectStore = useMainProjectStore();
 const authStore = useAuthStore();
+const { can } = usePermission();
 
 const project = computed(() => mainProjectStore.currentProject);
 const subProjectRows = computed(
@@ -31,6 +33,12 @@ const canSubmitProject = computed(
   () =>
     Boolean(project.value?.creator_id && project.value.creator_id === authStore.user?.id) &&
     (project.value?.status === 'pending_review' || project.value?.status === 'rejected'),
+);
+const canReviewProject = computed(
+  () =>
+    project.value?.status === 'pending_review' &&
+    can('main_project.review') &&
+    (project.value.creator_id !== authStore.user?.id || authStore.user?.role === 'admin'),
 );
 const submitConfirmVisible = ref(false);
 
@@ -102,6 +110,12 @@ function timelineTitle(status: ProjectStatus): string {
       >
         提交审核
       </el-button>
+      <router-link
+        v-if="project && canReviewProject"
+        :to="{ name: 'main-project-review', params: { id: project.id } }"
+      >
+        <el-button type="primary">审核</el-button>
+      </router-link>
     </div>
 
     <el-skeleton v-if="mainProjectStore.detailLoading && !project" animated />

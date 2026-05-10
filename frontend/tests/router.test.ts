@@ -25,6 +25,9 @@ describe('router', () => {
     const mainProjectEditRoute = router
       .getRoutes()
       .find((route) => route.name === 'main-project-edit');
+    const mainProjectReviewRoute = router
+      .getRoutes()
+      .find((route) => route.name === 'main-project-review');
     const profileRoute = router.getRoutes().find((route) => route.name === 'profile');
     const passwordRoute = router.getRoutes().find((route) => route.name === 'change-password');
     const loginRoute = router.getRoutes().find((route) => route.name === 'login');
@@ -37,6 +40,7 @@ describe('router', () => {
     expect(mainProjectDetailRoute?.path).toBe('/main-projects/:id');
     expect(mainProjectCreateRoute?.path).toBe('/main-projects/new');
     expect(mainProjectEditRoute?.path).toBe('/main-projects/:id/edit');
+    expect(mainProjectReviewRoute?.path).toBe('/main-projects/:id/review');
     expect(profileRoute?.path).toBe('/profile');
     expect(passwordRoute?.path).toBe('/change-password');
     expect(loginRoute?.path).toBe('/login');
