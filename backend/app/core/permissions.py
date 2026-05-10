@@ -65,6 +65,9 @@ PERMISSION_MATRIX: dict[str, frozenset[UserRole]] = {
     ),
     "revoke_request.submit": frozenset({UserRole.proj_leader}),
     "revoke_request.review": frozenset({UserRole.admin, UserRole.dept_manager}),
+    "report.generate": frozenset(
+        {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+    ),
     "project.view_all": frozenset(
         {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
     ),

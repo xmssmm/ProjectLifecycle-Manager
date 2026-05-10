@@ -22,6 +22,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "app.tasks.task_deadlines",
             "app.tasks.file_cleanup",
             "app.tasks.audit_partitions",
+            "app.tasks.reports",
         ],
     )
     app.conf.update(
