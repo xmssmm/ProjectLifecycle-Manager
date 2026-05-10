@@ -1,16 +1,27 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
+import {
+  bindOAuthProvider,
+  listOAuthBindings,
+  listOAuthProviders,
+  startOAuthLogin,
+  unbindOAuthProvider,
+} from '@/api/oauth';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 import { useProfileStore } from '@/stores/useProfileStore';
 import type { NotificationDeliveryMode, NotificationPreferenceRead } from '@/types/notifications';
+import type { OAuthBindingRead, OAuthProviderRead } from '@/types/oauth';
 import { ROLE_LABELS, STATUS_LABELS } from '@/types/users';
 
 const authStore = useAuthStore();
 const notificationStore = useNotificationStore();
 const profileStore = useProfileStore();
+const route = useRoute();
+const router = useRouter();
 
 const form = reactive({
   email: '',
@@ -18,6 +29,9 @@ const form = reactive({
 const notificationPreferenceForm = ref<NotificationPreferenceRead[]>([]);
 const notificationDeliveryMode = ref<NotificationDeliveryMode>('real_time');
 const notificationMode = ref<NotificationPreferenceMode>('all');
+const oauthProviders = ref<OAuthProviderRead[]>([]);
+const oauthBindings = ref<OAuthBindingRead[]>([]);
+const oauthBusyProvider = ref<string | null>(null);
 
 const profile = computed(() => profileStore.profile);
 
@@ -25,9 +39,11 @@ onMounted(async () => {
   if (!authStore.user) {
     return;
   }
+  await completeOAuthBindingIfPresent();
   await Promise.all([
     profileStore.fetchProfile(authStore.user.id),
     loadNotificationPreferences(),
+    loadOAuthBindings(),
   ]);
   form.email = profile.value?.email ?? '';
 });
@@ -100,6 +116,73 @@ async function saveNotificationPreferences(): Promise<void> {
   notificationDeliveryMode.value = inferNotificationDeliveryMode(notificationPreferenceForm.value);
   notificationMode.value = inferNotificationMode(notificationPreferenceForm.value);
   ElMessage.success('通知偏好已保存');
+}
+
+async function loadOAuthBindings(): Promise<void> {
+  try {
+    const [providers, bindings] = await Promise.all([
+      listOAuthProviders(),
+      listOAuthBindings(),
+    ]);
+    oauthProviders.value = providers;
+    oauthBindings.value = bindings;
+  } catch {
+    oauthProviders.value = [];
+    oauthBindings.value = [];
+  }
+}
+
+async function startOAuthBinding(provider: string): Promise<void> {
+  oauthBusyProvider.value = provider;
+  try {
+    const started = await startOAuthLogin(provider, { purpose: 'bind' });
+    globalThis.location.assign(started.authorization_url);
+  } catch {
+    ElMessage.error('企业账号绑定暂不可用');
+  } finally {
+    oauthBusyProvider.value = null;
+  }
+}
+
+async function unbindOAuth(provider: string): Promise<void> {
+  oauthBusyProvider.value = provider;
+  try {
+    await unbindOAuthProvider(provider);
+    await loadOAuthBindings();
+    ElMessage.success('企业账号绑定已解除');
+  } finally {
+    oauthBusyProvider.value = null;
+  }
+}
+
+async function completeOAuthBindingIfPresent(): Promise<void> {
+  const action = routeQueryString('oauth_action');
+  const provider = routeQueryString('oauth_provider');
+  const code = routeQueryString('code');
+  const state = routeQueryString('state');
+  if (action !== 'bind' || !provider || !code || !state) {
+    return;
+  }
+
+  try {
+    await bindOAuthProvider(provider, { code, state });
+    ElMessage.success('企业账号已绑定');
+    await router.replace({ name: 'profile' });
+  } catch {
+    ElMessage.error('企业账号绑定失败，请重新尝试');
+  }
+}
+
+function getOAuthBinding(provider: string): OAuthBindingRead | undefined {
+  return oauthBindings.value.find((binding) => binding.provider === provider);
+}
+
+function routeQueryString(key: string): string | null {
+  const value = route.query[key];
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : null;
+  }
+  return typeof value === 'string' && value ? value : null;
 }
 
 function clonePreferences(
@@ -226,6 +309,46 @@ const notificationDeliveryModes: NotificationDeliveryMode[] = ['real_time', 'dai
       >
         保存通知偏好
       </el-button>
+    </div>
+
+    <div v-if="oauthProviders.length > 0" class="admin-page__table profile-panel oauth-bindings">
+      <div class="profile-section-header">
+        <h3>企业账号绑定</h3>
+      </div>
+
+      <div class="oauth-bindings__list">
+        <div
+          v-for="provider in oauthProviders"
+          :key="provider.provider"
+          class="oauth-bindings__item"
+          :data-test="`oauth-binding-${provider.provider}`"
+        >
+          <div class="oauth-bindings__text">
+            <strong>{{ provider.label }}</strong>
+            <span v-if="getOAuthBinding(provider.provider)">
+              已绑定 {{ getOAuthBinding(provider.provider)?.email ?? '外部账号' }}
+            </span>
+            <span v-else>未绑定</span>
+          </div>
+          <el-button
+            v-if="getOAuthBinding(provider.provider)"
+            :data-test="`oauth-unbind-${provider.provider}`"
+            :loading="oauthBusyProvider === provider.provider"
+            @click="unbindOAuth(provider.provider)"
+          >
+            解绑
+          </el-button>
+          <el-button
+            v-else
+            :data-test="`oauth-bind-${provider.provider}`"
+            :loading="oauthBusyProvider === provider.provider"
+            type="primary"
+            @click="startOAuthBinding(provider.provider)"
+          >
+            绑定
+          </el-button>
+        </div>
+      </div>
     </div>
   </section>
 </template>

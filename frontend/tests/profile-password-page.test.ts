@@ -7,6 +7,7 @@ import ChangePassword from '@/views/ChangePassword.vue';
 import Profile from '@/views/Profile.vue';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { listNotificationPreferences, updateNotificationPreferences } from '@/api/notifications';
+import { listOAuthBindings, listOAuthProviders } from '@/api/oauth';
 
 vi.mock('@/api/auth', () => ({
   getCurrentUser: vi.fn().mockResolvedValue({
@@ -33,7 +34,16 @@ vi.mock('@/api/notifications', () => ({
   updateNotificationPreferences: vi.fn(),
 }));
 
+vi.mock('@/api/oauth', () => ({
+  bindOAuthProvider: vi.fn(),
+  listOAuthBindings: vi.fn(),
+  listOAuthProviders: vi.fn(),
+  startOAuthLogin: vi.fn(),
+  unbindOAuthProvider: vi.fn(),
+}));
+
 vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
   useRouter: () => ({ replace: vi.fn() }),
 }));
 
@@ -50,6 +60,8 @@ describe('profile and password pages', () => {
     vi.mocked(updateNotificationPreferences).mockResolvedValue({
       items: [{ ...taskPreference, enabled: false }, overduePreference],
     });
+    vi.mocked(listOAuthProviders).mockResolvedValue([]);
+    vi.mocked(listOAuthBindings).mockResolvedValue([]);
     const authStore = useAuthStore();
     authStore.setAccessToken('token');
     authStore.setUser({

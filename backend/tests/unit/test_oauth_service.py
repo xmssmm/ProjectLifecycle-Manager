@@ -3,17 +3,20 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import Table, UniqueConstraint
 
-from app.core.exceptions import AuthenticationError
+from app.core.exceptions import AuthenticationError, ResourceConflictError
+from app.core.security import hash_password
 from app.models.base import Base
 from app.models.oauth import OAuthBinding
+from app.models.users import User, UserRole, UserStatus
 from app.services.oauth import (
     InMemoryOAuthBindingRepository,
     InMemoryOAuthStateStore,
+    OAuthExternalIdentity,
     OAuthHttpClient,
     OAuthProviderConfig,
     OAuthService,
@@ -30,6 +33,48 @@ def make_provider() -> OAuthProviderConfig:
         userinfo_url="https://sso.example.local/oauth/userinfo",
         redirect_uri="https://app.example.local/api/v1/oauth/generic_oidc/callback",
         scope="openid email profile",
+    )
+
+
+def make_user(
+    *,
+    email: str = "member@example.local",
+    status: UserStatus = UserStatus.active,
+) -> User:
+    now = datetime.now(UTC)
+    return User(
+        id=uuid4(),
+        username=f"user-{uuid4()}",
+        email=email,
+        password_hash=hash_password("StrongPass1!"),
+        role=UserRole.proj_member,
+        dept_id=None,
+        status=status,
+        password_changed_at=now,
+        last_login_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def make_identity(
+    *,
+    provider: str = "generic_oidc",
+    external_id: str = "external-user-1",
+    email: str | None = "member@example.local",
+    email_verified: bool = True,
+    bound_user_id: UUID | None = None,
+) -> OAuthExternalIdentity:
+    return OAuthExternalIdentity(
+        provider=provider,
+        external_id=external_id,
+        email=email,
+        email_verified=email_verified,
+        display_name="Member",
+        bound_user_id=bound_user_id,
+        access_token_ciphertext="access-token",
+        refresh_token_ciphertext="refresh-token",
+        expires_at=None,
     )
 
 
@@ -277,3 +322,77 @@ async def test_handle_callback_resolves_existing_binding_user_id() -> None:
     )
 
     assert identity.bound_user_id == bound_user_id
+
+
+@pytest.mark.asyncio
+async def test_resolve_login_user_auto_binds_verified_email_user() -> None:
+    provider = make_provider()
+    now = datetime(2026, 5, 10, 3, 0, tzinfo=UTC)
+    user = make_user(email="member@example.local")
+    repository = InMemoryOAuthBindingRepository(users=[user])
+    service = OAuthService(
+        providers={provider.provider: provider},
+        state_store=InMemoryOAuthStateStore(),
+        http_client=FakeOAuthHttpClient(),
+        binding_repository=repository,
+        now_provider=lambda: now,
+    )
+
+    resolved = await service.resolve_login_user(make_identity())
+
+    assert resolved is user
+    assert user.last_login_at == now
+    binding = await repository.get_by_provider_external_id(
+        provider=provider.provider,
+        external_id="external-user-1",
+    )
+    assert binding is not None
+    assert binding.user_id == user.id
+    assert binding.email == "member@example.local"
+
+
+@pytest.mark.asyncio
+async def test_resolve_login_user_rejects_unverified_or_unknown_email() -> None:
+    provider = make_provider()
+    user = make_user(email="member@example.local")
+    service = OAuthService(
+        providers={provider.provider: provider},
+        state_store=InMemoryOAuthStateStore(),
+        http_client=FakeOAuthHttpClient(),
+        binding_repository=InMemoryOAuthBindingRepository(users=[user]),
+    )
+
+    with pytest.raises(AuthenticationError, match="OAuth account is not linked"):
+        await service.resolve_login_user(make_identity(email_verified=False))
+
+    with pytest.raises(AuthenticationError, match="OAuth account is not linked"):
+        await service.resolve_login_user(make_identity(email="missing@example.local"))
+
+
+@pytest.mark.asyncio
+async def test_bind_and_unbind_identity_enforces_existing_owner() -> None:
+    provider = make_provider()
+    actor = make_user(email="actor@example.local")
+    owner = make_user(email="owner@example.local")
+    repository = InMemoryOAuthBindingRepository(users=[actor, owner])
+    service = OAuthService(
+        providers={provider.provider: provider},
+        state_store=InMemoryOAuthStateStore(),
+        http_client=FakeOAuthHttpClient(),
+        binding_repository=repository,
+    )
+
+    owner_binding = await service.bind_identity(
+        user=owner,
+        identity=make_identity(bound_user_id=None),
+    )
+    assert owner_binding.user_id == owner.id
+
+    with pytest.raises(ResourceConflictError):
+        await service.bind_identity(
+            user=actor,
+            identity=make_identity(bound_user_id=owner.id),
+        )
+
+    assert await service.delete_user_binding(user_id=owner.id, provider=provider.provider) is True
+    assert await service.list_user_bindings(owner.id) == []

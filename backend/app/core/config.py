@@ -27,6 +27,17 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 100
     max_upload_size_mb: int = 50
 
+    oauth_generic_enabled: bool = False
+    oauth_generic_label: str = "企业账号"
+    oauth_generic_client_id: str = ""
+    oauth_generic_client_secret: str = ""
+    oauth_generic_authorize_url: str = ""
+    oauth_generic_token_url: str = ""
+    oauth_generic_userinfo_url: str = ""
+    oauth_generic_redirect_uri: str = ""
+    oauth_generic_bind_redirect_uri: str = ""
+    oauth_generic_scope: str = "openid email profile"
+
     storage_backend: str = "local"
     storage_root: str = Field(default="/app/storage")
     storage_public_url_prefix: str = "/storage"
