@@ -17,6 +17,7 @@ from app.models.phases import (
     PhaseStatus,
     ProcurementType,
 )
+from app.models.sub_projects import SubProject, SubProjectNoCounter, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
 
 __all__ = [
@@ -27,6 +28,9 @@ __all__ = [
     "MainProjectStatus",
     "ProjectReview",
     "ProjectReviewDecision",
+    "SubProject",
+    "SubProjectNoCounter",
+    "SubProjectStatus",
     "Notification",
     "Phase",
     "PhaseDocRequirement",
