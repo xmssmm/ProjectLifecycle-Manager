@@ -15,6 +15,7 @@ dependencies = [
     "fastapi>=0.110",
     "gunicorn>=22.0",
     "passlib[bcrypt]>=1.7",
+    "prometheus-client>=0.20",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "python-jose[cryptography]>=3.3",

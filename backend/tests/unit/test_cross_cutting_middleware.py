@@ -120,3 +120,19 @@ def test_health_returns_database_and_redis_status() -> None:
         "database": "ok",
         "redis": "ok",
     }
+
+
+def test_metrics_endpoint_records_http_request_metrics() -> None:
+    client = TestClient(create_app(health_checker=healthy_components))
+
+    assert client.get("/health").status_code == 200
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    body = response.text
+    assert 'http_requests_total{method="GET",path="/health",status_code="200"}' in body
+    assert "http_request_duration_seconds_bucket" in body
+    assert 'method="GET"' in body
+    assert 'path="/health"' in body
+    assert 'status_code="200"' in body

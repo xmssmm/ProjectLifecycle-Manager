@@ -3,7 +3,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
@@ -27,6 +27,11 @@ from app.core.db import AsyncSessionLocal
 from app.core.deps import get_auth_token_store
 from app.core.exceptions import BusinessException, business_exception_handler
 from app.core.health import collect_health
+from app.core.metrics import (
+    CONTENT_TYPE_LATEST,
+    PrometheusMetricsMiddleware,
+    create_http_metrics,
+)
 from app.core.middleware import (
     MaxBodySizeMiddleware,
     RateLimitMiddleware,
@@ -123,6 +128,7 @@ def create_app(
         resolved_settings.redis_url,
     )
     resolved_auth_token_store = auth_token_store or RedisAuthTokenStore(resolved_settings.redis_url)
+    http_metrics = create_http_metrics()
     lifespan_context = (
         build_startup_health_warning_lifespan(health_warning_checker)
         if health_warning_checker is not None
@@ -169,6 +175,7 @@ def create_app(
         max_body_size_bytes=resolved_settings.max_upload_size_bytes,
     )
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(PrometheusMetricsMiddleware, metrics=http_metrics)
     app.add_exception_handler(BusinessException, business_exception_handler)
     app.dependency_overrides[get_auth_failure_store] = lambda: resolved_auth_failure_store
     app.dependency_overrides[get_auth_token_store] = lambda: resolved_auth_token_store
@@ -200,6 +207,10 @@ def create_app(
                 **components,
             }
         )
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        return Response(content=http_metrics.render(), media_type=CONTENT_TYPE_LATEST)
 
     install_openapi_customization(app)
     return app

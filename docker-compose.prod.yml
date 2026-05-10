@@ -168,7 +168,81 @@ services:
       frontend:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data_prod:/prometheus
+    depends_on:
+      backend:
+        condition: service_healthy
+      celery-exporter:
+        condition: service_started
+      postgres-exporter:
+        condition: service_started
+      node-exporter:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data_prod:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  celery-exporter:
+    image: danihodovic/celery-exporter:latest
+    restart: unless-stopped
+    environment:
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+    ports:
+      - "9808:9808"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DATA_SOURCE_NAME:-postgresql://project_mgmt:change-me@postgres:5432/project_mgmt?sslmode=disable}
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro,rslave
+
 volumes:
   postgres_data_prod:
   redis_data_prod:
   nginx_certs:
+  prometheus_data_prod:
+  grafana_data_prod:
