@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ from app.core.exceptions import (
     ResourceNotFoundError,
     ValidationFailedError,
 )
-from app.models.documents import Document
+from app.models.documents import Document, DocumentScanStatus
 from app.models.phases import Phase
 from app.models.sub_projects import SubProject, SubProjectMember
 from app.models.users import User, UserRole
@@ -30,6 +31,8 @@ VIEW_ALL_DOCUMENT_ROLES = frozenset(
 )
 SUPPORTED_OFFICE_PREVIEW_EXTENSIONS = frozenset({".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"})
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class DocumentDownload:
@@ -39,6 +42,11 @@ class DocumentDownload:
 
 class OfficeDocumentConverter(Protocol):
     def convert_to_pdf(self, *, file_name: str, content: bytes) -> bytes:
+        ...
+
+
+class DocumentScanScheduler(Protocol):
+    def enqueue(self, document_id: UUID) -> None:
         ...
 
 
@@ -367,12 +375,14 @@ class DocumentService:
         max_file_size_bytes: int,
         file_validator: FileValidator | None = None,
         office_converter: OfficeDocumentConverter | None = None,
+        scan_scheduler: DocumentScanScheduler | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._max_file_size_bytes = max_file_size_bytes
         self._file_validator = file_validator or DefaultFileValidator()
         self._office_converter = office_converter or LibreOfficeDocumentConverter()
+        self._scan_scheduler = scan_scheduler
 
     async def upload_document(
         self,
@@ -441,6 +451,9 @@ class DocumentService:
             version=next_version,
             is_latest=True,
             is_deleted=False,
+            scan_status=DocumentScanStatus.pending,
+            scan_result=None,
+            scanned_at=None,
             uploader_id=actor.id,
             created_at=now,
             updated_at=now,
@@ -452,7 +465,29 @@ class DocumentService:
             self._delete_saved_content(storage_key)
             raise
         await self._repository.refresh(document)
+        if self._scan_scheduler is not None:
+            await self._enqueue_scan_or_mark_failed(document)
         return document
+
+    async def _enqueue_scan_or_mark_failed(self, document: Document) -> None:
+        if self._scan_scheduler is None:
+            return
+        try:
+            self._scan_scheduler.enqueue(document.id)
+        except Exception as exc:  # noqa: BLE001
+            now = datetime.now(UTC)
+            document.scan_status = DocumentScanStatus.failed
+            document.scan_result = f"Scan scheduling failed: {exc}"
+            document.scanned_at = now
+            document.updated_at = now
+            try:
+                await self._repository.commit()
+                await self._repository.refresh(document)
+            except Exception:
+                logger.exception(
+                    "Failed to persist scan scheduling failure for document %s",
+                    document.id,
+                )
 
     async def list_documents(
         self,
@@ -481,6 +516,7 @@ class DocumentService:
 
     async def download_document(self, *, actor: User, document_id: UUID) -> DocumentDownload:
         document = await self._get_authorized_document(actor=actor, document_id=document_id)
+        self._ensure_scan_allows_access(document)
         return DocumentDownload(
             document=document,
             content=self._storage.read(document.file_path),
@@ -495,6 +531,7 @@ class DocumentService:
         audit_context: AuditContext | None = None,
     ) -> DocumentDownload:
         document = await self._get_authorized_document(actor=actor, document_id=document_id)
+        self._ensure_scan_allows_access(document)
         if not self._is_pdf_document(document):
             raise BusinessException(
                 code=3020,
@@ -523,6 +560,7 @@ class DocumentService:
     ) -> DocumentDownload:
         """Authorize and convert an Office document to a PDF preview stream."""
         document = await self._get_authorized_document(actor=actor, document_id=document_id)
+        self._ensure_scan_allows_access(document)
         if not self._is_office_document(document):
             raise BusinessException(
                 code=3020,
@@ -552,6 +590,32 @@ class DocumentService:
             raise ResourceNotFoundError("Sub project does not exist")
         await self._ensure_visible(actor, sub_project)
         return document
+
+    @staticmethod
+    def _ensure_scan_allows_access(document: Document) -> None:
+        status = getattr(document, "scan_status", None) or DocumentScanStatus.clean
+        if status == DocumentScanStatus.clean:
+            return
+        if status == DocumentScanStatus.infected:
+            raise BusinessException(
+                code=3031,
+                message="Document is quarantined after virus scan",
+                status_code=403,
+                data={"document_id": str(document.id), "scan_result": document.scan_result or ""},
+            )
+        if status == DocumentScanStatus.failed:
+            raise BusinessException(
+                code=3032,
+                message="Document virus scan failed",
+                status_code=409,
+                data={"document_id": str(document.id), "scan_result": document.scan_result or ""},
+            )
+        raise BusinessException(
+            code=3030,
+            message="Document virus scan is pending",
+            status_code=409,
+            data={"document_id": str(document.id)},
+        )
 
     async def soft_delete_phase_documents(self, phase_id: UUID) -> list[Document]:
         phase = await self._repository.get_phase(phase_id)

@@ -26,6 +26,12 @@ services:
       timeout: 5s
       retries: 5
 
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav_data_prod:/var/lib/clamav
+
   backend:
     build:
       context: ./backend
@@ -40,6 +46,9 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CORS_ALLOW_ORIGINS: ${PROD_CORS_ALLOW_ORIGINS:-https://localhost}
       STORAGE_ROOT: /app/storage
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-10}
     command:
       [
         "gunicorn",
@@ -62,6 +71,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      clamav:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -86,6 +97,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       STORAGE_ROOT: /app/storage
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-10}
     command:
       [
         "celery",
@@ -101,6 +115,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      clamav:
+        condition: service_started
 
   celery-beat:
     build:
@@ -114,6 +130,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       STORAGE_ROOT: /app/storage
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-10}
     command:
       [
         "celery",
@@ -129,6 +148,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      clamav:
+        condition: service_started
 
   frontend:
     build:
@@ -243,6 +264,7 @@ services:
 volumes:
   postgres_data_prod:
   redis_data_prod:
+  clamav_data_prod:
   nginx_certs:
   prometheus_data_prod:
   grafana_data_prod:

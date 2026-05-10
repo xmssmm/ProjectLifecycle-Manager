@@ -1,5 +1,7 @@
 export const DOCUMENT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
+export type DocumentScanStatus = 'pending' | 'clean' | 'infected' | 'failed';
+
 export interface DocumentRead {
   acceptance_step_id: string | null;
   created_at: string;
@@ -11,6 +13,9 @@ export interface DocumentRead {
   is_deleted: boolean;
   is_latest: boolean;
   phase_id: string;
+  scan_status: DocumentScanStatus;
+  scan_result: string | null;
+  scanned_at: string | null;
   sub_project_id: string;
   updated_at: string;
   uploader_id: string;

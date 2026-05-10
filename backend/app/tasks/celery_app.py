@@ -28,6 +28,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "app.tasks.reports",
             "app.tasks.notifications",
             "app.tasks.notification_delivery",
+            "app.tasks.document_scanning",
         ],
     )
     app.conf.update(

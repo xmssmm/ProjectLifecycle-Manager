@@ -275,9 +275,9 @@
 
 **Test plan:**
 
-- [ ] EICAR 测试内容被识别为 infected。
-- [ ] pending 文档可见但下载/预览策略按需求限制。
-- [ ] infected 文档下载被拒绝。
+- [x] EICAR 测试内容被识别为 infected。
+- [x] pending 文档可见但下载/预览策略按需求限制。
+- [x] infected 文档下载被拒绝。
 
 ### T-3-USER-01 proj_leader 自助转交流程
 

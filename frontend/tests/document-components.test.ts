@@ -181,6 +181,32 @@ describe('DocumentList', () => {
 
     expect(previewOfficeDocument).toHaveBeenCalledWith('office-docx');
   });
+
+  it('shows scan status and disables access before a clean result', async () => {
+    const wrapper = mount(DocumentList, {
+      global: { stubs },
+      props: {
+        documents: [
+          {
+            ...sampleDocuments[0],
+            doc_type: 'pending_contract',
+            scan_status: 'pending',
+          },
+          {
+            ...sampleDocuments[1],
+            doc_type: 'infected_contract',
+            scan_status: 'infected',
+            scan_result: 'EICAR-Test-File FOUND',
+          },
+        ],
+      },
+    });
+
+    expect(wrapper.find('[data-test="scan-status-pending_contract"]').text()).toContain('扫描中');
+    expect(wrapper.find('[data-test="scan-status-infected_contract"]').text()).toContain('已隔离');
+    expect(wrapper.find('[data-test="preview-pending_contract"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.find('[data-test="preview-infected_contract"]').attributes('disabled')).toBeDefined();
+  });
 });
 
 describe('PdfPreview', () => {
@@ -260,6 +286,9 @@ const sampleDocuments: DocumentRead[] = [
     is_deleted: false,
     is_latest: true,
     phase_id: 'phase-1',
+    scan_status: 'clean',
+    scan_result: 'No threats found',
+    scanned_at: '2026-05-10T02:01:00Z',
     sub_project_id: 'sub-1',
     updated_at: '2026-05-10T02:00:00Z',
     uploader_id: 'user-2',
@@ -276,6 +305,9 @@ const sampleDocuments: DocumentRead[] = [
     is_deleted: false,
     is_latest: false,
     phase_id: 'phase-1',
+    scan_status: 'clean',
+    scan_result: 'No threats found',
+    scanned_at: '2026-05-10T01:01:00Z',
     sub_project_id: 'sub-1',
     updated_at: '2026-05-10T01:00:00Z',
     uploader_id: 'user-1',
@@ -292,6 +324,9 @@ const sampleDocuments: DocumentRead[] = [
     is_deleted: false,
     is_latest: true,
     phase_id: 'phase-1',
+    scan_status: 'clean',
+    scan_result: 'No threats found',
+    scanned_at: '2026-05-10T03:01:00Z',
     sub_project_id: 'sub-1',
     updated_at: '2026-05-10T03:00:00Z',
     uploader_id: 'user-3',
@@ -321,6 +356,9 @@ const officePreviewDocuments: DocumentRead[] = (
   is_deleted: false,
   is_latest: true,
   phase_id: 'phase-1',
+  scan_status: 'clean',
+  scan_result: 'No threats found',
+  scanned_at: '2026-05-10T04:01:00Z',
   sub_project_id: 'sub-1',
   updated_at: '2026-05-10T04:00:00Z',
   uploader_id: 'user-office',

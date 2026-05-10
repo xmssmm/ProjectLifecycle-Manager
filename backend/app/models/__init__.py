@@ -3,7 +3,7 @@ from app.models.acceptance_steps import AcceptanceStep, AcceptanceStepStatus
 from app.models.audit_logs import AuditLog
 from app.models.base import Base
 from app.models.departments import Department
-from app.models.documents import Document
+from app.models.documents import Document, DocumentScanStatus
 from app.models.main_projects import (
     MainProject,
     MainProjectStatus,
@@ -46,6 +46,7 @@ __all__ = [
     "AuditLog",
     "Department",
     "Document",
+    "DocumentScanStatus",
     "MainProject",
     "MainProjectStatus",
     "ProjectReview",
