@@ -22,7 +22,7 @@ const router = useRouter();
 const navItems: NavItem[] = [
   { icon: House, index: '/', label: '工作台' },
   { icon: User, index: '/profile', label: '我的' },
-  { disabled: true, icon: Folder, index: '/main-projects', label: '项目' },
+  { icon: Folder, index: '/main-projects', label: '项目' },
   { disabled: true, icon: Bell, index: '/notifications', label: '通知' },
   { icon: User, index: '/admin/users', label: '用户', requireRole: ['admin'] },
   { icon: Setting, index: '/admin/departments', label: '部门', requireRole: ['admin'] },

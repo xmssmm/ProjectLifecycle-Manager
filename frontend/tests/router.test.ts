@@ -15,6 +15,10 @@ describe('router', () => {
     const componentDemoRoute = router.getRoutes().find((route) => route.name === 'component-demo');
     const userManagementRoute = router.getRoutes().find((route) => route.name === 'admin-users');
     const departmentRoute = router.getRoutes().find((route) => route.name === 'admin-departments');
+    const mainProjectRoute = router.getRoutes().find((route) => route.name === 'main-projects');
+    const mainProjectDetailRoute = router
+      .getRoutes()
+      .find((route) => route.name === 'main-project-detail');
     const profileRoute = router.getRoutes().find((route) => route.name === 'profile');
     const passwordRoute = router.getRoutes().find((route) => route.name === 'change-password');
     const loginRoute = router.getRoutes().find((route) => route.name === 'login');
@@ -23,6 +27,8 @@ describe('router', () => {
     expect(componentDemoRoute?.path).toBe('/component-demo');
     expect(userManagementRoute?.path).toBe('/admin/users');
     expect(departmentRoute?.path).toBe('/admin/departments');
+    expect(mainProjectRoute?.path).toBe('/main-projects');
+    expect(mainProjectDetailRoute?.path).toBe('/main-projects/:id');
     expect(profileRoute?.path).toBe('/profile');
     expect(passwordRoute?.path).toBe('/change-password');
     expect(loginRoute?.path).toBe('/login');

@@ -8,6 +8,8 @@ import UserListView from '@/views/admin/UserList.vue';
 import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
 import HomeView from '@/views/HomeView.vue';
+import MainProjectDetailView from '@/views/main-project/MainProjectDetail.vue';
+import MainProjectListView from '@/views/main-project/MainProjectList.vue';
 import ProfileView from '@/views/Profile.vue';
 
 const router = createRouter({
@@ -36,6 +38,19 @@ const router = createRouter({
       name: 'admin-departments',
       component: DepartmentListView,
       meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/main-projects',
+      name: 'main-projects',
+      component: MainProjectListView,
+      meta: { permission: 'project.view_all', requiresAuth: true },
+    },
+    {
+      path: '/main-projects/:id',
+      name: 'main-project-detail',
+      component: MainProjectDetailView,
+      meta: { permission: 'project.view_all', requiresAuth: true },
+      props: (route) => ({ projectId: String(route.params.id) }),
     },
     {
       path: '/profile',
