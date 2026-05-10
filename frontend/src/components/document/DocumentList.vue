@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Clock, Collection, Download, View } from '@element-plus/icons-vue';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
 
 import DocumentVersionDiff from '@/components/document/DocumentVersionDiff.vue';
-import PdfPreview from '@/components/document/PdfPreview.vue';
 import type { DocumentRead } from '@/types/documents';
+
+const PdfPreview = defineAsyncComponent(() => import('@/components/document/PdfPreview.vue'));
 
 interface DocumentGroup {
   docType: string;

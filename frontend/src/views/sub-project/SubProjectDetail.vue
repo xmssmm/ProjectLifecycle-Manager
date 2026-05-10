@@ -2,7 +2,7 @@
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref, watch } from 'vue';
 
-import { PhaseProgress } from '@/components/phase';
+import { PhaseDocumentPanel, PhaseProgress } from '@/components/phase';
 import { ConfirmDialog, StatusTag } from '@/components/common';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -221,6 +221,8 @@ function formatDate(value: unknown): string {
       </section>
 
       <PhaseProgress :sub-project-id="subProject.id" />
+
+      <PhaseDocumentPanel :sub-project-id="subProject.id" />
 
       <section class="project-detail-band">
         <div class="project-detail-band__header">

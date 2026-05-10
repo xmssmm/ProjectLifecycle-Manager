@@ -31,6 +31,13 @@ vi.mock('@/api/subProjects', () => ({
   terminateSubProject: vi.fn(),
 }));
 
+vi.mock('pdfjs-dist', () => ({
+  GlobalWorkerOptions: {},
+  getDocument: vi.fn(),
+}));
+
+vi.mock('pdfjs-dist/build/pdf.worker.mjs?url', () => ({ default: 'worker-url' }));
+
 describe('sub project pages', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -287,6 +294,7 @@ const stubs = {
       '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
   },
   ElSkeleton: { template: '<section><slot /></section>' },
+  PhaseDocumentPanel: { template: '<section />' },
   PhaseProgress: { template: '<section />' },
   RouterLink: { props: ['to'], template: '<a><slot /></a>' },
   SearchBar: {
