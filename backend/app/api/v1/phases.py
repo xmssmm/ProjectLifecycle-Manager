@@ -20,7 +20,7 @@ from app.schemas.phases import (
     PhaseRequiredDocumentRead,
     PhaseUploadedDocumentRead,
 )
-from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
+from app.services.notification_runtime import build_notification_service
 from app.services.phases import (
     PhaseDetail,
     PhasePromotionResult,
@@ -36,9 +36,7 @@ async def get_phase_service(
 ) -> PhaseService:
     return PhaseService(
         repository=SqlAlchemyPhaseRepository(session),
-        notification_service=NotificationService(
-            repository=SqlAlchemyNotificationRepository(session),
-        ),
+        notification_service=build_notification_service(session=session),
     )
 
 

@@ -11,7 +11,7 @@ from app.core.responses import success_response
 from app.models.tasks import Task, TaskStatus
 from app.models.users import User
 from app.schemas.tasks import TaskCreate, TaskListRead, TaskRead, TaskUpdate
-from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
+from app.services.notification_runtime import build_notification_service
 from app.services.tasks import SqlAlchemyTaskRepository, TaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -22,9 +22,7 @@ async def get_task_service(
 ) -> TaskService:
     return TaskService(
         repository=SqlAlchemyTaskRepository(session),
-        notification_service=NotificationService(
-            repository=SqlAlchemyNotificationRepository(session),
-        ),
+        notification_service=build_notification_service(session=session),
     )
 
 

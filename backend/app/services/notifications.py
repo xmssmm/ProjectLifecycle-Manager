@@ -21,6 +21,7 @@ from app.services.notification_channels import (
     NotificationChannelType,
     normalize_channel_settings,
 )
+from app.services.notification_deliveries import NotificationDeliveryService
 
 BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
 DAILY_DIGEST_SCENARIO = "daily_digest"
@@ -658,11 +659,13 @@ class NotificationService:
         business_date_provider: Callable[[], date] = current_business_date,
         now_provider: Callable[[], datetime] = current_utc_datetime,
         channels: Mapping[NotificationChannelType, NotificationChannel] | None = None,
+        delivery_service: NotificationDeliveryService | None = None,
     ) -> None:
         self._repository = repository
         self._business_date_provider = business_date_provider
         self._now_provider = now_provider
         self._channels = dict(channels or {})
+        self._delivery_service = delivery_service
 
     async def send(
         self,
@@ -962,15 +965,20 @@ class NotificationService:
             for channel_type, channel in self._channels.items():
                 if not preference.channel_enabled(channel_type):
                     continue
-                await channel.send(
-                    NotificationChannelMessage(
-                        channel=channel_type,
-                        receiver_id=receiver_id,
-                        scenario=scenario,
-                        source_id=source_id,
-                        payload=dict(payload),
-                        dedup_key=dedup_key,
-                    ),
+                message = NotificationChannelMessage(
+                    channel=channel_type,
+                    receiver_id=receiver_id,
+                    scenario=scenario,
+                    source_id=source_id,
+                    payload=dict(payload),
+                    dedup_key=dedup_key,
+                )
+                if self._delivery_service is None:
+                    await channel.send(message)
+                    continue
+                await self._delivery_service.enqueue_and_attempt(
+                    message=message,
+                    channel=channel,
                 )
 
     def _build_digest_payload(

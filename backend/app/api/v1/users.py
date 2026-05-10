@@ -27,7 +27,7 @@ from app.schemas.users import (
 )
 from app.services.audit import AuditContext, BackgroundAuditLogWriter, get_audit_context
 from app.services.auth import AuthTokenStore
-from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
+from app.services.notification_runtime import build_notification_service
 from app.services.sub_projects import SqlAlchemySubProjectRepository, SubProjectService
 from app.services.users import (
     SqlAlchemyProjectAssignmentReader,
@@ -60,9 +60,7 @@ async def get_project_handover_service(
 ) -> SubProjectService:
     return SubProjectService(
         repository=SqlAlchemySubProjectRepository(session),
-        notification_service=NotificationService(
-            repository=SqlAlchemyNotificationRepository(session),
-        ),
+        notification_service=build_notification_service(session=session),
     )
 
 

@@ -8,6 +8,7 @@ from app.tasks.task_names import (
     AUDIT_PARTITION_TASK_NAME,
     CELERY_SMOKE_TASK_NAME,
     FILE_CLEANUP_TASK_NAME,
+    NOTIFICATION_DELIVERY_RETRY_TASK_NAME,
     NOTIFICATION_DIGEST_TASK_NAME,
     REPORT_CLEANUP_TASK_NAME,
     TASK_DEADLINE_SCAN_TASK_NAME,
@@ -26,6 +27,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "app.tasks.audit_partitions",
             "app.tasks.reports",
             "app.tasks.notifications",
+            "app.tasks.notification_delivery",
         ],
     )
     app.conf.update(
@@ -42,6 +44,10 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "notification-digest-daily-0900": {
                 "task": NOTIFICATION_DIGEST_TASK_NAME,
                 "schedule": crontab(minute=0, hour=9),
+            },
+            "notification-delivery-retry-every-minute": {
+                "task": NOTIFICATION_DELIVERY_RETRY_TASK_NAME,
+                "schedule": 60.0,
             },
             "file-cleanup-weekly-monday-0300": {
                 "task": FILE_CLEANUP_TASK_NAME,

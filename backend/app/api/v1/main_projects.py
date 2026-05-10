@@ -26,7 +26,7 @@ from app.services.main_projects import (
     ProjectProgressFunnel,
     SqlAlchemyMainProjectRepository,
 )
-from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
+from app.services.notification_runtime import build_notification_service
 
 router = APIRouter(prefix="/main-projects", tags=["main-projects"])
 
@@ -36,9 +36,7 @@ async def get_main_project_service(
 ) -> MainProjectService:
     return MainProjectService(
         repository=SqlAlchemyMainProjectRepository(session),
-        notification_service=NotificationService(
-            repository=SqlAlchemyNotificationRepository(session),
-        ),
+        notification_service=build_notification_service(session=session),
     )
 
 
