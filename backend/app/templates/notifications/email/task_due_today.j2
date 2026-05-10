@@ -1,0 +1,7 @@
+Subject: 任务 {{ task_no | default(source_id) }} 今日到期
+
+任务 {{ task_no | default(source_id) }} 将在 {{ due_date | default("今天") }} 到期。
+标题：{{ title | default("未命名任务") }}
+{% if url is defined and url %}
+链接：{{ url }}
+{% endif %}
