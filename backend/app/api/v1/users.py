@@ -202,10 +202,20 @@ async def get_user(
 async def update_user(
     user_id: UUID,
     payload: UserUpdate,
+    background_tasks: BackgroundTasks,
     service: Annotated[UserService, Depends(get_user_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, object]:
-    user = await service.update_user(actor=current_user, user_id=user_id, payload=payload)
+    user = await service.update_user(
+        actor=current_user,
+        user_id=user_id,
+        payload=payload,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
     return success_response(serialize_user(user))
 
 

@@ -100,10 +100,10 @@
 
 **Test plan:**
 
-- [ ] 已绑定用户可通过 SSO 登录。
-- [ ] 未绑定但 email 匹配已有用户时可提示绑定或自动绑定已登录会话。
-- [ ] 找不到用户时返回明确错误。
-- [ ] 前端点击企业登录会调用 login URL 并跳转。
+- [x] 已绑定用户可通过 SSO 登录。
+- [x] 未绑定但 email 匹配已有用户时可提示绑定或自动绑定已登录会话。
+- [x] 找不到用户时返回明确错误。
+- [x] 前端点击企业登录会调用 login URL 并跳转。
 
 ### T-3-AUTH-03 SSO 与本地账号共存策略
 
@@ -116,8 +116,8 @@
 - Modify: `backend/app/schemas/users.py`
 - Modify: `frontend/src/views/admin/UserList.vue`
 - Modify: `frontend/src/types/users.ts`
-- Test: `backend/tests/unit/test_auth_service.py`
-- Test: `backend/tests/unit/test_user_service.py`
+- Test: `backend/tests/unit/test_auth_login.py`
+- Test: `backend/tests/unit/test_user_management.py`
 - Test: `frontend/tests/user-management-page.test.ts`
 
 **Implementation:**
@@ -129,9 +129,9 @@
 
 **Test plan:**
 
-- [ ] 强制 SSO 用户不能密码登录。
-- [ ] 非强制用户仍可密码登录。
-- [ ] admin 可更新策略，非 admin 不可更新。
+- [x] 强制 SSO 用户不能密码登录。
+- [x] 非强制用户仍可密码登录。
+- [x] admin 可更新策略，非 admin 不可更新。
 
 ### T-3-NOTIF-01 通知通道抽象与偏好扩展
 

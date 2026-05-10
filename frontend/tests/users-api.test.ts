@@ -60,6 +60,7 @@ describe('users api', () => {
       client,
     );
     await updateUser('user-1', { email: 'next@example.com' }, client);
+    await updateUser('user-1', { sso_required: true }, client);
     await disableUser('user-1', client);
     await resetUserPassword('user-1', { new_password: 'NextPass123!' }, client);
     await changeOwnPassword({ new_password: 'NextPass123!', old_password: 'OldPass123!' }, client);
@@ -67,10 +68,16 @@ describe('users api', () => {
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
       'post /users',
       'put /users/user-1',
+      'put /users/user-1',
       'delete /users/user-1',
       'post /users/user-1/reset-password',
       'post /users/me/change-password',
     ]);
+    expect(calls[2]).toMatchObject({
+      data: JSON.stringify({ sso_required: true }),
+      method: 'put',
+      url: '/users/user-1',
+    });
   });
 
   it('gets a single user profile', async () => {
@@ -174,6 +181,7 @@ const sampleUser = {
   last_login_at: null,
   password_changed_at: '2026-05-10T00:00:00Z',
   role: 'admin',
+  sso_required: false,
   status: 'active',
   updated_at: '2026-05-10T00:00:00Z',
   username: 'admin',

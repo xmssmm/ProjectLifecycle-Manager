@@ -20,6 +20,7 @@ from app.core.security import hash_password, validate_password_strength, verify_
 from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
 from app.schemas.users import PasswordChangeRequest, PasswordResetRequest, UserCreate, UserUpdate
+from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter, build_modified_fields
 from app.services.auth import AuthTokenStore
 
 
@@ -219,6 +220,7 @@ class UserService:
             role=payload.role,
             dept_id=payload.dept_id,
             status=UserStatus.active,
+            sso_required=payload.sso_required,
             password_changed_at=now,
             last_login_at=None,
             created_at=now,
@@ -235,16 +237,26 @@ class UserService:
             raise PermissionDeniedError()
         return user
 
-    async def update_user(self, *, actor: User, user_id: UUID, payload: UserUpdate) -> User:
+    async def update_user(
+        self,
+        *,
+        actor: User,
+        user_id: UUID,
+        payload: UserUpdate,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> User:
         user = await self._get_existing_user(user_id)
         is_admin = actor.role == UserRole.admin
         if not is_admin and actor.id != user.id:
             raise PermissionDeniedError()
 
         fields = payload.model_fields_set
-        if not is_admin and ({"username", "role", "dept_id"} & fields):
+        if not is_admin and ({"username", "role", "dept_id", "sso_required"} & fields):
             raise PermissionDeniedError()
 
+        sso_before = user.sso_required
+        sso_policy_changed = False
         if payload.username is not None and payload.username != user.username:
             await self._ensure_unique_username(payload.username, excluding_user_id=user.id)
             user.username = payload.username
@@ -256,9 +268,20 @@ class UserService:
             user.role = payload.role
         if is_admin and "dept_id" in fields:
             user.dept_id = payload.dept_id
+        if is_admin and "sso_required" in fields and payload.sso_required is not None:
+            sso_policy_changed = payload.sso_required != user.sso_required
+            user.sso_required = payload.sso_required
 
         await self._repository.commit()
         await self._repository.refresh(user)
+        if sso_policy_changed:
+            self._record_sso_policy_audit(
+                actor=actor,
+                user=user,
+                before=sso_before,
+                audit_writer=audit_writer,
+                audit_context=audit_context,
+            )
         return user
 
     async def disable_user(self, *, actor: User, user_id: UUID) -> User:
@@ -347,3 +370,35 @@ class UserService:
             validate_password_strength(password)
         except ValueError as exc:
             raise PasswordStrengthError(str(exc)) from exc
+
+    @staticmethod
+    def _record_sso_policy_audit(
+        *,
+        actor: User,
+        user: User,
+        before: bool,
+        audit_writer: AuditLogWriter | None,
+        audit_context: AuditContext | None,
+    ) -> None:
+        if audit_writer is None:
+            return
+        context = audit_context or AuditContext(actor_id=actor.id)
+        before_state: dict[str, object] = {"id": str(user.id), "sso_required": before}
+        after_state: dict[str, object] = {
+            "id": str(user.id),
+            "sso_required": user.sso_required,
+        }
+        audit_writer.enqueue(
+            AuditLogEntry(
+                actor_id=context.actor_id,
+                action="user.sso_policy.update",
+                target_type="user",
+                target_id=str(user.id),
+                before_state=before_state,
+                after_state=after_state,
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                extra={"modified_fields": build_modified_fields(before_state, after_state)},
+                request_id=context.request_id,
+            ),
+        )

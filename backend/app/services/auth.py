@@ -308,6 +308,8 @@ async def authenticate_user(
 ) -> AuthTokens:
     if user is None or user.status not in LOGIN_ALLOWED_STATUSES:
         raise AuthenticationError("Invalid username or password")
+    if user.sso_required:
+        raise AuthenticationError("SSO is required for this account")
 
     failure_key = get_auth_failure_key(user.id)
     if await failure_store.get_fail_count(failure_key) >= AUTH_FAILURE_LIMIT:

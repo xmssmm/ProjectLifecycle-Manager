@@ -30,6 +30,7 @@ def make_settings() -> Settings:
 def make_user(
     *,
     password: str = "StrongPass1!",
+    sso_required: bool = False,
     status: UserStatus = UserStatus.active,
 ) -> User:
     now = datetime.now(UTC)
@@ -41,6 +42,7 @@ def make_user(
         role=UserRole.admin,
         dept_id=None,
         status=status,
+        sso_required=sso_required,
         password_changed_at=now,
         last_login_at=None,
         created_at=now,
@@ -103,6 +105,24 @@ async def test_authenticate_user_allows_password_reset_required_users_to_login()
 
     assert tokens.access_token
     assert user.last_login_at is not None
+
+
+@pytest.mark.asyncio
+async def test_authenticate_user_rejects_sso_required_local_password_login() -> None:
+    settings = make_settings()
+    user = make_user(sso_required=True)
+    store = InMemoryAuthFailureStore()
+
+    with pytest.raises(AuthenticationError, match="SSO"):
+        await authenticate_user(
+            user=user,
+            password="StrongPass1!",
+            failure_store=store,
+            settings=settings,
+        )
+
+    assert user.last_login_at is None
+    assert await store.get_fail_count(f"auth:fail:{user.id}") == 0
 
 
 @pytest.mark.asyncio
