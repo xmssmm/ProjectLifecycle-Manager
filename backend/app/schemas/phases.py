@@ -22,6 +22,11 @@ class PhaseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PhaseListRead(BaseModel):
+    items: list[PhaseRead]
+    total: int
+
+
 class PhaseDocTemplateRead(BaseModel):
     id: UUID
     phase_no: int
@@ -34,6 +39,34 @@ class PhaseDocTemplateRead(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PhaseRequiredDocumentRead(BaseModel):
+    doc_type: str
+    requirement: PhaseDocRequirement
+    qty_rule: str
+    procurement_type: ProcurementType | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PhaseUploadedDocumentRead(BaseModel):
+    id: UUID
+    doc_type: str
+    version: int
+    uploaded_at: datetime
+
+
+class PhaseCompletionRead(BaseModel):
+    required_total: int
+    uploaded_total: int
+    missing_doc_types: list[str]
+
+
+class PhaseDetailRead(PhaseRead):
+    required_documents: list[PhaseRequiredDocumentRead]
+    uploaded_documents: list[PhaseUploadedDocumentRead]
+    completion: PhaseCompletionRead
 
 
 class PhaseHistoryRead(BaseModel):

@@ -11,6 +11,7 @@ from app.api.v1.auth import get_auth_failure_store
 from app.api.v1.auth import router as auth_router
 from app.api.v1.departments import router as departments_router
 from app.api.v1.main_projects import router as main_projects_router
+from app.api.v1.phases import router as phases_router
 from app.api.v1.sub_projects import router as sub_projects_router
 from app.api.v1.system import router as system_router
 from app.api.v1.users import router as users_router
@@ -132,6 +133,7 @@ def create_app(
             {"name": "departments", "description": "部门管理接口。"},
             {"name": "main-projects", "description": "主项目管理接口。"},
             {"name": "sub-projects", "description": "子项目管理接口。"},
+            {"name": "phases", "description": "环节查询与流转接口。"},
             {"name": "system", "description": "系统健康、版本与基础能力。"},
         ],
     )
@@ -159,6 +161,7 @@ def create_app(
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
     app.include_router(main_projects_router, prefix="/api/v1")
+    app.include_router(phases_router, prefix="/api/v1")
     app.include_router(sub_projects_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
