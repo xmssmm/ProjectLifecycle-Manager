@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     wework_webhook_url: str = ""
     wework_webhook_secret: str = ""
 
+    dingtalk_enabled: bool = False
+    dingtalk_webhook_url: str = ""
+    dingtalk_webhook_secret: str = ""
+
     storage_backend: str = "local"
     storage_root: str = Field(default="/app/storage")
     storage_public_url_prefix: str = "/storage"
