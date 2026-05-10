@@ -74,6 +74,8 @@ describe('NotificationCenter', () => {
 const taskNotification: NotificationRead = {
   created_at: '2026-05-10T00:00:00Z',
   dedup_key: 'task_assigned:user-1:task-1:20260510',
+  delivery_mode: 'real_time',
+  digest_sent_at: null,
   id: 'notif-1',
   payload: { task_id: 'task-1', task_no: 'Z-001-T-001' },
   read_at: null,

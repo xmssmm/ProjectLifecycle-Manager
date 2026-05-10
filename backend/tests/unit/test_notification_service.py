@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, timedelta
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -19,9 +20,11 @@ from app.models.notifications import Notification, NotificationPreference
 from app.models.users import User, UserRole, UserStatus
 from app.services.notifications import (
     InMemoryNotificationRepository,
+    NotificationDeliveryMode,
     NotificationPage,
     NotificationPreferenceState,
     NotificationService,
+    StoredNotificationPreference,
 )
 
 
@@ -60,14 +63,20 @@ def make_notification(
     receiver_id: UUID,
     created_at: datetime,
     read_at: datetime | None = None,
+    scenario: str = "task_assigned",
+    source_id: str | None = None,
+    delivery_mode: NotificationDeliveryMode = NotificationDeliveryMode.real_time,
+    digest_sent_at: datetime | None = None,
 ) -> Notification:
     return Notification(
         id=uuid4(),
         receiver_id=receiver_id,
-        scenario="task_assigned",
-        source_id=str(uuid4()),
+        scenario=scenario,
+        source_id=source_id or str(uuid4()),
         payload={"title": "Task"},
         dedup_key=str(uuid4()),
+        delivery_mode=delivery_mode,
+        digest_sent_at=digest_sent_at,
         read_at=read_at,
         created_at=created_at,
         updated_at=created_at,
@@ -86,6 +95,8 @@ def test_notification_table_has_required_columns_and_constraints() -> None:
         "source_id",
         "payload",
         "dedup_key",
+        "delivery_mode",
+        "digest_sent_at",
         "read_at",
         "created_at",
         "updated_at",
@@ -109,6 +120,7 @@ def test_notification_preference_table_has_required_columns_and_constraints() ->
         "user_id",
         "scenario",
         "enabled",
+        "delivery_mode",
         "created_at",
         "updated_at",
     }.issubset(set(table.c.keys()))
@@ -152,7 +164,10 @@ async def test_send_respects_notification_preferences_per_receiver() -> None:
     enabled_receiver = uuid4()
     disabled_receiver = uuid4()
     source_id = uuid4()
-    repository.preferences[(disabled_receiver, "task_assigned")] = False
+    repository.preferences[(disabled_receiver, "task_assigned")] = StoredNotificationPreference(
+        enabled=False,
+        delivery_mode=NotificationDeliveryMode.real_time,
+    )
 
     sent = await service.send(
         scenario="task_assigned",
@@ -166,7 +181,10 @@ async def test_send_respects_notification_preferences_per_receiver() -> None:
         enabled_receiver,
     ]
 
-    repository.preferences[(disabled_receiver, "task_assigned")] = True
+    repository.preferences[(disabled_receiver, "task_assigned")] = StoredNotificationPreference(
+        enabled=True,
+        delivery_mode=NotificationDeliveryMode.real_time,
+    )
     reenabled = await service.send(
         scenario="task_assigned",
         receivers=[enabled_receiver, disabled_receiver],
@@ -175,6 +193,30 @@ async def test_send_respects_notification_preferences_per_receiver() -> None:
     )
 
     assert [notification.receiver_id for notification in reenabled] == [disabled_receiver]
+
+
+@pytest.mark.asyncio
+async def test_send_queues_digest_mode_notifications_without_unread_count() -> None:
+    user = make_user()
+    service, repository = make_service()
+    repository.preferences[(user.id, "task_assigned")] = StoredNotificationPreference(
+        enabled=True,
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+
+    sent = await service.send(
+        scenario="task_assigned",
+        receivers=[user.id],
+        source_id=uuid4(),
+        payload={"task_no": "T-001"},
+    )
+    page = await service.list_notifications(actor=user)
+
+    assert len(sent) == 1
+    assert sent[0].delivery_mode == NotificationDeliveryMode.daily_digest
+    assert sent[0].digest_sent_at is None
+    assert await service.unread_count(actor=user) == 0
+    assert page.items == []
 
 
 @pytest.mark.asyncio
@@ -277,6 +319,77 @@ async def test_mark_all_read_only_updates_current_user_unread_notifications() ->
 
 
 @pytest.mark.asyncio
+async def test_generate_daily_digest_groups_previous_day_and_marks_items() -> None:
+    user = make_user()
+    other_user = make_user()
+    digest_date = date(2026, 5, 9)
+    now = datetime(2026, 5, 10, 1, 0, tzinfo=UTC)
+    first = make_notification(
+        receiver_id=user.id,
+        scenario="task_assigned",
+        source_id="task-1",
+        created_at=datetime(2026, 5, 8, 18, 0, tzinfo=UTC),
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+    second = make_notification(
+        receiver_id=user.id,
+        scenario="payment_created",
+        source_id="payment-1",
+        created_at=datetime(2026, 5, 9, 6, 0, tzinfo=UTC),
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+    ignored_real_time = make_notification(
+        receiver_id=user.id,
+        created_at=datetime(2026, 5, 9, 6, 0, tzinfo=UTC),
+    )
+    ignored_other_day = make_notification(
+        receiver_id=user.id,
+        created_at=datetime(2026, 5, 9, 18, 0, tzinfo=UTC),
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+    other_receiver = make_notification(
+        receiver_id=other_user.id,
+        scenario="task_assigned",
+        source_id="task-2",
+        created_at=datetime(2026, 5, 9, 1, 0, tzinfo=UTC),
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+    repository = InMemoryNotificationRepository(
+        [first, second, ignored_real_time, ignored_other_day, other_receiver],
+    )
+    service = NotificationService(
+        repository=repository,
+        business_date_provider=lambda: date(2026, 5, 10),
+        now_provider=lambda: now,
+    )
+
+    result = await service.generate_daily_digest(business_date=digest_date)
+
+    assert result.business_date == digest_date
+    assert result.source_notification_count == 3
+    assert result.digest_notification_count == 2
+    assert first.digest_sent_at == now
+    assert second.digest_sent_at == now
+    assert other_receiver.digest_sent_at == now
+    assert ignored_real_time.digest_sent_at is None
+    assert ignored_other_day.digest_sent_at is None
+
+    digest = next(
+        notification
+        for notification in repository.notifications
+        if notification.receiver_id == user.id and notification.scenario == "daily_digest"
+    )
+    assert digest.delivery_mode == NotificationDeliveryMode.real_time
+    assert digest.source_id == "2026-05-09"
+    assert digest.payload["total"] == 2
+    digest_groups = cast(list[dict[str, object]], digest.payload["groups"])
+    assert [group["scenario"] for group in digest_groups] == [
+        "payment_created",
+        "task_assigned",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_lists_and_updates_notification_preferences() -> None:
     user = make_user()
     service, repository = make_service()
@@ -284,6 +397,7 @@ async def test_lists_and_updates_notification_preferences() -> None:
     defaults = await service.list_preferences(actor=user)
 
     assert all(item.enabled for item in defaults)
+    assert all(item.delivery_mode == NotificationDeliveryMode.real_time for item in defaults)
     assert {item.scenario for item in defaults}.issuperset(
         {
             "project_pending_review",
@@ -295,12 +409,33 @@ async def test_lists_and_updates_notification_preferences() -> None:
 
     updated = await service.update_preferences(
         actor=user,
-        preferences={"task_assigned": False, "project_pending_review": True},
+        preferences={
+            "task_assigned": StoredNotificationPreference(
+                enabled=False,
+                delivery_mode=NotificationDeliveryMode.daily_digest,
+            ),
+            "project_pending_review": StoredNotificationPreference(
+                enabled=True,
+                delivery_mode=NotificationDeliveryMode.real_time,
+            ),
+        },
     )
 
-    assert repository.preferences[(user.id, "task_assigned")] is False
-    assert repository.preferences[(user.id, "project_pending_review")] is True
+    assert repository.preferences[(user.id, "task_assigned")] == StoredNotificationPreference(
+        enabled=False,
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+    assert repository.preferences[
+        (user.id, "project_pending_review")
+    ] == StoredNotificationPreference(
+        enabled=True,
+        delivery_mode=NotificationDeliveryMode.real_time,
+    )
     assert next(item for item in updated if item.scenario == "task_assigned").enabled is False
+    assert (
+        next(item for item in updated if item.scenario == "task_assigned").delivery_mode
+        == NotificationDeliveryMode.daily_digest
+    )
 
 
 def test_notification_endpoints_list_count_and_mark_read() -> None:
@@ -380,6 +515,7 @@ def test_notification_preference_endpoints_list_and_update() -> None:
                     description="任务执行人收到任务分配提醒",
                     direct_related=True,
                     enabled=False,
+                    delivery_mode=NotificationDeliveryMode.daily_digest,
                 ),
             ]
 
@@ -387,10 +523,15 @@ def test_notification_preference_endpoints_list_and_update() -> None:
             self,
             *,
             actor: User,
-            preferences: dict[str, bool],
+            preferences: dict[str, StoredNotificationPreference],
         ) -> list[NotificationPreferenceState]:
             assert actor.id == user.id
-            assert preferences == {"task_assigned": True}
+            assert preferences == {
+                "task_assigned": StoredNotificationPreference(
+                    enabled=True,
+                    delivery_mode=NotificationDeliveryMode.real_time,
+                ),
+            }
             return [
                 NotificationPreferenceState(
                     scenario="task_assigned",
@@ -398,6 +539,7 @@ def test_notification_preference_endpoints_list_and_update() -> None:
                     description="任务执行人收到任务分配提醒",
                     direct_related=True,
                     enabled=True,
+                    delivery_mode=NotificationDeliveryMode.real_time,
                 ),
             ]
 
@@ -419,7 +561,15 @@ def test_notification_preference_endpoints_list_and_update() -> None:
     list_response = client.get("/api/v1/notifications/preferences")
     update_response = client.put(
         "/api/v1/notifications/preferences",
-        json={"preferences": [{"scenario": "task_assigned", "enabled": True}]},
+        json={
+            "preferences": [
+                {
+                    "scenario": "task_assigned",
+                    "enabled": True,
+                    "delivery_mode": "real_time",
+                },
+            ],
+        },
     )
 
     assert list_response.status_code == 200
@@ -429,6 +579,8 @@ def test_notification_preference_endpoints_list_and_update() -> None:
         "description": "任务执行人收到任务分配提醒",
         "direct_related": True,
         "enabled": False,
+        "delivery_mode": "daily_digest",
     }
     assert update_response.status_code == 200
     assert update_response.json()["data"]["items"][0]["enabled"] is True
+    assert update_response.json()["data"]["items"][0]["delivery_mode"] == "real_time"

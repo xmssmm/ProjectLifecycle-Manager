@@ -91,8 +91,12 @@ describe('profile and password pages', () => {
 
     expect(updateNotificationPreferences).toHaveBeenCalledWith({
       preferences: [
-        { enabled: false, scenario: 'task_assigned' },
-        { enabled: false, scenario: 'task_overdue_escalation' },
+        { delivery_mode: 'real_time', enabled: false, scenario: 'task_assigned' },
+        {
+          delivery_mode: 'daily_digest',
+          enabled: false,
+          scenario: 'task_overdue_escalation',
+        },
       ],
     });
   });
@@ -126,6 +130,7 @@ const sampleUser = {
 const taskPreference = {
   description: '任务执行人收到任务分配提醒',
   direct_related: true,
+  delivery_mode: 'real_time',
   enabled: true,
   label: '任务分配',
   scenario: 'task_assigned',
@@ -134,6 +139,7 @@ const taskPreference = {
 const overduePreference = {
   description: '项目管理人员收到逾期升级提醒',
   direct_related: false,
+  delivery_mode: 'daily_digest',
   enabled: false,
   label: '逾期升级',
   scenario: 'task_overdue_escalation',

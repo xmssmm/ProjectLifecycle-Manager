@@ -19,10 +19,12 @@ from app.schemas.notifications import (
     NotificationUnreadCountRead,
 )
 from app.services.notifications import (
+    NotificationDeliveryMode,
     NotificationPage,
     NotificationPreferenceState,
     NotificationService,
     SqlAlchemyNotificationRepository,
+    StoredNotificationPreference,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -59,6 +61,7 @@ def serialize_notification_preferences(
                 description=preference.description,
                 direct_related=preference.direct_related,
                 enabled=preference.enabled,
+                delivery_mode=preference.delivery_mode.value,
             )
             for preference in preferences
         ],
@@ -100,7 +103,13 @@ async def update_notification_preferences(
 ) -> dict[str, object]:
     preferences = await service.update_preferences(
         actor=current_user,
-        preferences={item.scenario: item.enabled for item in payload.preferences},
+        preferences={
+            item.scenario: StoredNotificationPreference(
+                enabled=item.enabled,
+                delivery_mode=NotificationDeliveryMode(item.delivery_mode),
+            )
+            for item in payload.preferences
+        },
     )
     return success_response(serialize_notification_preferences(preferences))
 

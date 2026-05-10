@@ -23,6 +23,7 @@ class Notification(UuidPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_notifications_receiver_read", "receiver_id", "read_at"),
         Index("ix_notifications_scenario", "scenario"),
         Index("ix_notifications_source_id", "source_id"),
+        Index("ix_notifications_digest_pending", "delivery_mode", "digest_sent_at", "created_at"),
     )
 
     receiver_id: Mapped[UUID] = mapped_column(
@@ -39,6 +40,16 @@ class Notification(UuidPrimaryKeyMixin, TimestampMixin, Base):
         server_default=text("'{}'::jsonb"),
     )
     dedup_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    delivery_mode: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="real_time",
+        server_default="real_time",
+    )
+    digest_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     receiver: Mapped[User] = relationship()
@@ -58,6 +69,12 @@ class NotificationPreference(UuidPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     scenario: Mapped[str] = mapped_column(String(64), nullable=False)
+    delivery_mode: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="real_time",
+        server_default="real_time",
+    )
     enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

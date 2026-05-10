@@ -67,11 +67,15 @@ describe('notification store', () => {
     const store = useNotificationStore();
 
     await store.fetchPreferences();
-    await store.savePreferences([{ scenario: 'task_assigned', enabled: false }]);
+    await store.savePreferences([
+      { scenario: 'task_assigned', enabled: false, delivery_mode: 'daily_digest' },
+    ]);
 
     expect(listNotificationPreferences).toHaveBeenCalled();
     expect(updateNotificationPreferences).toHaveBeenCalledWith({
-      preferences: [{ enabled: false, scenario: 'task_assigned' }],
+      preferences: [
+        { delivery_mode: 'daily_digest', enabled: false, scenario: 'task_assigned' },
+      ],
     });
     expect(store.preferences).toEqual([{ ...taskPreference, enabled: false }]);
   });
@@ -80,6 +84,8 @@ describe('notification store', () => {
 const unreadNotification: NotificationRead = {
   created_at: '2026-05-10T00:00:00Z',
   dedup_key: 'task_assigned:user-1:task-1:20260510',
+  delivery_mode: 'real_time',
+  digest_sent_at: null,
   id: 'notif-1',
   payload: { task_id: 'task-1', task_no: 'Z-001-T-001' },
   read_at: null,
@@ -98,6 +104,7 @@ const readNotification: NotificationRead = {
 const taskPreference: NotificationPreferenceRead = {
   description: '任务执行人收到任务分配提醒',
   direct_related: true,
+  delivery_mode: 'real_time',
   enabled: true,
   label: '任务分配',
   scenario: 'task_assigned',
