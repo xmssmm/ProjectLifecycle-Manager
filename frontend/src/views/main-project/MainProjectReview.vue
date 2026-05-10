@@ -2,7 +2,7 @@
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 
-import { StatusTag } from '@/components/common';
+import { MobileReadOnlyNotice, StatusTag } from '@/components/common';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
@@ -187,6 +187,11 @@ function readErrorMessage(error: unknown, fallback: string): string {
     <el-skeleton v-if="loading" animated />
 
     <template v-else-if="project">
+      <MobileReadOnlyNotice
+        data-test="mobile-read-only-review"
+        message="移动端仅支持查看审核信息，请切换到 PC 端处理审核。"
+      />
+
       <section class="project-detail-band">
         <div class="project-detail-band__header">
           <h3>{{ project.name }}</h3>
@@ -259,7 +264,7 @@ function readErrorMessage(error: unknown, fallback: string): string {
         </ul>
       </section>
 
-      <div v-if="canSubmitReview" class="project-form-actions">
+      <div v-if="canSubmitReview" class="project-form-actions desktop-only-action">
         <el-button
           data-test="reject-review"
           :loading="submitting"

@@ -177,7 +177,8 @@ function createBlobUrl(blob: Blob, fallbackId: string): string {
 <template>
   <el-dialog
     v-model="visible"
-    class="pdf-preview"
+    class="pdf-preview pdf-preview--mobile-fullscreen"
+    data-test="pdf-preview-dialog"
     width="min(96vw, 980px)"
     @closed="cleanupPreview"
   >
@@ -346,5 +347,45 @@ function createBlobUrl(blob: Blob, fallbackId: string): string {
   margin: 16px auto;
   background: #fff;
   box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+}
+
+@media (width <= 768px) {
+  :deep(.pdf-preview--mobile-fullscreen.el-dialog),
+  .pdf-preview--mobile-fullscreen :deep(.el-dialog) {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: 100vw !important;
+    max-width: 100vw;
+    height: 100dvh;
+    margin: 0 !important;
+    border-radius: 0;
+  }
+
+  :deep(.pdf-preview--mobile-fullscreen .el-dialog__body) {
+    min-height: 0;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .pdf-preview__toolbar {
+    gap: 10px;
+  }
+
+  .pdf-preview__button,
+  .pdf-preview__download,
+  .pdf-preview__close {
+    min-height: 44px;
+  }
+
+  .pdf-preview__download {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .pdf-preview__canvas-wrap {
+    min-height: 0;
+    max-height: calc(100dvh - 178px);
+    border-radius: 0;
+  }
 }
 </style>

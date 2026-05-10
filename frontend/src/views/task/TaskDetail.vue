@@ -126,6 +126,35 @@ function statusLabel(status: TaskStatus): string {
             </tbody>
           </table>
         </div>
+
+        <div class="task-executor-cards">
+          <article
+            v-for="executor in task.executors"
+            :key="executor.id"
+            class="task-executor-card"
+            data-test="task-executor-mobile-card"
+          >
+            <div>
+              <span>用户 ID</span>
+              <strong>{{ executor.user_id }}</strong>
+            </div>
+            <div>
+              <span>状态</span>
+              <strong>
+                <StatusTag :status="executor.status" />
+                <span class="task-status-code">{{ executor.status }}</span>
+              </strong>
+            </div>
+            <div>
+              <span>计划完成</span>
+              <strong>{{ formatDate(executor.plan_end_date) }}</strong>
+            </div>
+            <div>
+              <span>实际完成</span>
+              <strong>{{ formatDate(executor.actual_end_date) }}</strong>
+            </div>
+          </article>
+        </div>
       </section>
     </template>
 

@@ -2,7 +2,7 @@
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 
-import { ConfirmDialog, StatusTag } from '@/components/common';
+import { ConfirmDialog, MobileReadOnlyNotice, StatusTag } from '@/components/common';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useSubProjectStore } from '@/stores/useSubProjectStore';
@@ -131,6 +131,11 @@ function formatMoney(value: unknown): string {
     <el-skeleton v-if="loading" animated />
 
     <template v-else-if="subProject">
+      <MobileReadOnlyNotice
+        data-test="mobile-read-only-review"
+        message="移动端仅支持查看审核信息，请切换到 PC 端处理审核。"
+      />
+
       <section class="project-detail-band">
         <div class="project-detail-band__header">
           <h3>{{ subProject.name }}</h3>
@@ -164,7 +169,7 @@ function formatMoney(value: unknown): string {
         </el-form>
       </section>
 
-      <div v-if="canSubmitReview" class="project-form-actions">
+      <div v-if="canSubmitReview" class="project-form-actions desktop-only-action">
         <el-button
           data-test="reject-sub-project"
           :loading="submitting"

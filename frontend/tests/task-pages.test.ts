@@ -93,6 +93,8 @@ describe('TaskDetail', () => {
 
     expect(getTask).toHaveBeenCalledWith('task-1');
     expect(wrapper.find('[data-test="complete-task"]').exists()).toBe(true);
+    expect(wrapper.findAll('[data-test="task-executor-mobile-card"]')).toHaveLength(2);
+    expect(wrapper.find('[data-test="task-executor-mobile-card"]').text()).toContain('member-1');
 
     await wrapper.find('[data-test="complete-task"]').trigger('click');
     await flushPromises();

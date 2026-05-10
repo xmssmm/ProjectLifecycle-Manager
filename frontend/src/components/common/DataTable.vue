@@ -25,7 +25,12 @@ const emit = defineEmits<{
 
 <template>
   <div class="data-table">
-    <el-table v-loading="loading" :data="rows" @sort-change="emit('sort-change', $event)">
+    <el-table
+      v-loading="loading"
+      class="data-table__desktop"
+      :data="rows"
+      @sort-change="emit('sort-change', $event)"
+    >
       <el-table-column
         v-for="column in columns"
         :key="column.key"
@@ -36,12 +41,32 @@ const emit = defineEmits<{
         :width="column.width"
       >
         <template #default="{ row }">
-          <slot :name="column.key" :row="row" :value="row[column.key]">
+          <slot :name="column.key" :row="(row as unknown)" :value="row[column.key]">
             {{ row[column.key] }}
           </slot>
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="data-table__mobile-list" data-test="data-table-mobile-list">
+      <article
+        v-for="(row, rowIndex) in rows"
+        :key="String(row.id ?? rowIndex)"
+        class="data-table__mobile-card"
+        data-test="data-table-mobile-card"
+      >
+        <dl>
+          <div v-for="column in columns" :key="column.key" class="data-table__mobile-field">
+            <dt>{{ column.label }}</dt>
+            <dd>
+              <slot :name="column.key" :row="(row as unknown)" :value="row[column.key]">
+                {{ row[column.key] }}
+              </slot>
+            </dd>
+          </div>
+        </dl>
+      </article>
+    </div>
 
     <div class="data-table__pagination">
       <el-pagination

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 
-import { StatusTag } from '@/components/common';
+import { MobileReadOnlyNotice, StatusTag } from '@/components/common';
 import { usePermission } from '@/composables/usePermission';
 import { usePhaseStore } from '@/stores/usePhaseStore';
 import { PHASE_STATUS_LABELS, type PhaseRead, type PhaseStatus } from '@/types/phases';
@@ -95,6 +95,10 @@ function extractErrorMessage(error: unknown): string {
     </div>
 
     <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
+    <MobileReadOnlyNotice
+      data-test="mobile-read-only-phase"
+      message="移动端仅支持查看环节进度，请切换到 PC 端推进环节。"
+    />
 
     <div v-if="orderedPhases.length > 0" class="phase-progress__list">
       <article
@@ -119,6 +123,7 @@ function extractErrorMessage(error: unknown): string {
         </div>
         <el-button
           v-if="canPromote(phase)"
+          class="desktop-only-action"
           :data-test="`promote-${phase.id}`"
           :loading="phaseStore.promotingId === phase.id"
           size="small"

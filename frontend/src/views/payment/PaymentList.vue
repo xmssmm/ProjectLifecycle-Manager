@@ -2,6 +2,7 @@
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
+import { MobileReadOnlyNotice } from '@/components/common';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { usePaymentStore } from '@/stores/usePaymentStore';
 import {
@@ -222,10 +223,20 @@ function isOverBudgetError(error: unknown): boolean {
         <h2>付款记录</h2>
         <p>{{ subProjectId }}</p>
       </div>
-      <el-button data-test="open-create-payment" type="primary" @click="createDialogVisible = true">
+      <el-button
+        class="desktop-only-action"
+        data-test="open-create-payment"
+        type="primary"
+        @click="createDialogVisible = true"
+      >
         新增付款
       </el-button>
     </div>
+
+    <MobileReadOnlyNotice
+      data-test="mobile-read-only-payment"
+      message="移动端仅支持查看付款记录，请切换到 PC 端新增或红冲付款。"
+    />
 
     <section class="payment-filter-band">
       <label class="payment-field">
@@ -281,6 +292,7 @@ function isOverBudgetError(error: unknown): boolean {
             <td>
               <el-button
                 v-if="canReverse(payment)"
+                class="desktop-only-action"
                 data-test="reverse-payment"
                 size="small"
                 type="danger"
