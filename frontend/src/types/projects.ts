@@ -35,6 +35,16 @@ export interface MainProjectListQuery {
   pageSize: number;
 }
 
+export interface MainProjectCreatePayload {
+  dept_id: string;
+  expected_finish_date: string;
+  name: string;
+  remark: string | null;
+  total_budget: string;
+}
+
+export type MainProjectUpdatePayload = Partial<MainProjectCreatePayload>;
+
 export interface SubProjectRead {
   actual_end_date: string | null;
   budget: string;

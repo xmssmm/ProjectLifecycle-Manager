@@ -2,7 +2,13 @@ import type { AxiosAdapter, AxiosRequestConfig } from 'axios';
 import { describe, expect, it } from 'vitest';
 
 import { createApiClient } from '../src/api/client';
-import { getMainProject, listMainProjects } from '../src/api/mainProjects';
+import {
+  createMainProject,
+  getMainProject,
+  listMainProjects,
+  submitMainProject,
+  updateMainProject,
+} from '../src/api/mainProjects';
 import { listSubProjects } from '../src/api/subProjects';
 
 describe('project api', () => {
@@ -62,6 +68,64 @@ describe('project api', () => {
       url: '/sub-projects',
     });
     expect(result.items[0].main_project_id).toBe('main-1');
+  });
+
+  it('creates, updates, and submits main projects', async () => {
+    const calls: AxiosRequestConfig[] = [];
+    const client = createApiClient('http://api.local');
+    client.defaults.adapter = recordingAdapter(calls, {
+      code: 0,
+      message: 'success',
+      data: sampleMainProject,
+    });
+
+    await createMainProject(
+      {
+        dept_id: 'dept-a',
+        expected_finish_date: '2026-12-31',
+        name: '智慧档案平台',
+        remark: '一期',
+        total_budget: '500000.00',
+      },
+      client,
+    );
+    await updateMainProject(
+      'main-1',
+      {
+        expected_finish_date: '2027-01-31',
+        name: '智慧档案平台二期',
+        remark: null,
+        total_budget: '520000.00',
+      },
+      client,
+    );
+    await submitMainProject('main-1', client);
+
+    expect(calls[0]).toMatchObject({
+      data: JSON.stringify({
+        dept_id: 'dept-a',
+        expected_finish_date: '2026-12-31',
+        name: '智慧档案平台',
+        remark: '一期',
+        total_budget: '500000.00',
+      }),
+      method: 'post',
+      url: '/main-projects',
+    });
+    expect(calls[1]).toMatchObject({
+      data: JSON.stringify({
+        expected_finish_date: '2027-01-31',
+        name: '智慧档案平台二期',
+        remark: null,
+        total_budget: '520000.00',
+      }),
+      method: 'put',
+      url: '/main-projects/main-1',
+    });
+    expect(calls[2]).toMatchObject({
+      method: 'post',
+      url: '/main-projects/main-1/submit',
+    });
   });
 });
 

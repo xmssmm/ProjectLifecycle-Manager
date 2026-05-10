@@ -1,7 +1,13 @@
 import type { AxiosInstance } from 'axios';
 
 import { apiClient } from '@/api/client';
-import type { MainProjectListQuery, MainProjectListRead, MainProjectRead } from '@/types/projects';
+import type {
+  MainProjectCreatePayload,
+  MainProjectListQuery,
+  MainProjectListRead,
+  MainProjectRead,
+  MainProjectUpdatePayload,
+} from '@/types/projects';
 
 interface ApiResponse<T> {
   code: number;
@@ -27,5 +33,35 @@ export async function getMainProject(
   client: AxiosInstance = apiClient,
 ): Promise<MainProjectRead> {
   const response = await client.get<ApiResponse<MainProjectRead>>(`/main-projects/${projectId}`);
+  return response.data.data;
+}
+
+export async function createMainProject(
+  payload: MainProjectCreatePayload,
+  client: AxiosInstance = apiClient,
+): Promise<MainProjectRead> {
+  const response = await client.post<ApiResponse<MainProjectRead>>('/main-projects', payload);
+  return response.data.data;
+}
+
+export async function updateMainProject(
+  projectId: string,
+  payload: MainProjectUpdatePayload,
+  client: AxiosInstance = apiClient,
+): Promise<MainProjectRead> {
+  const response = await client.put<ApiResponse<MainProjectRead>>(
+    `/main-projects/${projectId}`,
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function submitMainProject(
+  projectId: string,
+  client: AxiosInstance = apiClient,
+): Promise<MainProjectRead> {
+  const response = await client.post<ApiResponse<MainProjectRead>>(
+    `/main-projects/${projectId}/submit`,
+  );
   return response.data.data;
 }

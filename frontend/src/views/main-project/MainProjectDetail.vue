@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { ElMessage } from 'element-plus';
+import { computed, onMounted, ref, watch } from 'vue';
 
-import { DataTable, StatusTag } from '@/components/common';
+import { ConfirmDialog, DataTable, StatusTag } from '@/components/common';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
 import { MAIN_PROJECT_TIMELINE, PROJECT_STATUS_LABELS, type ProjectStatus } from '@/types/projects';
 
@@ -10,6 +12,7 @@ const props = defineProps<{
 }>();
 
 const mainProjectStore = useMainProjectStore();
+const authStore = useAuthStore();
 
 const project = computed(() => mainProjectStore.currentProject);
 const subProjectRows = computed(
@@ -21,6 +24,15 @@ const activeStep = computed(() => {
   }
   return Math.max(MAIN_PROJECT_TIMELINE.indexOf(project.value.status), 0);
 });
+const canEditRejectedProject = computed(
+  () => project.value?.status === 'rejected' && project.value.creator_id === authStore.user?.id,
+);
+const canSubmitProject = computed(
+  () =>
+    Boolean(project.value?.creator_id && project.value.creator_id === authStore.user?.id) &&
+    (project.value?.status === 'pending_review' || project.value?.status === 'rejected'),
+);
+const submitConfirmVisible = ref(false);
 
 const subProjectColumns = [
   { key: 'project_no', label: '子项目编号', minWidth: 180 },
@@ -41,6 +53,14 @@ watch(
 
 async function loadProject(): Promise<void> {
   await mainProjectStore.fetchMainProjectDetail(props.projectId);
+}
+
+async function submitProject(): Promise<void> {
+  if (!project.value) {
+    return;
+  }
+  await mainProjectStore.submitMainProject(project.value.id);
+  ElMessage.success('主项目已提交审核');
 }
 
 function formatMoney(value: unknown): string {
@@ -69,6 +89,19 @@ function timelineTitle(status: ProjectStatus): string {
       <router-link :to="{ name: 'main-projects' }">
         <el-button>返回列表</el-button>
       </router-link>
+      <router-link
+        v-if="project && canEditRejectedProject"
+        :to="{ name: 'main-project-edit', params: { id: project.id } }"
+      >
+        <el-button>编辑</el-button>
+      </router-link>
+      <el-button
+        v-if="project && canSubmitProject"
+        type="primary"
+        @click="submitConfirmVisible = true"
+      >
+        提交审核
+      </el-button>
     </div>
 
     <el-skeleton v-if="mainProjectStore.detailLoading && !project" animated />
@@ -131,5 +164,13 @@ function timelineTitle(status: ProjectStatus): string {
     </template>
 
     <el-empty v-else description="项目不存在" />
+
+    <ConfirmDialog
+      v-model="submitConfirmVisible"
+      confirm-text="提交审核"
+      message="提交后将通知审核人处理，审核前请确认项目信息无误。"
+      title="提交主项目审核"
+      @confirm="submitProject"
+    />
   </section>
 </template>

@@ -1,13 +1,22 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getMainProject, listMainProjects } from '@/api/mainProjects';
+import {
+  createMainProject,
+  getMainProject,
+  listMainProjects,
+  submitMainProject,
+  updateMainProject,
+} from '@/api/mainProjects';
 import { listSubProjects } from '@/api/subProjects';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
 
 vi.mock('@/api/mainProjects', () => ({
+  createMainProject: vi.fn(),
   getMainProject: vi.fn(),
   listMainProjects: vi.fn(),
+  submitMainProject: vi.fn(),
+  updateMainProject: vi.fn(),
 }));
 
 vi.mock('@/api/subProjects', () => ({
@@ -25,6 +34,12 @@ describe('useMainProjectStore', () => {
       total: 1,
     });
     vi.mocked(getMainProject).mockResolvedValue(sampleMainProject);
+    vi.mocked(createMainProject).mockResolvedValue(sampleMainProject);
+    vi.mocked(updateMainProject).mockResolvedValue({ ...sampleMainProject, name: '更新后项目' });
+    vi.mocked(submitMainProject).mockResolvedValue({
+      ...sampleMainProject,
+      status: 'pending_review',
+    });
     vi.mocked(listSubProjects).mockResolvedValue({
       items: [sampleSubProject],
       page: 1,
@@ -45,6 +60,40 @@ describe('useMainProjectStore', () => {
     expect(store.projects[0].name).toBe('智慧档案平台');
     expect(store.currentProject?.id).toBe('main-1');
     expect(store.currentSubProjects[0].main_project_id).toBe('main-1');
+  });
+
+  it('creates, updates, and submits main projects', async () => {
+    const store = useMainProjectStore();
+
+    const created = await store.createMainProject({
+      dept_id: 'dept-a',
+      expected_finish_date: '2026-12-31',
+      name: '智慧档案平台',
+      remark: '一期',
+      total_budget: '500000.00',
+    });
+    const updated = await store.updateMainProject('main-1', {
+      name: '更新后项目',
+      remark: null,
+    });
+    const submitted = await store.submitMainProject('main-1');
+
+    expect(createMainProject).toHaveBeenCalledWith({
+      dept_id: 'dept-a',
+      expected_finish_date: '2026-12-31',
+      name: '智慧档案平台',
+      remark: '一期',
+      total_budget: '500000.00',
+    });
+    expect(updateMainProject).toHaveBeenCalledWith('main-1', {
+      name: '更新后项目',
+      remark: null,
+    });
+    expect(submitMainProject).toHaveBeenCalledWith('main-1');
+    expect(created.id).toBe('main-1');
+    expect(updated.name).toBe('更新后项目');
+    expect(submitted.status).toBe('pending_review');
+    expect(store.currentProject?.status).toBe('pending_review');
   });
 });
 

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 
 import { DataTable, SearchBar, StatusTag } from '@/components/common';
+import { usePermission } from '@/composables/usePermission';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
 import {
   MAIN_PROJECT_STATUS_OPTIONS,
@@ -11,8 +12,10 @@ import {
 } from '@/types/projects';
 
 const mainProjectStore = useMainProjectStore();
+const { can } = usePermission();
 const searchModel = ref<Record<string, string | number>>({ dept_id: '', status: '' });
 const filters = ref({ deptId: '', status: '' });
+const canCreateMainProject = computed(() => can('main_project.create'));
 
 const columns = [
   { key: 'project_no', label: '项目编号', minWidth: 160 },
@@ -88,6 +91,9 @@ function statusLabel(status: ProjectStatus): string {
         <h2>主项目</h2>
         <p>按状态和部门筛选项目，进入详情查看状态和子项目。</p>
       </div>
+      <router-link v-if="canCreateMainProject" :to="{ name: 'main-project-create' }">
+        <el-button type="primary">新建主项目</el-button>
+      </router-link>
     </div>
 
     <SearchBar

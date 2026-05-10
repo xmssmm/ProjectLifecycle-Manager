@@ -1,8 +1,20 @@
 import { defineStore } from 'pinia';
 
-import { getMainProject, listMainProjects } from '@/api/mainProjects';
+import {
+  createMainProject as createMainProjectRequest,
+  getMainProject,
+  listMainProjects,
+  submitMainProject as submitMainProjectRequest,
+  updateMainProject as updateMainProjectRequest,
+} from '@/api/mainProjects';
 import { listSubProjects } from '@/api/subProjects';
-import type { MainProjectListQuery, MainProjectRead, SubProjectRead } from '@/types/projects';
+import type {
+  MainProjectCreatePayload,
+  MainProjectListQuery,
+  MainProjectRead,
+  MainProjectUpdatePayload,
+  SubProjectRead,
+} from '@/types/projects';
 
 interface MainProjectState {
   currentProject: MainProjectRead | null;
@@ -54,9 +66,25 @@ export const useMainProjectStore = defineStore('main-projects', {
         this.currentSubProjects = subProjects.items.filter(
           (subProject) => subProject.main_project_id === projectId,
         );
+        return project;
       } finally {
         this.detailLoading = false;
       }
+    },
+    async createMainProject(payload: MainProjectCreatePayload) {
+      const project = await createMainProjectRequest(payload);
+      this.currentProject = project;
+      return project;
+    },
+    async updateMainProject(projectId: string, payload: MainProjectUpdatePayload) {
+      const project = await updateMainProjectRequest(projectId, payload);
+      this.currentProject = project;
+      return project;
+    },
+    async submitMainProject(projectId: string) {
+      const project = await submitMainProjectRequest(projectId);
+      this.currentProject = project;
+      return project;
     },
   },
 });

@@ -9,6 +9,7 @@ import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
 import HomeView from '@/views/HomeView.vue';
 import MainProjectDetailView from '@/views/main-project/MainProjectDetail.vue';
+import MainProjectEditView from '@/views/main-project/MainProjectEdit.vue';
 import MainProjectListView from '@/views/main-project/MainProjectList.vue';
 import ProfileView from '@/views/Profile.vue';
 
@@ -46,10 +47,23 @@ const router = createRouter({
       meta: { permission: 'project.view_all', requiresAuth: true },
     },
     {
+      path: '/main-projects/new',
+      name: 'main-project-create',
+      component: MainProjectEditView,
+      meta: { permission: 'main_project.create', requiresAuth: true },
+    },
+    {
       path: '/main-projects/:id',
       name: 'main-project-detail',
       component: MainProjectDetailView,
       meta: { permission: 'project.view_all', requiresAuth: true },
+      props: (route) => ({ projectId: String(route.params.id) }),
+    },
+    {
+      path: '/main-projects/:id/edit',
+      name: 'main-project-edit',
+      component: MainProjectEditView,
+      meta: { permission: 'main_project.edit', requiresAuth: true },
       props: (route) => ({ projectId: String(route.params.id) }),
     },
     {

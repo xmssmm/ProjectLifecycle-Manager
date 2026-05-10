@@ -314,6 +314,20 @@ body {
   font-size: 13px;
 }
 
+.project-form-band {
+  padding: 24px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.project-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
 .profile-page {
   max-width: 920px;
 }
