@@ -8,6 +8,7 @@ from app.tasks.task_names import (
     AUDIT_PARTITION_TASK_NAME,
     CELERY_SMOKE_TASK_NAME,
     FILE_CLEANUP_TASK_NAME,
+    REPORT_CLEANUP_TASK_NAME,
     TASK_DEADLINE_SCAN_TASK_NAME,
 )
 
@@ -43,6 +44,10 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "audit-partition-maintenance-monthly-0030": {
                 "task": AUDIT_PARTITION_TASK_NAME,
                 "schedule": crontab(minute=30, hour=0, day_of_month=1),
+            },
+            "report-cleanup-daily-0330": {
+                "task": REPORT_CLEANUP_TASK_NAME,
+                "schedule": crontab(minute=30, hour=3),
             },
         },
         result_serializer="json",

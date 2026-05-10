@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
 from time import perf_counter
@@ -26,7 +26,13 @@ from app.models.reports import ReportJob, ReportJobStatus, ReportType
 from app.models.sub_projects import SubProject
 from app.models.users import User, UserRole
 from app.schemas.reports import ReportCreate
-from app.services.reports import InMemoryReportRepository, ReportService, ReportTaskDispatcher
+from app.services.reports import (
+    InMemoryReportRepository,
+    ReportDownload,
+    ReportFileFormat,
+    ReportService,
+    ReportTaskDispatcher,
+)
 from app.storage.base import StorageBackend
 from tests.factories import (
     DepartmentFactory,
@@ -209,10 +215,131 @@ def test_report_endpoints_create_job_and_return_progress_payload() -> None:
     assert payload["row_count"] == 2
 
 
+@pytest.mark.asyncio
+async def test_report_download_returns_requested_format_for_requester_only() -> None:
+    requester = cast(User, UserFactory(role=UserRole.dept_manager))
+    other_user = cast(User, UserFactory(role=UserRole.dept_manager))
+    service, repository, storage, _dispatcher = make_service()
+    job = make_completed_report_job(requester)
+    repository.jobs[job.id] = job
+    storage.saved = [
+        SavedReport(job.xlsx_storage_key or "", "project_list.xlsx", b"xlsx-bytes"),
+        SavedReport(job.pdf_storage_key or "", "project_list.pdf", b"%PDF-1.7"),
+    ]
+
+    download = await service.download_report(
+        actor=requester,
+        job_id=job.id,
+        file_format=ReportFileFormat.xlsx,
+    )
+
+    assert download.file_name == "project_list.xlsx"
+    assert (
+        download.content_type
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert download.content == b"xlsx-bytes"
+    with pytest.raises(PermissionDeniedError):
+        await service.download_report(
+            actor=other_user,
+            job_id=job.id,
+            file_format=ReportFileFormat.pdf,
+        )
+
+
+def test_report_download_endpoint_streams_file_with_content_disposition() -> None:
+    requester = cast(User, UserFactory(role=UserRole.dept_manager))
+    job_id = uuid4()
+
+    class FakeReportService:
+        async def download_report(
+            self,
+            *,
+            actor: User,
+            job_id: UUID,
+            file_format: ReportFileFormat,
+        ) -> ReportDownload:
+            assert actor.id == requester.id
+            assert file_format == ReportFileFormat.xlsx
+            return ReportDownload(
+                file_name="project_list.xlsx",
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                content=b"xlsx-bytes",
+            )
+
+    async def fake_db_session() -> AsyncIterator[object]:
+        yield object()
+
+    async def fake_current_user() -> User:
+        return requester
+
+    async def fake_report_service() -> FakeReportService:
+        return FakeReportService()
+
+    app = create_app(rate_limit_store=InMemoryRateLimitStore())
+    app.dependency_overrides[get_db_session] = fake_db_session
+    app.dependency_overrides[get_current_user] = fake_current_user
+    app.dependency_overrides[get_report_service] = fake_report_service
+
+    response = TestClient(app).get(f"/api/v1/reports/{job_id}/download?format=xlsx")
+
+    assert response.status_code == 200
+    assert response.content == b"xlsx-bytes"
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    assert "project_list.xlsx" in response.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
+async def test_report_cleanup_deletes_files_after_retention_window() -> None:
+    now = datetime(2026, 5, 10, tzinfo=UTC)
+    requester = cast(User, UserFactory(role=UserRole.dept_manager))
+    service, repository, storage, _dispatcher = make_service(now_provider=lambda: now)
+    expired_job = make_completed_report_job(
+        requester,
+        finished_at=now - timedelta(days=8),
+    )
+    fresh_job = make_completed_report_job(
+        requester,
+        finished_at=now - timedelta(days=6),
+    )
+    repository.jobs[expired_job.id] = expired_job
+    repository.jobs[fresh_job.id] = fresh_job
+    storage.saved = [
+        SavedReport(expired_job.xlsx_storage_key or "", "old.xlsx", b"old-xlsx"),
+        SavedReport(expired_job.pdf_storage_key or "", "old.pdf", b"old-pdf"),
+        SavedReport(fresh_job.xlsx_storage_key or "", "fresh.xlsx", b"fresh-xlsx"),
+        SavedReport(fresh_job.pdf_storage_key or "", "fresh.pdf", b"fresh-pdf"),
+    ]
+
+    result = await service.cleanup_expired_reports(retention_days=7)
+
+    assert result.deleted_jobs == 1
+    assert result.deleted_files == 2
+    assert expired_job.xlsx_storage_key is None
+    assert expired_job.pdf_storage_key is None
+    assert fresh_job.xlsx_storage_key is not None
+    assert fresh_job.pdf_storage_key is not None
+    assert [item.filename for item in storage.saved] == ["fresh.xlsx", "fresh.pdf"]
+
+
+def test_celery_beat_schedules_report_cleanup_daily() -> None:
+    from app.core.config import Settings
+    from app.tasks.celery_app import create_celery_app
+    from app.tasks.task_names import REPORT_CLEANUP_TASK_NAME
+
+    celery_app = create_celery_app(Settings(redis_url="redis://redis:6379/0"))
+
+    schedule = celery_app.conf.beat_schedule["report-cleanup-daily-0330"]
+    assert schedule["task"] == REPORT_CLEANUP_TASK_NAME
+
+
 def make_service(
     *,
     sub_project_count: int = 2,
     async_threshold_rows: int = 1000,
+    now_provider: Callable[[], datetime] | None = None,
 ) -> tuple[ReportService, InMemoryReportRepository, RecordingStorage, RecordingDispatcher]:
     department = cast(Department, DepartmentFactory(code="general", name="综合部"))
     main_project = cast(
@@ -265,5 +392,31 @@ def make_service(
         storage=storage,
         dispatcher=dispatcher,
         async_threshold_rows=async_threshold_rows,
+        now_provider=now_provider if now_provider is not None else lambda: datetime.now(UTC),
     )
     return service, repository, storage, dispatcher
+
+
+def make_completed_report_job(
+    requester: User,
+    *,
+    finished_at: datetime | None = None,
+) -> ReportJob:
+    now = finished_at or datetime(2026, 5, 10, tzinfo=UTC)
+    job_id = uuid4()
+    return ReportJob(
+        id=job_id,
+        report_type=ReportType.project_list,
+        requested_by_id=requester.id,
+        parameters={},
+        status=ReportJobStatus.completed,
+        progress=100,
+        row_count=2,
+        xlsx_storage_key=f"reports/{job_id}/project_list.xlsx",
+        pdf_storage_key=f"reports/{job_id}/project_list.pdf",
+        error_message=None,
+        started_at=now,
+        finished_at=now,
+        created_at=now,
+        updated_at=now,
+    )
