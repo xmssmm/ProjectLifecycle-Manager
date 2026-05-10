@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
+from app.api.v1.acceptance_steps import router as acceptance_steps_router
 from app.api.v1.auth import get_auth_failure_store
 from app.api.v1.auth import router as auth_router
 from app.api.v1.departments import router as departments_router
@@ -131,6 +132,7 @@ def create_app(
         description="企业项目过程管理与资料归档系统后端接口。",
         lifespan=lifespan_context,
         openapi_tags=[
+            {"name": "acceptance-steps", "description": "Acceptance step endpoints."},
             {"name": "payments", "description": "Payment creation and reversal endpoints."},
             {"name": "auth", "description": "Authentication endpoints."},
             {"name": "users", "description": "用户管理接口。"},
@@ -164,6 +166,7 @@ def create_app(
     app.add_exception_handler(BusinessException, business_exception_handler)
     app.dependency_overrides[get_auth_failure_store] = lambda: resolved_auth_failure_store
     app.dependency_overrides[get_auth_token_store] = lambda: resolved_auth_token_store
+    app.include_router(acceptance_steps_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")

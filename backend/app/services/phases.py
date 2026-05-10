@@ -10,6 +10,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessException, PermissionDeniedError, ResourceNotFoundError
+from app.models.acceptance_steps import AcceptanceStep, AcceptanceStepStatus
 from app.models.documents import Document
 from app.models.phases import (
     Phase,
@@ -117,6 +118,9 @@ class PhaseRepository(Protocol):
     async def list_latest_documents(self, phase_id: UUID) -> list[Document]:
         ...
 
+    async def list_acceptance_steps(self, phase_id: UUID) -> list[AcceptanceStep]:
+        ...
+
     def add_history(self, history: PhaseHistory) -> None:
         ...
 
@@ -209,6 +213,14 @@ class SqlAlchemyPhaseRepository:
         )
         return list(result.all())
 
+    async def list_acceptance_steps(self, phase_id: UUID) -> list[AcceptanceStep]:
+        result = await self._session.scalars(
+            select(AcceptanceStep)
+            .where(AcceptanceStep.phase_id == phase_id)
+            .order_by(AcceptanceStep.step_no.asc()),
+        )
+        return list(result.all())
+
     def add_history(self, history: PhaseHistory) -> None:
         self._session.add(history)
 
@@ -229,6 +241,7 @@ class InMemoryPhaseRepository:
         phases: list[Phase] | None = None,
         phase_doc_templates: list[PhaseDocTemplate] | None = None,
         documents: list[Document] | None = None,
+        acceptance_steps: list[AcceptanceStep] | None = None,
         sub_projects: list[SubProject] | None = None,
         members: list[SubProjectMember] | None = None,
         histories: list[PhaseHistory] | None = None,
@@ -236,6 +249,7 @@ class InMemoryPhaseRepository:
         self.phases = list(phases or [])
         self.phase_doc_templates = list(phase_doc_templates or [])
         self.documents = list(documents or [])
+        self.acceptance_steps = list(acceptance_steps or [])
         self.sub_projects = list(sub_projects or [])
         self.members = list(members or [])
         self.histories = list(histories or [])
@@ -299,6 +313,10 @@ class InMemoryPhaseRepository:
         ]
         return sorted(documents, key=lambda document: (document.doc_type, document.created_at))
 
+    async def list_acceptance_steps(self, phase_id: UUID) -> list[AcceptanceStep]:
+        steps = [step for step in self.acceptance_steps if step.phase_id == phase_id]
+        return sorted(steps, key=lambda step: step.step_no)
+
     def add_history(self, history: PhaseHistory) -> None:
         self.histories.append(history)
 
@@ -355,6 +373,13 @@ class PhaseService:
         required_documents = await self._required_documents_for_phase(phase)
         uploaded_documents = await self._repository.list_latest_documents(phase.id)
         self._ensure_phase_dependencies_completed(phase, phases)
+        acceptance_steps = await self._repository.list_acceptance_steps(phase.id)
+        if self._ensure_acceptance_steps_completed(phase, acceptance_steps):
+            required_documents = [
+                document
+                for document in required_documents
+                if document.doc_type != "acceptance_report"
+            ]
         self._ensure_required_documents_uploaded(required_documents, uploaded_documents)
 
         now = datetime.now(UTC)
@@ -499,6 +524,27 @@ class PhaseService:
                 status_code=409,
                 data={"missing_documents": missing},
             )
+
+    @staticmethod
+    def _ensure_acceptance_steps_completed(
+        phase: Phase,
+        acceptance_steps: Sequence[AcceptanceStep],
+    ) -> bool:
+        if phase.phase_no != 4 or not acceptance_steps:
+            return False
+        incomplete = [
+            step.step_no
+            for step in acceptance_steps
+            if step.status != AcceptanceStepStatus.completed
+        ]
+        if incomplete:
+            raise BusinessException(
+                code=3003,
+                message="All acceptance steps must be completed before promoting acceptance phase",
+                status_code=409,
+                data={"incomplete_step_nos": incomplete},
+            )
+        return True
 
     @staticmethod
     def _matches_qty_rule(*, qty_rule: str, actual: int) -> bool:
