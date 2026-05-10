@@ -4,7 +4,11 @@ from celery import Celery  # type: ignore[import-untyped]
 from celery.schedules import crontab  # type: ignore[import-untyped]
 
 from app.core.config import Settings, get_settings
-from app.tasks.task_names import CELERY_SMOKE_TASK_NAME, TASK_DEADLINE_SCAN_TASK_NAME
+from app.tasks.task_names import (
+    CELERY_SMOKE_TASK_NAME,
+    FILE_CLEANUP_TASK_NAME,
+    TASK_DEADLINE_SCAN_TASK_NAME,
+)
 
 
 def create_celery_app(settings: Settings | None = None) -> Celery:
@@ -13,7 +17,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
         "project_management",
         broker=resolved_settings.effective_celery_broker_url,
         backend=resolved_settings.effective_celery_result_backend,
-        include=["app.tasks.task_deadlines"],
+        include=["app.tasks.task_deadlines", "app.tasks.file_cleanup"],
     )
     app.conf.update(
         accept_content=["json"],
@@ -25,6 +29,10 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "task-deadline-scan-daily-0900": {
                 "task": TASK_DEADLINE_SCAN_TASK_NAME,
                 "schedule": crontab(minute=0, hour=9),
+            },
+            "file-cleanup-weekly-monday-0300": {
+                "task": FILE_CLEANUP_TASK_NAME,
+                "schedule": crontab(minute=0, hour=3, day_of_week="monday"),
             },
         },
         result_serializer="json",
