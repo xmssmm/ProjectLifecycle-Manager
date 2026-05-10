@@ -33,10 +33,10 @@ frontend/coverage/
 Thumbs.db
 
 # Runtime data
-storage/
-uploads/
-logs/
-tmp/
+/storage/
+/uploads/
+/logs/
+/tmp/
 
 # Local worktrees
 .worktrees/

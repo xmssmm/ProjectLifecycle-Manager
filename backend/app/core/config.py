@@ -26,6 +26,11 @@ class Settings(BaseSettings):
 
     storage_backend: str = "local"
     storage_root: str = Field(default="/app/storage")
+    storage_public_url_prefix: str = "/storage"
+    s3_endpoint_url: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    s3_bucket: str = ""
 
     model_config = SettingsConfigDict(
         env_file=("../.env", ".env"),
