@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     jwt_private_key_path: str = "/run/secrets/jwt_private_key.pem"
     jwt_public_key_path: str = "/run/secrets/jwt_public_key.pem"
     jwt_algorithm: str = "RS256"
+    jwt_secret_key: str = "dev-secret-change-me"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 

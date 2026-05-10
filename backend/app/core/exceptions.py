@@ -27,6 +27,11 @@ class AuthenticationError(BusinessException):
         super().__init__(code=1001, message=message, status_code=401, data=data)
 
 
+class AccountLockedError(BusinessException):
+    def __init__(self, message: str = "Account is locked", data: Any = None) -> None:
+        super().__init__(code=1002, message=message, status_code=423, data=data)
+
+
 class PermissionDeniedError(BusinessException):
     def __init__(self, message: str = "权限不足", data: Any = None) -> None:
         super().__init__(code=1003, message=message, status_code=403, data=data)

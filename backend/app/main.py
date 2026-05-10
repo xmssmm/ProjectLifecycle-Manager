@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
+from app.api.v1.auth import get_auth_failure_store
+from app.api.v1.auth import router as auth_router
 from app.core.config import Settings, get_settings
 from app.core.exceptions import BusinessException, business_exception_handler
 from app.core.health import collect_health
@@ -18,6 +20,7 @@ from app.core.middleware import (
     configure_logging,
 )
 from app.core.responses import success_response
+from app.services.auth import AuthFailureStore, RedisAuthFailureStore
 
 HealthChecker = Callable[[], Awaitable[dict[str, str]]]
 
@@ -51,18 +54,23 @@ def create_app(
     *,
     settings: Settings | None = None,
     rate_limit_store: RateLimitStore | None = None,
+    auth_failure_store: AuthFailureStore | None = None,
     health_checker: HealthChecker | None = None,
 ) -> FastAPI:
     configure_logging()
     resolved_settings = settings or get_settings()
     resolved_health_checker = health_checker or collect_health
     resolved_rate_limit_store = rate_limit_store or RedisRateLimitStore(resolved_settings.redis_url)
+    resolved_auth_failure_store = auth_failure_store or RedisAuthFailureStore(
+        resolved_settings.redis_url,
+    )
 
     app = FastAPI(
         title="企业项目过程管理与资料归档系统 API",
         version="0.1.0",
         description="企业项目过程管理与资料归档系统后端接口。",
         openapi_tags=[
+            {"name": "auth", "description": "Authentication endpoints."},
             {"name": "system", "description": "系统健康、版本与基础能力。"},
         ],
     )
@@ -85,6 +93,8 @@ def create_app(
     )
     app.add_middleware(RequestIdMiddleware)
     app.add_exception_handler(BusinessException, business_exception_handler)
+    app.dependency_overrides[get_auth_failure_store] = lambda: resolved_auth_failure_store
+    app.include_router(auth_router, prefix="/api/v1")
 
     @app.get("/health", tags=["system"])
     async def health() -> dict[str, Any]:

@@ -20,6 +20,23 @@ def verify_password(password: str, password_hash: str) -> bool:
     return cast(bool, password_context.verify(password, password_hash))
 
 
+def validate_password_strength(password: str) -> None:
+    missing_requirements: list[str] = []
+    if len(password) < 8:
+        missing_requirements.append("at least 8 characters")
+    if not any(character.isupper() for character in password):
+        missing_requirements.append("an uppercase letter")
+    if not any(character.islower() for character in password):
+        missing_requirements.append("a lowercase letter")
+    if not any(character.isdigit() for character in password):
+        missing_requirements.append("a number")
+    if not any(not character.isalnum() for character in password):
+        missing_requirements.append("a special character")
+
+    if missing_requirements:
+        raise ValueError("Password must include " + ", ".join(missing_requirements))
+
+
 def create_jwt_token(
     *,
     subject: str,
