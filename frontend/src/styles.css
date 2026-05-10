@@ -145,6 +145,83 @@ body {
   font-weight: 700;
 }
 
+.data-table__pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.search-bar {
+  padding: 16px 16px 0;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.confirm-dialog__message {
+  margin: 0;
+  color: #344054;
+  line-height: 1.6;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.status-tag--danger {
+  border-color: #fecdca;
+  color: #b42318;
+  background: #fffbfa;
+}
+
+.status-tag--info {
+  border-color: #d0d5dd;
+  color: #475467;
+  background: #f9fafb;
+}
+
+.status-tag--primary {
+  border-color: var(--el-color-primary-light-7);
+  color: var(--el-color-primary-dark-2);
+  background: var(--el-color-primary-light-9);
+}
+
+.status-tag--success {
+  border-color: #abefc6;
+  color: #067647;
+  background: #f6fef9;
+}
+
+.status-tag--warning {
+  border-color: #fedf89;
+  color: #b54708;
+  background: #fffcf5;
+}
+
+.component-demo {
+  max-width: 1120px;
+}
+
+.component-demo h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.component-demo__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+
 @media (width <= 768px) {
   .app-shell {
     display: block;
@@ -172,5 +249,10 @@ body {
     grid-template-columns: 1fr;
     min-width: 0;
     margin-top: 20px;
+  }
+
+  .component-demo__status {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

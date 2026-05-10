@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, Folder, House, Setting } from '@element-plus/icons-vue';
+import { Bell, Box, Folder, House, Setting } from '@element-plus/icons-vue';
 </script>
 
 <template>
@@ -21,6 +21,10 @@ import { Bell, Folder, House, Setting } from '@element-plus/icons-vue';
         <el-menu-item disabled index="/notifications">
           <el-icon><Bell /></el-icon>
           <span>通知</span>
+        </el-menu-item>
+        <el-menu-item index="/component-demo">
+          <el-icon><Box /></el-icon>
+          <span>组件</span>
         </el-menu-item>
         <el-menu-item disabled index="/admin">
           <el-icon><Setting /></el-icon>
