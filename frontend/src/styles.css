@@ -232,6 +232,60 @@ body {
   margin: 16px 0;
 }
 
+.admin-page {
+  display: grid;
+  gap: 16px;
+  max-width: 1280px;
+}
+
+.admin-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-page__header h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.admin-page__header p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.admin-page__table {
+  padding: 16px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.user-edit-form {
+  display: grid;
+  gap: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .login-page {
   display: grid;
   place-items: center;
@@ -308,6 +362,11 @@ body {
   }
 
   .component-demo__status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-page__header {
     align-items: flex-start;
     flex-direction: column;
   }

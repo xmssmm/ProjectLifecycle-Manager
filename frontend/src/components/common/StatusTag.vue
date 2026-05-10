@@ -7,8 +7,11 @@ const STATUS_MAP: Record<
 > = {
   approved: { label: '已通过', type: 'success' },
   archived: { label: '已归档', type: 'info' },
+  active: { label: '启用', type: 'success' },
+  disabled: { label: '停用', type: 'info' },
   draft: { label: '草稿', type: 'info' },
   pending_review: { label: '待审核', type: 'warning' },
+  password_reset_required: { label: '需改密', type: 'warning' },
   rejected: { label: '已退回', type: 'danger' },
   submitted: { label: '已提交', type: 'primary' },
 };
