@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -47,6 +49,21 @@ def make_user() -> User:
         created_at=now,
         updated_at=now,
     )
+
+
+def tamper_jwt_payload(token: str) -> str:
+    header, payload, signature = token.split(".")
+    padded_payload = payload + "=" * (-len(payload) % 4)
+    claims = json.loads(base64.urlsafe_b64decode(padded_payload))
+    claims["role"] = UserRole.proj_member.value
+    tampered_payload = (
+        base64.urlsafe_b64encode(
+            json.dumps(claims, separators=(",", ":")).encode("utf-8"),
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
+    return ".".join((header, tampered_payload, signature))
 
 
 class FakeSession:
@@ -162,8 +179,7 @@ async def test_validate_token_claims_rejects_tampered_and_expired_tokens() -> No
     user = make_user()
     token_store = InMemoryAuthTokenStore()
     tokens = create_auth_tokens(user, settings)
-    replacement = "x" if tokens.access_token[-1] != "x" else "y"
-    tampered = f"{tokens.access_token[:-1]}{replacement}"
+    tampered = tamper_jwt_payload(tokens.access_token)
     expired = create_jwt_token(
         subject=str(user.id),
         key=settings.jwt_secret_key,
