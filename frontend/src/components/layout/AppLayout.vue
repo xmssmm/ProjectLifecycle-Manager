@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { Bell, Box, Folder, House, Setting, SwitchButton, User } from '@element-plus/icons-vue';
+import {
+  Bell,
+  Box,
+  Folder,
+  House,
+  List,
+  Setting,
+  SwitchButton,
+  User,
+} from '@element-plus/icons-vue';
 import { computed, type Component } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -23,6 +32,7 @@ const navItems: NavItem[] = [
   { icon: House, index: '/', label: '工作台' },
   { icon: User, index: '/profile', label: '我的' },
   { icon: Folder, index: '/main-projects', label: '项目' },
+  { icon: List, index: '/tasks', label: '任务' },
   { disabled: true, icon: Bell, index: '/notifications', label: '通知' },
   { icon: User, index: '/admin/users', label: '用户', requireRole: ['admin'] },
   { icon: Setting, index: '/admin/departments', label: '部门', requireRole: ['admin'] },

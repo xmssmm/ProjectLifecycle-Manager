@@ -14,6 +14,7 @@ const STATUS_MAP: Record<
   draft: { label: '草稿', type: 'info' },
   in_progress: { label: '进行中', type: 'primary' },
   not_started: { label: '未开始', type: 'info' },
+  overdue: { label: '已逾期', type: 'danger' },
   pending_review: { label: '待审核', type: 'warning' },
   password_reset_required: { label: '需改密', type: 'warning' },
   rejected: { label: '已退回', type: 'danger' },

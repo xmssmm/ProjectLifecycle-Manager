@@ -19,6 +19,8 @@ import SubProjectDetailView from '@/views/sub-project/SubProjectDetail.vue';
 import SubProjectEditView from '@/views/sub-project/SubProjectEdit.vue';
 import SubProjectListView from '@/views/sub-project/SubProjectList.vue';
 import SubProjectReviewView from '@/views/sub-project/SubProjectReview.vue';
+import TaskDetailView from '@/views/task/TaskDetail.vue';
+import TaskListView from '@/views/task/TaskList.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -124,6 +126,19 @@ const router = createRouter({
       component: SubProjectDetailView,
       meta: { requiresAuth: true },
       props: (route) => ({ subProjectId: String(route.params.id) }),
+    },
+    {
+      path: '/tasks',
+      name: 'tasks',
+      component: TaskListView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/tasks/:id',
+      name: 'task-detail',
+      component: TaskDetailView,
+      meta: { requiresAuth: true },
+      props: (route) => ({ taskId: String(route.params.id) }),
     },
     {
       path: '/profile',
