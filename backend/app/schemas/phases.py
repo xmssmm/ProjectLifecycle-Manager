@@ -53,7 +53,10 @@ class PhaseRequiredDocumentRead(BaseModel):
 class PhaseUploadedDocumentRead(BaseModel):
     id: UUID
     doc_type: str
+    file_name: str
+    file_size: int
     version: int
+    uploader_id: UUID
     uploaded_at: datetime
 
 
@@ -67,6 +70,11 @@ class PhaseDetailRead(PhaseRead):
     required_documents: list[PhaseRequiredDocumentRead]
     uploaded_documents: list[PhaseUploadedDocumentRead]
     completion: PhaseCompletionRead
+
+
+class PhasePromotionRead(BaseModel):
+    phase: PhaseRead
+    activated_phase: PhaseRead | None
 
 
 class PhaseHistoryRead(BaseModel):

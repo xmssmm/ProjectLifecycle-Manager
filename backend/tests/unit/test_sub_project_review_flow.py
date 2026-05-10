@@ -166,7 +166,13 @@ async def test_review_sub_project_approves_and_creates_six_phases() -> None:
     assert len(repository.phases) == 6
     assert [phase.phase_no for phase in repository.phases] == [1, 2, 3, 4, 5, 6]
     assert repository.phases[0].status == PhaseStatus.in_progress
-    assert [phase.status for phase in repository.phases[1:]] == [PhaseStatus.waiting] * 5
+    assert [phase.status for phase in repository.phases[1:]] == [
+        PhaseStatus.waiting,
+        PhaseStatus.waiting,
+        PhaseStatus.waiting,
+        PhaseStatus.in_progress,
+        PhaseStatus.waiting,
+    ]
     assert repository.reviews[0].decision == ProjectReviewDecision.approve
     assert notification_repository.notifications[0].scenario == "project_review_result"
     assert notification_repository.notifications[0].receiver_id == leader.id

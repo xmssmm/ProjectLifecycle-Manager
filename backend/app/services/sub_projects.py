@@ -1217,8 +1217,10 @@ class SubProjectService:
                     phase_no=phase_no,
                     code=code,
                     name=name,
-                    status=PhaseStatus.in_progress if phase_no == 1 else PhaseStatus.waiting,
-                    enter_at=now if phase_no == 1 else None,
+                    status=PhaseStatus.in_progress
+                    if phase_no in {1, 5}
+                    else PhaseStatus.waiting,
+                    enter_at=now if phase_no in {1, 5} else None,
                     finish_at=None,
                     procurement_type=None,
                     created_at=now,
