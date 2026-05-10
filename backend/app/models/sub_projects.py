@@ -148,6 +148,48 @@ class SubProjectMember(UuidPrimaryKeyMixin, TimestampMixin, Base):
     user: Mapped[User] = relationship()
 
 
+class SubProjectHandover(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "sub_project_handovers"
+    __table_args__ = (
+        Index("ix_sub_project_handovers_sub_project_operated", "sub_project_id", "operated_at"),
+        Index("ix_sub_project_handovers_from_user_id", "from_user_id"),
+        Index("ix_sub_project_handovers_to_user_id", "to_user_id"),
+        Index("ix_sub_project_handovers_operator_id", "operator_id"),
+    )
+
+    sub_project_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("sub_projects.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    from_user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    to_user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    operator_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    operated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    sub_project: Mapped[SubProject] = relationship()
+    from_user: Mapped[User] = relationship(foreign_keys=[from_user_id])
+    to_user: Mapped[User] = relationship(foreign_keys=[to_user_id])
+    operator: Mapped[User] = relationship(foreign_keys=[operator_id])
+
+
 class SubProjectNoCounter(Base):
     __tablename__ = "sub_project_no_counters"
 

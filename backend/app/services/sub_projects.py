@@ -24,13 +24,16 @@ from app.models.main_projects import (
 from app.models.phases import Phase, PhaseStatus
 from app.models.sub_projects import (
     SubProject,
+    SubProjectHandover,
     SubProjectMember,
     SubProjectMemberRole,
     SubProjectStatus,
 )
 from app.models.users import User, UserRole, UserStatus
 from app.schemas.sub_projects import (
+    SubProjectBatchHandoverItem,
     SubProjectCreate,
+    SubProjectHandoverRequest,
     SubProjectMemberCreate,
     SubProjectReviewRequest,
     SubProjectTerminateRequest,
@@ -52,6 +55,9 @@ APPROVED_SUB_PROJECT_STATUSES = frozenset(
         SubProjectStatus.completed,
         SubProjectStatus.closed,
     },
+)
+ACTIVE_HANDOVER_STATUSES = frozenset(
+    {SubProjectStatus.not_started, SubProjectStatus.in_progress, SubProjectStatus.completed},
 )
 DEFAULT_PHASES = (
     (1, "initiation", "立项"),
@@ -83,6 +89,9 @@ class SubProjectRepository(Protocol):
         ...
 
     async def list_members(self, sub_project_id: UUID) -> list[SubProjectMember]:
+        ...
+
+    async def list_active_sub_projects_for_leader(self, user_id: UUID) -> list[SubProject]:
         ...
 
     async def get_member(
@@ -125,6 +134,9 @@ class SubProjectRepository(Protocol):
         ...
 
     def add_member(self, member: SubProjectMember) -> None:
+        ...
+
+    def add_handover(self, handover: SubProjectHandover) -> None:
         ...
 
     async def delete_member(self, member: SubProjectMember) -> None:
@@ -190,6 +202,17 @@ class SqlAlchemySubProjectRepository:
             select(SubProjectMember)
             .where(SubProjectMember.sub_project_id == sub_project_id)
             .order_by(SubProjectMember.role_in_project.asc(), SubProjectMember.joined_at.asc()),
+        )
+        return list(result.all())
+
+    async def list_active_sub_projects_for_leader(self, user_id: UUID) -> list[SubProject]:
+        result = await self._session.scalars(
+            select(SubProject)
+            .where(
+                SubProject.manager_id == user_id,
+                SubProject.status.in_(list(ACTIVE_HANDOVER_STATUSES)),
+            )
+            .order_by(SubProject.created_at.desc()),
         )
         return list(result.all())
 
@@ -280,6 +303,9 @@ class SqlAlchemySubProjectRepository:
     def add_member(self, member: SubProjectMember) -> None:
         self._session.add(member)
 
+    def add_handover(self, handover: SubProjectHandover) -> None:
+        self._session.add(handover)
+
     async def delete_member(self, member: SubProjectMember) -> None:
         await self._session.delete(member)
 
@@ -297,12 +323,14 @@ class InMemorySubProjectRepository:
         main_projects: Sequence[MainProject],
         sub_projects: Sequence[SubProject] | None = None,
         members: Sequence[SubProjectMember] | None = None,
+        handovers: Sequence[SubProjectHandover] | None = None,
         users: Sequence[User] | None = None,
         next_sequences: dict[UUID, int] | None = None,
     ) -> None:
         self.main_projects = list(main_projects)
         self.sub_projects = list(sub_projects or [])
         self.members = list(members or [])
+        self.handovers = list(handovers or [])
         self.users = list(users or [])
         self.reviews: list[ProjectReview] = []
         self.phases: list[Phase] = []
@@ -349,6 +377,14 @@ class InMemorySubProjectRepository:
             members,
             key=lambda member: (member.role_in_project.value, member.joined_at),
         )
+
+    async def list_active_sub_projects_for_leader(self, user_id: UUID) -> list[SubProject]:
+        active = [
+            sub_project
+            for sub_project in self.sub_projects
+            if sub_project.manager_id == user_id and sub_project.status in ACTIVE_HANDOVER_STATUSES
+        ]
+        return sorted(active, key=lambda sub_project: sub_project.created_at, reverse=True)
 
     async def get_member(
         self,
@@ -423,6 +459,9 @@ class InMemorySubProjectRepository:
 
     def add_member(self, member: SubProjectMember) -> None:
         self.members.append(member)
+
+    def add_handover(self, handover: SubProjectHandover) -> None:
+        self.handovers.append(handover)
 
     async def delete_member(self, member: SubProjectMember) -> None:
         self.members.remove(member)
@@ -570,6 +609,146 @@ class SubProjectService:
             audit_context=audit_context,
         )
         return member
+
+    async def list_active_sub_projects_for_leader(
+        self,
+        *,
+        actor: User,
+        user_id: UUID,
+    ) -> list[SubProject]:
+        if actor.role != UserRole.admin:
+            raise PermissionDeniedError()
+        return await self._repository.list_active_sub_projects_for_leader(user_id)
+
+    async def handover_sub_project(
+        self,
+        *,
+        actor: User,
+        sub_project_id: UUID,
+        payload: SubProjectHandoverRequest,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+        expected_from_user_id: UUID | None = None,
+    ) -> SubProject:
+        if actor.role != UserRole.admin:
+            raise PermissionDeniedError()
+
+        sub_project = await self._get_existing_sub_project(sub_project_id)
+        if sub_project.status not in ACTIVE_HANDOVER_STATUSES:
+            raise self._invalid_status(sub_project.status.value, "当前状态不允许转交负责人")
+        if expected_from_user_id is not None and sub_project.manager_id != expected_from_user_id:
+            raise BusinessException(
+                code=3003,
+                message="子项目当前负责人不匹配",
+                status_code=409,
+                data={
+                    "sub_project_id": str(sub_project.id),
+                    "expected_from_user_id": str(expected_from_user_id),
+                    "actual_manager_id": str(sub_project.manager_id),
+                },
+            )
+        if payload.to_user_id == sub_project.manager_id:
+            raise BusinessException(
+                code=3003,
+                message="新负责人不能与原负责人相同",
+                status_code=409,
+                data={"to_user_id": str(payload.to_user_id)},
+            )
+
+        from_user = await self._repository.get_user(sub_project.manager_id)
+        to_user = await self._repository.get_user(payload.to_user_id)
+        if to_user is None:
+            raise ResourceNotFoundError("新负责人不存在")
+        if to_user.role != UserRole.proj_leader or to_user.status != UserStatus.active:
+            raise BusinessException(
+                code=3003,
+                message="新负责人必须是活跃项目负责人",
+                status_code=409,
+                data={"status": to_user.status.value, "role": to_user.role.value},
+            )
+
+        now = datetime.now(UTC)
+        before_state = to_audit_state(sub_project)
+        old_manager_id = sub_project.manager_id
+        sub_project.manager_id = to_user.id
+        await self._upsert_handover_members(
+            sub_project=sub_project,
+            old_manager_id=old_manager_id,
+            new_manager_id=to_user.id,
+            now=now,
+        )
+        self._repository.add_handover(
+            SubProjectHandover(
+                id=uuid4(),
+                sub_project_id=sub_project.id,
+                from_user_id=old_manager_id,
+                to_user_id=to_user.id,
+                reason=payload.reason,
+                operator_id=actor.id,
+                operated_at=now,
+                created_at=now,
+                updated_at=now,
+            ),
+        )
+        await self._repository.commit()
+        await self._repository.refresh(sub_project)
+
+        member_ids = await self._active_member_ids(sub_project.id)
+        receivers = [to_user.id, *member_ids]
+        if from_user is not None and from_user.status != UserStatus.disabled:
+            receivers.insert(0, from_user.id)
+        await self._send_notification(
+            scenario="handover_completed",
+            receivers=receivers,
+            source_id=sub_project.id,
+            payload={
+                "project_no": sub_project.project_no,
+                "project_name": sub_project.name,
+                "from_user_id": str(old_manager_id),
+                "to_user_id": str(to_user.id),
+                "reason": payload.reason,
+            },
+        )
+        self._record_audit(
+            action="sub_project.handover",
+            actor=actor,
+            sub_project=sub_project,
+            before_state=before_state,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            extra={
+                "from_user_id": str(old_manager_id),
+                "to_user_id": str(to_user.id),
+                "reason": payload.reason,
+            },
+        )
+        return sub_project
+
+    async def batch_handover_sub_projects(
+        self,
+        *,
+        actor: User,
+        from_user_id: UUID,
+        payload: Sequence[SubProjectBatchHandoverItem],
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> list[SubProject]:
+        if actor.role != UserRole.admin:
+            raise PermissionDeniedError()
+        return [
+            await self.handover_sub_project(
+                actor=actor,
+                sub_project_id=item.sub_project_id,
+                payload=SubProjectHandoverRequest(
+                    to_user_id=item.to_user_id,
+                    reason=item.reason,
+                ),
+                expected_from_user_id=from_user_id,
+                audit_writer=audit_writer,
+                audit_context=audit_context,
+            )
+            for item in payload
+        ]
 
     async def create_sub_project(self, *, actor: User, payload: SubProjectCreate) -> SubProject:
         if actor.role != UserRole.proj_leader:
@@ -870,6 +1049,49 @@ class SubProjectService:
         if actor.role == UserRole.proj_leader and sub_project.manager_id == actor.id:
             return
         raise PermissionDeniedError()
+
+    async def _upsert_handover_members(
+        self,
+        *,
+        sub_project: SubProject,
+        old_manager_id: UUID,
+        new_manager_id: UUID,
+        now: datetime,
+    ) -> None:
+        old_member = await self._repository.get_member(
+            sub_project_id=sub_project.id,
+            user_id=old_manager_id,
+        )
+        if old_member is not None:
+            old_member.role_in_project = SubProjectMemberRole.proj_member
+
+        new_member = await self._repository.get_member(
+            sub_project_id=sub_project.id,
+            user_id=new_manager_id,
+        )
+        if new_member is not None:
+            new_member.role_in_project = SubProjectMemberRole.proj_leader
+            return
+
+        self._repository.add_member(
+            SubProjectMember(
+                id=uuid4(),
+                sub_project_id=sub_project.id,
+                user_id=new_manager_id,
+                role_in_project=SubProjectMemberRole.proj_leader,
+                joined_at=now,
+                created_at=now,
+                updated_at=now,
+            ),
+        )
+
+    async def _active_member_ids(self, sub_project_id: UUID) -> list[UUID]:
+        active_user_ids: list[UUID] = []
+        for member in await self._repository.list_members(sub_project_id):
+            user = await self._repository.get_user(member.user_id)
+            if user is not None and user.status != UserStatus.disabled:
+                active_user_ids.append(member.user_id)
+        return active_user_ids
 
     async def _validate_over_budget(
         self,

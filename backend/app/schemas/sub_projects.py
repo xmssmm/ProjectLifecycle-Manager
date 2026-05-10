@@ -75,6 +75,20 @@ class SubProjectMemberCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class SubProjectHandoverRequest(BaseModel):
+    to_user_id: UUID
+    reason: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=500),
+    ]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SubProjectBatchHandoverItem(SubProjectHandoverRequest):
+    sub_project_id: UUID
+
+
 class SubProjectRead(BaseModel):
     id: UUID
     project_no: str

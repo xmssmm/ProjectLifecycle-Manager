@@ -1,15 +1,20 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.core.db import get_db_session
+from app.core.db import AsyncSessionLocal, get_db_session
 from app.core.deps import get_auth_token_store, get_current_user
 from app.core.permissions import require_role
 from app.core.responses import success_response
 from app.models.users import User, UserRole
+from app.schemas.sub_projects import (
+    SubProjectBatchHandoverItem,
+    SubProjectListRead,
+    SubProjectRead,
+)
 from app.schemas.users import (
     PasswordChangeRequest,
     PasswordResetRequest,
@@ -18,8 +23,15 @@ from app.schemas.users import (
     UserRead,
     UserUpdate,
 )
+from app.services.audit import AuditContext, BackgroundAuditLogWriter, get_audit_context
 from app.services.auth import AuthTokenStore
-from app.services.users import NoopProjectAssignmentReader, SqlAlchemyUserRepository, UserService
+from app.services.notifications import NotificationService, SqlAlchemyNotificationRepository
+from app.services.sub_projects import SqlAlchemySubProjectRepository, SubProjectService
+from app.services.users import (
+    SqlAlchemyProjectAssignmentReader,
+    SqlAlchemyUserRepository,
+    UserService,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -36,8 +48,19 @@ async def get_user_service(
     return UserService(
         repository=SqlAlchemyUserRepository(session),
         token_store=token_store,
-        project_reader=NoopProjectAssignmentReader(),
+        project_reader=SqlAlchemyProjectAssignmentReader(session),
         token_revoke_ttl_seconds=get_token_revoke_ttl_seconds(settings),
+    )
+
+
+async def get_project_handover_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SubProjectService:
+    return SubProjectService(
+        repository=SqlAlchemySubProjectRepository(session),
+        notification_service=NotificationService(
+            repository=SqlAlchemyNotificationRepository(session),
+        ),
     )
 
 
@@ -86,6 +109,54 @@ async def change_own_password(
 ) -> dict[str, object]:
     user = await service.change_own_password(actor=current_user, payload=payload)
     return success_response(serialize_user(user))
+
+
+@router.get("/{user_id}/active-sub-projects")
+async def list_active_sub_projects_for_leader(
+    user_id: UUID,
+    service: Annotated[SubProjectService, Depends(get_project_handover_service)],
+    current_user: Annotated[User, Depends(require_role(UserRole.admin))],
+) -> dict[str, object]:
+    sub_projects = await service.list_active_sub_projects_for_leader(
+        actor=current_user,
+        user_id=user_id,
+    )
+    payload = SubProjectListRead(
+        items=[SubProjectRead.model_validate(sub_project) for sub_project in sub_projects],
+        total=len(sub_projects),
+        page=1,
+        page_size=len(sub_projects),
+    )
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.post("/{user_id}/batch-handover")
+async def batch_handover_sub_projects(
+    user_id: UUID,
+    payload: Annotated[list[SubProjectBatchHandoverItem], Body(min_length=1)],
+    background_tasks: BackgroundTasks,
+    service: Annotated[SubProjectService, Depends(get_project_handover_service)],
+    current_user: Annotated[User, Depends(require_role(UserRole.admin))],
+) -> dict[str, object]:
+    sub_projects = await service.batch_handover_sub_projects(
+        actor=current_user,
+        from_user_id=user_id,
+        payload=payload,
+        audit_writer=BackgroundAuditLogWriter(
+            background_tasks=background_tasks,
+            session_factory=AsyncSessionLocal,
+        ),
+        audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
+    )
+    return success_response(
+        {
+            "items": [
+                SubProjectRead.model_validate(sub_project).model_dump(mode="json")
+                for sub_project in sub_projects
+            ],
+            "total": len(sub_projects),
+        },
+    )
 
 
 @router.get("/{user_id}")

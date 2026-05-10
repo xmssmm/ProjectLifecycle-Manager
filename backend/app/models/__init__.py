@@ -19,6 +19,7 @@ from app.models.phases import (
 )
 from app.models.sub_projects import (
     SubProject,
+    SubProjectHandover,
     SubProjectMember,
     SubProjectMemberRole,
     SubProjectNoCounter,
@@ -35,6 +36,7 @@ __all__ = [
     "ProjectReview",
     "ProjectReviewDecision",
     "SubProject",
+    "SubProjectHandover",
     "SubProjectMember",
     "SubProjectMemberRole",
     "SubProjectNoCounter",

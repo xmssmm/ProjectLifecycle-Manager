@@ -17,6 +17,7 @@ from app.core.exceptions import (
     ResourceNotFoundError,
 )
 from app.core.security import hash_password, validate_password_strength, verify_password
+from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
 from app.schemas.users import PasswordChangeRequest, PasswordResetRequest, UserCreate, UserUpdate
 from app.services.auth import AuthTokenStore
@@ -108,6 +109,26 @@ class SqlAlchemyUserRepository:
 
     async def refresh(self, user: User) -> None:
         await self._session.refresh(user)
+
+
+class SqlAlchemyProjectAssignmentReader:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def count_active_sub_projects_for_leader(self, user_id: UUID) -> int:
+        value = await self._session.scalar(
+            select(func.count()).select_from(SubProject).where(
+                SubProject.manager_id == user_id,
+                SubProject.status.in_(
+                    [
+                        SubProjectStatus.not_started,
+                        SubProjectStatus.in_progress,
+                        SubProjectStatus.completed,
+                    ],
+                ),
+            ),
+        )
+        return int(value or 0)
 
 
 class InMemoryUserRepository:
