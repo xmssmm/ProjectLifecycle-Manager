@@ -4,17 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getUnreadNotificationCount,
   listNotifications,
+  listNotificationPreferences,
   markAllNotificationsRead,
   markNotificationRead,
+  updateNotificationPreferences,
 } from '@/api/notifications';
 import { useNotificationStore } from '@/stores/useNotificationStore';
-import type { NotificationRead } from '@/types/notifications';
+import type { NotificationPreferenceRead, NotificationRead } from '@/types/notifications';
 
 vi.mock('@/api/notifications', () => ({
   getUnreadNotificationCount: vi.fn(),
   listNotifications: vi.fn(),
+  listNotificationPreferences: vi.fn(),
   markAllNotificationsRead: vi.fn(),
   markNotificationRead: vi.fn(),
+  updateNotificationPreferences: vi.fn(),
 }));
 
 describe('notification store', () => {
@@ -54,6 +58,23 @@ describe('notification store', () => {
     expect(store.notifications.every((notification) => notification.read_at !== null)).toBe(true);
     expect(store.unreadCount).toBe(0);
   });
+
+  it('loads and saves notification preferences', async () => {
+    vi.mocked(listNotificationPreferences).mockResolvedValue({ items: [taskPreference] });
+    vi.mocked(updateNotificationPreferences).mockResolvedValue({
+      items: [{ ...taskPreference, enabled: false }],
+    });
+    const store = useNotificationStore();
+
+    await store.fetchPreferences();
+    await store.savePreferences([{ scenario: 'task_assigned', enabled: false }]);
+
+    expect(listNotificationPreferences).toHaveBeenCalled();
+    expect(updateNotificationPreferences).toHaveBeenCalledWith({
+      preferences: [{ enabled: false, scenario: 'task_assigned' }],
+    });
+    expect(store.preferences).toEqual([{ ...taskPreference, enabled: false }]);
+  });
 });
 
 const unreadNotification: NotificationRead = {
@@ -72,4 +93,12 @@ const readNotification: NotificationRead = {
   ...unreadNotification,
   id: 'notif-2',
   read_at: '2026-05-09T01:00:00Z',
+};
+
+const taskPreference: NotificationPreferenceRead = {
+  description: '任务执行人收到任务分配提醒',
+  direct_related: true,
+  enabled: true,
+  label: '任务分配',
+  scenario: 'task_assigned',
 };

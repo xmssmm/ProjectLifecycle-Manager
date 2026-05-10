@@ -11,12 +11,16 @@ from app.models.notifications import Notification
 from app.models.users import User
 from app.schemas.notifications import (
     NotificationListRead,
+    NotificationPreferenceListRead,
+    NotificationPreferenceRead,
+    NotificationPreferenceUpdate,
     NotificationRead,
     NotificationReadAllResult,
     NotificationUnreadCountRead,
 )
 from app.services.notifications import (
     NotificationPage,
+    NotificationPreferenceState,
     NotificationService,
     SqlAlchemyNotificationRepository,
 )
@@ -44,6 +48,24 @@ def serialize_notification_page(page: NotificationPage) -> dict[str, object]:
     return payload.model_dump(mode="json")
 
 
+def serialize_notification_preferences(
+    preferences: list[NotificationPreferenceState],
+) -> dict[str, object]:
+    payload = NotificationPreferenceListRead(
+        items=[
+            NotificationPreferenceRead(
+                scenario=preference.scenario,
+                label=preference.label,
+                description=preference.description,
+                direct_related=preference.direct_related,
+                enabled=preference.enabled,
+            )
+            for preference in preferences
+        ],
+    )
+    return payload.model_dump(mode="json")
+
+
 @router.get("")
 async def list_notifications(
     service: Annotated[NotificationService, Depends(get_notification_service)],
@@ -59,6 +81,28 @@ async def list_notifications(
         unread=unread,
     )
     return success_response(serialize_notification_page(notification_page))
+
+
+@router.get("/preferences")
+async def list_notification_preferences(
+    service: Annotated[NotificationService, Depends(get_notification_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    preferences = await service.list_preferences(actor=current_user)
+    return success_response(serialize_notification_preferences(preferences))
+
+
+@router.put("/preferences")
+async def update_notification_preferences(
+    payload: NotificationPreferenceUpdate,
+    service: Annotated[NotificationService, Depends(get_notification_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, object]:
+    preferences = await service.update_preferences(
+        actor=current_user,
+        preferences={item.scenario: item.enabled for item in payload.preferences},
+    )
+    return success_response(serialize_notification_preferences(preferences))
 
 
 @router.get("/unread-count")

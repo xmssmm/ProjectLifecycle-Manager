@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ResourceNotFoundError, ValidationFailedError
-from app.models.notifications import Notification
+from app.models.notifications import Notification, NotificationPreference
 from app.models.users import User
 
 BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
@@ -29,8 +29,119 @@ class NotificationPage:
     total: int
 
 
+@dataclass(frozen=True)
+class NotificationScenarioDefinition:
+    scenario: str
+    label: str
+    description: str
+    direct_related: bool
+
+
+@dataclass(frozen=True)
+class NotificationPreferenceState:
+    scenario: str
+    label: str
+    description: str
+    direct_related: bool
+    enabled: bool
+
+
+NOTIFICATION_SCENARIOS: tuple[NotificationScenarioDefinition, ...] = (
+    NotificationScenarioDefinition(
+        scenario="project_pending_review",
+        label="项目待审核",
+        description="主项目或子项目提交后等待审核",
+        direct_related=False,
+    ),
+    NotificationScenarioDefinition(
+        scenario="project_review_result",
+        label="审核结果",
+        description="提交的项目审核通过或驳回",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
+        scenario="task_assigned",
+        label="任务分配",
+        description="被分配为任务执行人",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
+        scenario="task_due_today",
+        label="任务今日到期",
+        description="负责的任务计划今日完成",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
+        scenario="task_overdue",
+        label="任务逾期",
+        description="负责的任务已经逾期",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
+        scenario="task_overdue_escalation",
+        label="逾期升级",
+        description="管理人员收到任务逾期升级提醒",
+        direct_related=False,
+    ),
+    NotificationScenarioDefinition(
+        scenario="payment_created",
+        label="付款登记",
+        description="关联项目新增付款记录",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
+        scenario="over_budget_warning",
+        label="预算预警",
+        description="付款后项目预算使用触发预警",
+        direct_related=False,
+    ),
+    NotificationScenarioDefinition(
+        scenario="revoke_request_pending",
+        label="撤回待审核",
+        description="项目环节撤回申请等待审核",
+        direct_related=False,
+    ),
+    NotificationScenarioDefinition(
+        scenario="revoke_result",
+        label="撤回结果",
+        description="提交的撤回申请审核完成",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
+        scenario="phase_promoted",
+        label="环节推进",
+        description="关联项目推进到新环节",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
+        scenario="handover_completed",
+        label="负责人转交",
+        description="子项目负责人转交完成",
+        direct_related=True,
+    ),
+)
+
+NOTIFICATION_SCENARIO_BY_CODE = {
+    definition.scenario: definition for definition in NOTIFICATION_SCENARIOS
+}
+
+
 class NotificationRepository(Protocol):
     async def existing_dedup_keys(self, dedup_keys: Sequence[str]) -> set[str]:
+        ...
+
+    async def disabled_receivers_for_scenario(
+        self,
+        *,
+        scenario: str,
+        receiver_ids: Sequence[UUID],
+    ) -> set[UUID]:
+        ...
+
+    async def list_preferences(self, user_id: UUID) -> dict[str, bool]:
+        ...
+
+    async def upsert_preferences(self, *, user_id: UUID, preferences: Mapping[str, bool]) -> None:
         ...
 
     async def list_notifications(
@@ -77,6 +188,58 @@ class SqlAlchemyNotificationRepository:
             select(Notification.dedup_key).where(Notification.dedup_key.in_(dedup_keys)),
         )
         return set(result.all())
+
+    async def disabled_receivers_for_scenario(
+        self,
+        *,
+        scenario: str,
+        receiver_ids: Sequence[UUID],
+    ) -> set[UUID]:
+        if not receiver_ids:
+            return set()
+
+        result = await self._session.scalars(
+            select(NotificationPreference.user_id).where(
+                NotificationPreference.user_id.in_(receiver_ids),
+                NotificationPreference.scenario == scenario,
+                NotificationPreference.enabled.is_(False),
+            ),
+        )
+        return set(result.all())
+
+    async def list_preferences(self, user_id: UUID) -> dict[str, bool]:
+        result = await self._session.scalars(
+            select(NotificationPreference).where(NotificationPreference.user_id == user_id),
+        )
+        return {preference.scenario: preference.enabled for preference in result.all()}
+
+    async def upsert_preferences(self, *, user_id: UUID, preferences: Mapping[str, bool]) -> None:
+        if not preferences:
+            return
+
+        scenarios = list(preferences.keys())
+        result = await self._session.scalars(
+            select(NotificationPreference).where(
+                NotificationPreference.user_id == user_id,
+                NotificationPreference.scenario.in_(scenarios),
+            ),
+        )
+        existing = {preference.scenario: preference for preference in result.all()}
+        now = datetime.now(UTC)
+        for scenario, enabled in preferences.items():
+            preference = existing.get(scenario)
+            if preference is None:
+                preference = NotificationPreference(
+                    user_id=user_id,
+                    scenario=scenario,
+                    enabled=enabled,
+                    created_at=now,
+                    updated_at=now,
+                )
+                self._session.add(preference)
+                continue
+            preference.enabled = enabled
+            preference.updated_at = now
 
     async def list_notifications(
         self,
@@ -145,8 +308,13 @@ class SqlAlchemyNotificationRepository:
 
 
 class InMemoryNotificationRepository:
-    def __init__(self, notifications: Sequence[Notification] | None = None) -> None:
+    def __init__(
+        self,
+        notifications: Sequence[Notification] | None = None,
+        preferences: Mapping[tuple[UUID, str], bool] | None = None,
+    ) -> None:
         self.notifications = list(notifications or [])
+        self.preferences = dict(preferences or {})
 
     async def existing_dedup_keys(self, dedup_keys: Sequence[str]) -> set[str]:
         requested = set(dedup_keys)
@@ -155,6 +323,29 @@ class InMemoryNotificationRepository:
             for notification in self.notifications
             if notification.dedup_key in requested
         }
+
+    async def disabled_receivers_for_scenario(
+        self,
+        *,
+        scenario: str,
+        receiver_ids: Sequence[UUID],
+    ) -> set[UUID]:
+        return {
+            receiver_id
+            for receiver_id in receiver_ids
+            if self.preferences.get((receiver_id, scenario), True) is False
+        }
+
+    async def list_preferences(self, user_id: UUID) -> dict[str, bool]:
+        return {
+            scenario: enabled
+            for (preference_user_id, scenario), enabled in self.preferences.items()
+            if preference_user_id == user_id
+        }
+
+    async def upsert_preferences(self, *, user_id: UUID, preferences: Mapping[str, bool]) -> None:
+        for scenario, enabled in preferences.items():
+            self.preferences[(user_id, scenario)] = enabled
 
     async def list_notifications(
         self,
@@ -255,6 +446,12 @@ class NotificationService:
         receiver_ids = self._unique_receivers(receivers)
         if not receiver_ids:
             return []
+        receiver_ids = await self._filter_enabled_receivers(
+            scenario=scenario,
+            receiver_ids=receiver_ids,
+        )
+        if not receiver_ids:
+            return []
 
         source_key = str(source_id)
         business_date = self._business_date_provider()
@@ -313,6 +510,41 @@ class NotificationService:
     async def unread_count(self, *, actor: User) -> int:
         return await self._repository.count_unread(actor.id)
 
+    async def list_preferences(self, *, actor: User) -> list[NotificationPreferenceState]:
+        stored_preferences = await self._repository.list_preferences(actor.id)
+        return [
+            NotificationPreferenceState(
+                scenario=definition.scenario,
+                label=definition.label,
+                description=definition.description,
+                direct_related=definition.direct_related,
+                enabled=stored_preferences.get(definition.scenario, True),
+            )
+            for definition in NOTIFICATION_SCENARIOS
+        ]
+
+    async def update_preferences(
+        self,
+        *,
+        actor: User,
+        preferences: Mapping[str, bool],
+    ) -> list[NotificationPreferenceState]:
+        unknown_scenarios = sorted(
+            set(preferences.keys()) - set(NOTIFICATION_SCENARIO_BY_CODE.keys()),
+        )
+        if unknown_scenarios:
+            raise ValidationFailedError(
+                "Unknown notification scenario",
+                data={"scenarios": unknown_scenarios},
+            )
+
+        await self._repository.upsert_preferences(
+            user_id=actor.id,
+            preferences=preferences,
+        )
+        await self._repository.commit()
+        return await self.list_preferences(actor=actor)
+
     async def mark_read(self, *, actor: User, notification_id: UUID) -> Notification:
         notification = await self._get_owned_notification(
             actor=actor,
@@ -365,6 +597,22 @@ class NotificationService:
             raise ValidationFailedError("Page must be greater than or equal to 1")
         if page_size < 1 or page_size > 100:
             raise ValidationFailedError("Page size must be between 1 and 100")
+
+    async def _filter_enabled_receivers(
+        self,
+        *,
+        scenario: str,
+        receiver_ids: list[UUID],
+    ) -> list[UUID]:
+        disabled_receivers = await self._repository.disabled_receivers_for_scenario(
+            scenario=scenario,
+            receiver_ids=receiver_ids,
+        )
+        if not disabled_receivers:
+            return receiver_ids
+        return [
+            receiver_id for receiver_id in receiver_ids if receiver_id not in disabled_receivers
+        ]
 
     @staticmethod
     def _unique_receivers(receivers: Sequence[UUID]) -> list[UUID]:

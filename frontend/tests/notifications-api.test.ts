@@ -5,8 +5,10 @@ import { createApiClient } from '../src/api/client';
 import {
   getUnreadNotificationCount,
   listNotifications,
+  listNotificationPreferences,
   markAllNotificationsRead,
   markNotificationRead,
+  updateNotificationPreferences,
 } from '../src/api/notifications';
 
 describe('notifications api', () => {
@@ -42,6 +44,23 @@ describe('notifications api', () => {
     });
     await markAllNotificationsRead(client);
 
+    client.defaults.adapter = recordingAdapter(calls, {
+      code: 0,
+      data: { items: [samplePreference] },
+      message: 'success',
+    });
+    await listNotificationPreferences(client);
+
+    client.defaults.adapter = recordingAdapter(calls, {
+      code: 0,
+      data: { items: [{ ...samplePreference, enabled: false }] },
+      message: 'success',
+    });
+    await updateNotificationPreferences(
+      { preferences: [{ scenario: 'task_assigned', enabled: false }] },
+      client,
+    );
+
     expect(calls[0]).toMatchObject({
       method: 'get',
       params: { page: 2, page_size: 10, unread: true },
@@ -59,6 +78,17 @@ describe('notifications api', () => {
       method: 'post',
       url: '/notifications/read-all',
     });
+    expect(calls[4]).toMatchObject({
+      method: 'get',
+      url: '/notifications/preferences',
+    });
+    expect(calls[5]).toMatchObject({
+      data: JSON.stringify({
+        preferences: [{ scenario: 'task_assigned', enabled: false }],
+      }),
+      method: 'put',
+      url: '/notifications/preferences',
+    });
   });
 });
 
@@ -72,6 +102,14 @@ const sampleNotification = {
   scenario: 'task_assigned',
   source_id: 'task-1',
   updated_at: '2026-05-10T00:00:00Z',
+};
+
+const samplePreference = {
+  description: '任务执行人收到任务分配提醒',
+  direct_related: true,
+  enabled: true,
+  label: '任务分配',
+  scenario: 'task_assigned',
 };
 
 function recordingAdapter(calls: AxiosRequestConfig[], data: unknown): AxiosAdapter {

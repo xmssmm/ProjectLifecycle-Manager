@@ -15,11 +15,12 @@ from app.core.deps import get_current_user
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.base import Base
-from app.models.notifications import Notification
+from app.models.notifications import Notification, NotificationPreference
 from app.models.users import User, UserRole, UserStatus
 from app.services.notifications import (
     InMemoryNotificationRepository,
     NotificationPage,
+    NotificationPreferenceState,
     NotificationService,
 )
 
@@ -98,6 +99,27 @@ def test_notification_table_has_required_columns_and_constraints() -> None:
     )
 
 
+def test_notification_preference_table_has_required_columns_and_constraints() -> None:
+    assert "user_notification_preferences" in Base.metadata.tables
+
+    table = NotificationPreference.__table__
+    assert isinstance(table, Table)
+    assert {
+        "id",
+        "user_id",
+        "scenario",
+        "enabled",
+        "created_at",
+        "updated_at",
+    }.issubset(set(table.c.keys()))
+
+    assert any(
+        isinstance(constraint, UniqueConstraint)
+        and tuple(constraint.columns.keys()) == ("user_id", "scenario")
+        for constraint in table.constraints
+    )
+
+
 @pytest.mark.asyncio
 async def test_send_creates_notification_with_source_aware_dedup_key() -> None:
     service, repository = make_service()
@@ -122,6 +144,37 @@ async def test_send_creates_notification_with_source_aware_dedup_key() -> None:
         f"project_pending_review:{receiver_id}:{source_id}:20260510"
     )
     assert notification.read_at is None
+
+
+@pytest.mark.asyncio
+async def test_send_respects_notification_preferences_per_receiver() -> None:
+    service, repository = make_service()
+    enabled_receiver = uuid4()
+    disabled_receiver = uuid4()
+    source_id = uuid4()
+    repository.preferences[(disabled_receiver, "task_assigned")] = False
+
+    sent = await service.send(
+        scenario="task_assigned",
+        receivers=[enabled_receiver, disabled_receiver],
+        source_id=source_id,
+        payload={"task": "A"},
+    )
+
+    assert [notification.receiver_id for notification in sent] == [enabled_receiver]
+    assert [notification.receiver_id for notification in repository.notifications] == [
+        enabled_receiver,
+    ]
+
+    repository.preferences[(disabled_receiver, "task_assigned")] = True
+    reenabled = await service.send(
+        scenario="task_assigned",
+        receivers=[enabled_receiver, disabled_receiver],
+        source_id=source_id,
+        payload={"task": "A"},
+    )
+
+    assert [notification.receiver_id for notification in reenabled] == [disabled_receiver]
 
 
 @pytest.mark.asyncio
@@ -223,6 +276,33 @@ async def test_mark_all_read_only_updates_current_user_unread_notifications() ->
     assert other_user.read_at is None
 
 
+@pytest.mark.asyncio
+async def test_lists_and_updates_notification_preferences() -> None:
+    user = make_user()
+    service, repository = make_service()
+
+    defaults = await service.list_preferences(actor=user)
+
+    assert all(item.enabled for item in defaults)
+    assert {item.scenario for item in defaults}.issuperset(
+        {
+            "project_pending_review",
+            "task_assigned",
+            "task_overdue_escalation",
+            "handover_completed",
+        },
+    )
+
+    updated = await service.update_preferences(
+        actor=user,
+        preferences={"task_assigned": False, "project_pending_review": True},
+    )
+
+    assert repository.preferences[(user.id, "task_assigned")] is False
+    assert repository.preferences[(user.id, "project_pending_review")] is True
+    assert next(item for item in updated if item.scenario == "task_assigned").enabled is False
+
+
 def test_notification_endpoints_list_count_and_mark_read() -> None:
     user = make_user()
     notification = make_notification(receiver_id=user.id, created_at=datetime.now(UTC))
@@ -285,3 +365,70 @@ def test_notification_endpoints_list_count_and_mark_read() -> None:
     assert read_response.json()["data"]["read_at"] is not None
     assert read_all_response.status_code == 200
     assert read_all_response.json()["data"]["read_count"] == 3
+
+
+def test_notification_preference_endpoints_list_and_update() -> None:
+    user = make_user()
+
+    class FakeNotificationService:
+        async def list_preferences(self, *, actor: User) -> list[NotificationPreferenceState]:
+            assert actor.id == user.id
+            return [
+                NotificationPreferenceState(
+                    scenario="task_assigned",
+                    label="任务分配",
+                    description="任务执行人收到任务分配提醒",
+                    direct_related=True,
+                    enabled=False,
+                ),
+            ]
+
+        async def update_preferences(
+            self,
+            *,
+            actor: User,
+            preferences: dict[str, bool],
+        ) -> list[NotificationPreferenceState]:
+            assert actor.id == user.id
+            assert preferences == {"task_assigned": True}
+            return [
+                NotificationPreferenceState(
+                    scenario="task_assigned",
+                    label="任务分配",
+                    description="任务执行人收到任务分配提醒",
+                    direct_related=True,
+                    enabled=True,
+                ),
+            ]
+
+    async def fake_db_session() -> AsyncIterator[object]:
+        yield object()
+
+    async def fake_current_user() -> User:
+        return user
+
+    async def fake_service() -> FakeNotificationService:
+        return FakeNotificationService()
+
+    app = create_app(rate_limit_store=InMemoryRateLimitStore())
+    app.dependency_overrides[get_db_session] = fake_db_session
+    app.dependency_overrides[get_current_user] = fake_current_user
+    app.dependency_overrides[get_notification_service] = fake_service
+    client = TestClient(app)
+
+    list_response = client.get("/api/v1/notifications/preferences")
+    update_response = client.put(
+        "/api/v1/notifications/preferences",
+        json={"preferences": [{"scenario": "task_assigned", "enabled": True}]},
+    )
+
+    assert list_response.status_code == 200
+    assert list_response.json()["data"]["items"][0] == {
+        "scenario": "task_assigned",
+        "label": "任务分配",
+        "description": "任务执行人收到任务分配提醒",
+        "direct_related": True,
+        "enabled": False,
+    }
+    assert update_response.status_code == 200
+    assert update_response.json()["data"]["items"][0]["enabled"] is True

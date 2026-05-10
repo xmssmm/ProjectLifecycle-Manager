@@ -30,3 +30,24 @@ export interface NotificationUnreadCountRead {
 export interface NotificationReadAllResult {
   read_count: number;
 }
+
+export interface NotificationPreferenceRead {
+  description: string;
+  direct_related: boolean;
+  enabled: boolean;
+  label: string;
+  scenario: string;
+}
+
+export interface NotificationPreferenceListRead {
+  items: NotificationPreferenceRead[];
+}
+
+export interface NotificationPreferenceUpdateItem {
+  enabled: boolean;
+  scenario: string;
+}
+
+export interface NotificationPreferenceUpdate {
+  preferences: NotificationPreferenceUpdateItem[];
+}

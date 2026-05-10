@@ -31,3 +31,24 @@ class NotificationUnreadCountRead(BaseModel):
 
 class NotificationReadAllResult(BaseModel):
     read_count: int
+
+
+class NotificationPreferenceRead(BaseModel):
+    scenario: str
+    label: str
+    description: str
+    direct_related: bool
+    enabled: bool
+
+
+class NotificationPreferenceListRead(BaseModel):
+    items: list[NotificationPreferenceRead]
+
+
+class NotificationPreferenceUpdateItem(BaseModel):
+    scenario: str
+    enabled: bool
+
+
+class NotificationPreferenceUpdate(BaseModel):
+    preferences: list[NotificationPreferenceUpdateItem]
