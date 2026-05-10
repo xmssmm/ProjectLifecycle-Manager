@@ -1,11 +1,18 @@
 <template>
   <el-container class="app-shell">
-    <el-aside class="app-sidebar" width="248px">
+    <el-aside
+      class="app-sidebar"
+      width="248px"
+    >
       <div class="brand">
         <span class="brand-mark">PM</span>
         <span class="brand-text">项目管理归档</span>
       </div>
-      <el-menu class="nav-menu" default-active="/" router>
+      <el-menu
+        class="nav-menu"
+        default-active="/"
+        router
+      >
         <el-menu-item index="/">
           <span>工作台</span>
         </el-menu-item>
