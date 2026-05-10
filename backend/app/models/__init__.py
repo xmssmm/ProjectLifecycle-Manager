@@ -4,6 +4,11 @@ from app.models.audit_logs import AuditLog
 from app.models.base import Base
 from app.models.departments import Department
 from app.models.documents import Document, DocumentScanStatus
+from app.models.handover_requests import (
+    HandoverRequest,
+    HandoverRequestProject,
+    HandoverRequestStatus,
+)
 from app.models.main_projects import (
     MainProject,
     MainProjectStatus,
@@ -47,6 +52,9 @@ __all__ = [
     "Department",
     "Document",
     "DocumentScanStatus",
+    "HandoverRequest",
+    "HandoverRequestProject",
+    "HandoverRequestStatus",
     "MainProject",
     "MainProjectStatus",
     "ProjectReview",

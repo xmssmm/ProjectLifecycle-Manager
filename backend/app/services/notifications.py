@@ -176,6 +176,24 @@ NOTIFICATION_SCENARIOS: tuple[NotificationScenarioDefinition, ...] = (
         direct_related=True,
     ),
     NotificationScenarioDefinition(
+        scenario="handover_request_candidate",
+        label="转交候选确认",
+        description="项目负责人自助转交等待候选人确认",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
+        scenario="handover_request_pending_review",
+        label="转交待审核",
+        description="候选人已确认，等待部门负责人审核",
+        direct_related=False,
+    ),
+    NotificationScenarioDefinition(
+        scenario="handover_request_rejected",
+        label="转交被拒绝",
+        description="项目负责人自助转交被候选人或审核人拒绝",
+        direct_related=True,
+    ),
+    NotificationScenarioDefinition(
         scenario="document_infected",
         label="文档隔离告警",
         description="上传文档被病毒扫描标记为风险文件",

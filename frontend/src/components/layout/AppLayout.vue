@@ -30,6 +30,12 @@ const { hasRole } = usePermission();
 const router = useRouter();
 
 const navItems: NavItem[] = [
+  {
+    icon: User,
+    index: '/handover',
+    label: '自助转交',
+    requireRole: ['admin', 'dept_manager', 'proj_leader'],
+  },
   { icon: House, index: '/', label: '工作台' },
   { icon: DataAnalysis, index: '/dashboard', label: '驾驶舱' },
   { icon: User, index: '/profile', label: '我的' },

@@ -14,6 +14,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.departments import router as departments_router
 from app.api.v1.documents import router as documents_router
+from app.api.v1.handover_requests import router as handover_requests_router
 from app.api.v1.main_projects import router as main_projects_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.oauth import router as oauth_router
@@ -152,6 +153,7 @@ def create_app(
             {"name": "notifications", "description": "Notification query endpoints."},
             {"name": "oauth", "description": "OAuth2/OIDC SSO endpoints."},
             {"name": "revoke-requests", "description": "Phase revoke request endpoints."},
+            {"name": "handover-requests", "description": "Self-service handover workflow."},
             {"name": "auth", "description": "Authentication endpoints."},
             {"name": "users", "description": "用户管理接口。"},
             {"name": "departments", "description": "部门管理接口。"},
@@ -192,6 +194,7 @@ def create_app(
     app.include_router(dashboard_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
+    app.include_router(handover_requests_router, prefix="/api/v1")
     app.include_router(main_projects_router, prefix="/api/v1")
     app.include_router(notifications_router, prefix="/api/v1")
     app.include_router(oauth_router, prefix="/api/v1")
