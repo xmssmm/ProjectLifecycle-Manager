@@ -9,10 +9,27 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BusinessException, PermissionDeniedError, ResourceNotFoundError
-from app.models.main_projects import MainProject, MainProjectStatus
-from app.models.users import User, UserRole
-from app.schemas.main_projects import MainProjectCreate, MainProjectUpdate
+from app.core.exceptions import (
+    BusinessException,
+    PermissionDeniedError,
+    ResourceNotFoundError,
+    SelfReviewDeniedError,
+)
+from app.models.main_projects import (
+    MainProject,
+    MainProjectStatus,
+    ProjectReview,
+    ProjectReviewDecision,
+)
+from app.models.users import User, UserRole, UserStatus
+from app.schemas.main_projects import (
+    MainProjectCreate,
+    MainProjectReviewRequest,
+    MainProjectReviewUpdate,
+    MainProjectUpdate,
+)
+from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter, to_audit_state
+from app.services.notifications import NotificationService
 
 VIEW_ALL_PROJECT_ROLES = frozenset(
     {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
@@ -29,7 +46,18 @@ class MainProjectRepository(Protocol):
     async def next_project_sequence(self) -> int:
         ...
 
+    async def list_active_user_ids_by_role(
+        self,
+        role: UserRole,
+        *,
+        excluding_user_id: UUID | None = None,
+    ) -> list[UUID]:
+        ...
+
     def add(self, project: MainProject) -> None:
+        ...
+
+    def add_review(self, review: ProjectReview) -> None:
         ...
 
     async def commit(self) -> None:
@@ -62,8 +90,23 @@ class SqlAlchemyMainProjectRepository:
         value = await self._session.scalar(text("SELECT nextval('main_project_no_seq')"))
         return int(cast(int, value))
 
+    async def list_active_user_ids_by_role(
+        self,
+        role: UserRole,
+        *,
+        excluding_user_id: UUID | None = None,
+    ) -> list[UUID]:
+        conditions = [User.role == role, User.status == UserStatus.active]
+        if excluding_user_id is not None:
+            conditions.append(User.id != excluding_user_id)
+        result = await self._session.scalars(select(User.id).where(*conditions))
+        return list(result.all())
+
     def add(self, project: MainProject) -> None:
         self._session.add(project)
+
+    def add_review(self, review: ProjectReview) -> None:
+        self._session.add(review)
 
     async def commit(self) -> None:
         await self._session.commit()
@@ -77,9 +120,12 @@ class InMemoryMainProjectRepository:
         self,
         projects: Sequence[MainProject] | None = None,
         *,
+        users: Sequence[User] | None = None,
         next_sequence: int = 1,
     ) -> None:
         self.projects = list(projects or [])
+        self.users = list(users or [])
+        self.reviews: list[ProjectReview] = []
         self._next_sequence = next_sequence
 
     async def list_projects(self, *, page: int, page_size: int) -> tuple[list[MainProject], int]:
@@ -95,8 +141,25 @@ class InMemoryMainProjectRepository:
         self._next_sequence += 1
         return value
 
+    async def list_active_user_ids_by_role(
+        self,
+        role: UserRole,
+        *,
+        excluding_user_id: UUID | None = None,
+    ) -> list[UUID]:
+        return [
+            user.id
+            for user in self.users
+            if user.role == role
+            and user.status == UserStatus.active
+            and user.id != excluding_user_id
+        ]
+
     def add(self, project: MainProject) -> None:
         self.projects.append(project)
+
+    def add_review(self, review: ProjectReview) -> None:
+        self.reviews.append(review)
 
     async def commit(self) -> None:
         return None
@@ -110,9 +173,11 @@ class MainProjectService:
         self,
         *,
         repository: MainProjectRepository,
+        notification_service: NotificationService | None = None,
         today_provider: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
+        self._notification_service = notification_service
         self._today_provider = today_provider
 
     async def list_projects(
@@ -188,6 +253,121 @@ class MainProjectService:
         await self._repository.refresh(project)
         return project
 
+    async def submit_project(
+        self,
+        *,
+        actor: User,
+        project_id: UUID,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> MainProject:
+        project = await self._get_existing_project(project_id)
+        if project.creator_id != actor.id:
+            raise PermissionDeniedError()
+        if project.status not in {MainProjectStatus.pending_review, MainProjectStatus.rejected}:
+            raise self._invalid_status(project.status, "当前状态不允许提交主项目")
+
+        before_state = to_audit_state(project)
+        project.status = MainProjectStatus.pending_review
+        await self._repository.commit()
+        await self._repository.refresh(project)
+
+        receivers = await self._repository.list_active_user_ids_by_role(
+            UserRole.dept_manager,
+            excluding_user_id=actor.id,
+        )
+        await self._send_notification(
+            scenario="project_pending_review",
+            receivers=receivers,
+            source_id=project.id,
+            payload={
+                "project_no": project.project_no,
+                "project_name": project.name,
+            },
+        )
+        self._record_audit(
+            action="main_project.submit",
+            actor=actor,
+            project=project,
+            before_state=before_state,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            extra={},
+        )
+        return project
+
+    async def review_project(
+        self,
+        *,
+        actor: User,
+        project_id: UUID,
+        payload: MainProjectReviewRequest,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> MainProject:
+        if actor.role not in {UserRole.admin, UserRole.dept_manager}:
+            raise PermissionDeniedError()
+
+        project = await self._get_existing_project(project_id)
+        if project.creator_id == actor.id and actor.role != UserRole.admin:
+            raise SelfReviewDeniedError()
+        if project.status != MainProjectStatus.pending_review:
+            raise self._invalid_status(project.status, "当前状态不允许审核主项目")
+
+        before_state = to_audit_state(project)
+        modified_fields = self._apply_review_updates(project, payload.updates)
+        from_status = project.status
+        project.status = (
+            MainProjectStatus.not_started
+            if payload.decision == ProjectReviewDecision.approve
+            else MainProjectStatus.rejected
+        )
+        now = datetime.now(UTC)
+        review = ProjectReview(
+            id=uuid4(),
+            main_project_id=project.id,
+            reviewer_id=actor.id,
+            decision=payload.decision,
+            from_status=from_status,
+            to_status=project.status,
+            review_comment=payload.review_comment,
+            modified_fields=modified_fields,
+            admin_override=actor.role == UserRole.admin,
+            reviewed_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        self._repository.add_review(review)
+        await self._repository.commit()
+        await self._repository.refresh(project)
+
+        if project.creator_id is not None:
+            await self._send_notification(
+                scenario="project_review_result",
+                receivers=[project.creator_id],
+                source_id=project.id,
+                payload={
+                    "project_no": project.project_no,
+                    "project_name": project.name,
+                    "decision": payload.decision.value,
+                    "review_comment": payload.review_comment,
+                },
+            )
+        self._record_audit(
+            action="main_project.review",
+            actor=actor,
+            project=project,
+            before_state=before_state,
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            extra={
+                "admin_override": actor.role == UserRole.admin,
+                "decision": payload.decision.value,
+                "modified_fields": modified_fields,
+            },
+        )
+        return project
+
     async def _get_existing_project(self, project_id: UUID) -> MainProject:
         project = await self._repository.get_by_id(project_id)
         if project is None:
@@ -201,3 +381,94 @@ class MainProjectService:
     def _ensure_view_all(actor: User) -> None:
         if actor.role not in VIEW_ALL_PROJECT_ROLES:
             raise PermissionDeniedError()
+
+    async def _send_notification(
+        self,
+        *,
+        scenario: str,
+        receivers: Sequence[UUID],
+        source_id: UUID,
+        payload: dict[str, object],
+    ) -> None:
+        if self._notification_service is None or not receivers:
+            return
+        await self._notification_service.send(
+            scenario=scenario,
+            receivers=receivers,
+            source_id=source_id,
+            payload=payload,
+        )
+
+    @staticmethod
+    def _apply_review_updates(
+        project: MainProject,
+        updates: MainProjectReviewUpdate | None,
+    ) -> dict[str, dict[str, object | None]]:
+        if updates is None:
+            return {}
+
+        modified_fields: dict[str, dict[str, object | None]] = {}
+        fields = updates.model_fields_set
+        update_values = {
+            "name": updates.name,
+            "dept_id": updates.dept_id,
+            "total_budget": updates.total_budget,
+            "expected_finish_date": updates.expected_finish_date,
+            "remark": updates.remark,
+        }
+        for field_name, new_value in update_values.items():
+            if field_name not in fields:
+                continue
+            old_value = getattr(project, field_name)
+            if old_value == new_value:
+                continue
+            modified_fields[field_name] = {
+                "before": MainProjectService._audit_json_value(old_value),
+                "after": MainProjectService._audit_json_value(new_value),
+            }
+            setattr(project, field_name, new_value)
+        return modified_fields
+
+    @staticmethod
+    def _record_audit(
+        *,
+        action: str,
+        actor: User,
+        project: MainProject,
+        before_state: dict[str, object],
+        audit_writer: AuditLogWriter | None,
+        audit_context: AuditContext | None,
+        extra: dict[str, object],
+    ) -> None:
+        if audit_writer is None:
+            return
+        context = audit_context or AuditContext(actor_id=actor.id)
+        audit_writer.enqueue(
+            AuditLogEntry(
+                actor_id=context.actor_id or actor.id,
+                action=action,
+                target_type="main_project",
+                target_id=str(project.id),
+                before_state=before_state,
+                after_state=to_audit_state(project),
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                extra=extra,
+                request_id=context.request_id,
+            ),
+        )
+
+    @staticmethod
+    def _audit_json_value(value: object | None) -> object | None:
+        if isinstance(value, UUID | Decimal | date):
+            return str(value)
+        return value
+
+    @staticmethod
+    def _invalid_status(status: MainProjectStatus, message: str) -> BusinessException:
+        return BusinessException(
+            code=3003,
+            message=message,
+            status_code=409,
+            data={"status": status.value},
+        )

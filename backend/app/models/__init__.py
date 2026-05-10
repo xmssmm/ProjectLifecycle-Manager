@@ -2,7 +2,12 @@
 from app.models.audit_logs import AuditLog
 from app.models.base import Base
 from app.models.departments import Department
-from app.models.main_projects import MainProject, MainProjectStatus
+from app.models.main_projects import (
+    MainProject,
+    MainProjectStatus,
+    ProjectReview,
+    ProjectReviewDecision,
+)
 from app.models.notifications import Notification
 from app.models.phases import (
     Phase,
@@ -20,6 +25,8 @@ __all__ = [
     "Department",
     "MainProject",
     "MainProjectStatus",
+    "ProjectReview",
+    "ProjectReviewDecision",
     "Notification",
     "Phase",
     "PhaseDocRequirement",

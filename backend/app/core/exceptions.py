@@ -37,6 +37,11 @@ class PermissionDeniedError(BusinessException):
         super().__init__(code=1003, message=message, status_code=403, data=data)
 
 
+class SelfReviewDeniedError(BusinessException):
+    def __init__(self, message: str = "审核人不能是创建人本人", data: Any = None) -> None:
+        super().__init__(code=1010, message=message, status_code=403, data=data)
+
+
 class ValidationFailedError(BusinessException):
     def __init__(self, message: str = "参数错误", data: Any = None) -> None:
         super().__init__(code=2003, message=message, status_code=422, data=data)
