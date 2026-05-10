@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from celery import Celery  # type: ignore[import-untyped]
+from celery.schedules import crontab  # type: ignore[import-untyped]
 
 from app.core.config import Settings, get_settings
-
-CELERY_SMOKE_TASK_NAME = "app.tasks.celery_app.ping"
+from app.tasks.task_names import CELERY_SMOKE_TASK_NAME, TASK_DEADLINE_SCAN_TASK_NAME
 
 
 def create_celery_app(settings: Settings | None = None) -> Celery:
@@ -13,6 +13,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
         "project_management",
         broker=resolved_settings.effective_celery_broker_url,
         backend=resolved_settings.effective_celery_result_backend,
+        include=["app.tasks.task_deadlines"],
     )
     app.conf.update(
         accept_content=["json"],
@@ -20,6 +21,10 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "celery-smoke-ping-every-minute": {
                 "task": CELERY_SMOKE_TASK_NAME,
                 "schedule": 60.0,
+            },
+            "task-deadline-scan-daily-0900": {
+                "task": TASK_DEADLINE_SCAN_TASK_NAME,
+                "schedule": crontab(minute=0, hour=9),
             },
         },
         result_serializer="json",

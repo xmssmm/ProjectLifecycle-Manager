@@ -34,9 +34,7 @@ def test_celery_app_registers_smoke_task_for_beat() -> None:
     celery_app = celery_module.create_celery_app(Settings(redis_url="redis://redis:6379/0"))
 
     assert celery_module.CELERY_SMOKE_TASK_NAME in celery_app.tasks
-    assert celery_app.conf.beat_schedule == {
-        "celery-smoke-ping-every-minute": {
-            "task": celery_module.CELERY_SMOKE_TASK_NAME,
-            "schedule": 60.0,
-        },
+    assert celery_app.conf.beat_schedule["celery-smoke-ping-every-minute"] == {
+        "task": celery_module.CELERY_SMOKE_TASK_NAME,
+        "schedule": 60.0,
     }
