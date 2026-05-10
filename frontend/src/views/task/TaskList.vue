@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 
-import { StatusTag } from '@/components/common';
+import { ConfirmDialog, StatusTag } from '@/components/common';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useTaskStore } from '@/stores/useTaskStore';
 import {
   TASK_STATUS_LABELS,
@@ -11,8 +12,14 @@ import {
   type TaskStatus,
 } from '@/types/tasks';
 
+import type { TaskRead } from '@/types/tasks';
+
+const authStore = useAuthStore();
 const taskStore = useTaskStore();
 const createDialogVisible = ref(false);
+const quickCompleteDialogVisible = ref(false);
+const quickCompleteTarget = ref<TaskRead | null>(null);
+const quickCompletingId = ref('');
 const submitting = ref(false);
 const filterState = reactive({
   assigneeMe: false,
@@ -51,6 +58,38 @@ async function submitTask(): Promise<void> {
     createDialogVisible.value = false;
   } finally {
     submitting.value = false;
+  }
+}
+
+function currentExecutor(task: TaskRead) {
+  return task.executors.find((executor) => executor.user_id === authStore.user?.id);
+}
+
+function canQuickComplete(task: TaskRead): boolean {
+  const executor = currentExecutor(task);
+  return Boolean(executor) && executor?.status !== 'completed';
+}
+
+function openQuickComplete(task: TaskRead): void {
+  if (!canQuickComplete(task)) {
+    return;
+  }
+  quickCompleteTarget.value = task;
+  quickCompleteDialogVisible.value = true;
+}
+
+async function confirmQuickComplete(): Promise<void> {
+  const task = quickCompleteTarget.value;
+  if (!task) {
+    return;
+  }
+  quickCompletingId.value = task.id;
+  try {
+    await taskStore.completeTask(task.id);
+    quickCompleteDialogVisible.value = false;
+    quickCompleteTarget.value = null;
+  } finally {
+    quickCompletingId.value = '';
   }
 }
 
@@ -196,6 +235,47 @@ function statusLabel(status: TaskStatus): string {
           </tr>
         </tbody>
       </table>
+      <div class="task-mobile-list">
+        <article v-for="task in taskRows" :key="task.id" class="task-mobile-card">
+          <div class="task-mobile-card__header">
+            <div>
+              <span>{{ task.task_no }}</span>
+              <h3>{{ task.name }}</h3>
+            </div>
+            <StatusTag :status="task.status" />
+          </div>
+          <dl class="task-mobile-card__meta">
+            <div>
+              <dt>子项目</dt>
+              <dd>{{ task.sub_project_id }}</dd>
+            </div>
+            <div>
+              <dt>阶段</dt>
+              <dd>{{ task.phase_id }}</dd>
+            </div>
+            <div>
+              <dt>计划完成</dt>
+              <dd>{{ formatDate(task.plan_end_date) }}</dd>
+            </div>
+          </dl>
+          <div class="task-mobile-card__actions">
+            <router-link :to="{ name: 'task-detail', params: { id: task.id } }">
+              <el-button size="small">查看</el-button>
+            </router-link>
+            <el-button
+              v-if="canQuickComplete(task)"
+              class="mobile-only-action"
+              :data-test="`quick-complete-task-${task.id}`"
+              :loading="quickCompletingId === task.id"
+              size="small"
+              type="primary"
+              @click="openQuickComplete(task)"
+            >
+              完成
+            </el-button>
+          </div>
+        </article>
+      </div>
       <el-empty v-if="!taskStore.loading && taskRows.length === 0" description="暂无任务" />
     </section>
 
@@ -246,5 +326,16 @@ function statusLabel(status: TaskStatus): string {
         </div>
       </template>
     </el-dialog>
+
+    <ConfirmDialog
+      v-model="quickCompleteDialogVisible"
+      confirm-data-test="confirm-quick-complete"
+      confirm-text="完成任务"
+      data-test="quick-complete-confirm"
+      :message="`确认完成任务“${quickCompleteTarget?.name ?? ''}”？`"
+      title="完成任务"
+      type="primary"
+      @confirm="confirmQuickComplete"
+    />
   </section>
 </template>

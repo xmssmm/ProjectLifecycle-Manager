@@ -3,7 +3,9 @@ import { computed } from 'vue';
 
 const props = withDefaults(
   defineProps<{
+    cancelDataTest?: string;
     cancelText?: string;
+    confirmDataTest?: string;
     confirmText?: string;
     message: string;
     modelValue: boolean;
@@ -11,7 +13,9 @@ const props = withDefaults(
     type?: 'danger' | 'primary' | 'warning';
   }>(),
   {
+    cancelDataTest: undefined,
     cancelText: '取消',
+    confirmDataTest: undefined,
     confirmText: '确认',
     type: 'primary',
   },
@@ -44,8 +48,8 @@ function confirmAction(): void {
     <p class="confirm-dialog__message">{{ message }}</p>
     <slot />
     <template #footer>
-      <el-button @click="closeDialog">{{ cancelText }}</el-button>
-      <el-button :type="type" @click="confirmAction">
+      <el-button :data-test="cancelDataTest" @click="closeDialog">{{ cancelText }}</el-button>
+      <el-button :data-test="confirmDataTest" :type="type" @click="confirmAction">
         {{ confirmText }}
       </el-button>
     </template>
