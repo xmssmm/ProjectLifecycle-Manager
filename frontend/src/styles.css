@@ -643,6 +643,83 @@ body {
   gap: 2px;
 }
 
+.payment-filter-band {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.payment-field {
+  display: grid;
+  gap: 6px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.payment-field select,
+.payment-form input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  color: #172033;
+  background: #fff;
+  font: inherit;
+}
+
+.payment-table-band {
+  overflow-x: auto;
+}
+
+.payment-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.payment-table th,
+.payment-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5e9f0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.payment-table th {
+  color: #475467;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.payment-table__amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.payment-table__amount.is-negative {
+  color: #b42318;
+}
+
+.payment-form {
+  display: grid;
+  gap: 2px;
+}
+
+.payment-form__file-name {
+  display: block;
+  margin-top: 6px;
+  color: #667085;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .task-summary {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }

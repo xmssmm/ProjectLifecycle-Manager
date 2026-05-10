@@ -14,6 +14,7 @@ import MainProjectDetailView from '@/views/main-project/MainProjectDetail.vue';
 import MainProjectEditView from '@/views/main-project/MainProjectEdit.vue';
 import MainProjectListView from '@/views/main-project/MainProjectList.vue';
 import MainProjectReviewView from '@/views/main-project/MainProjectReview.vue';
+import PaymentListView from '@/views/payment/PaymentList.vue';
 import ProfileView from '@/views/Profile.vue';
 import SubProjectDetailView from '@/views/sub-project/SubProjectDetail.vue';
 import SubProjectEditView from '@/views/sub-project/SubProjectEdit.vue';
@@ -118,6 +119,13 @@ const router = createRouter({
       name: 'sub-project-review',
       component: SubProjectReviewView,
       meta: { permission: 'sub_project.review', requiresAuth: true },
+      props: (route) => ({ subProjectId: String(route.params.id) }),
+    },
+    {
+      path: '/sub-projects/:id/payments',
+      name: 'sub-project-payments',
+      component: PaymentListView,
+      meta: { requiresAuth: true },
       props: (route) => ({ subProjectId: String(route.params.id) }),
     },
     {

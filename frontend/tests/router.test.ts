@@ -45,6 +45,9 @@ describe('router', () => {
     const subProjectReviewRoute = router
       .getRoutes()
       .find((route) => route.name === 'sub-project-review');
+    const subProjectPaymentsRoute = router
+      .getRoutes()
+      .find((route) => route.name === 'sub-project-payments');
     const profileRoute = router.getRoutes().find((route) => route.name === 'profile');
     const passwordRoute = router.getRoutes().find((route) => route.name === 'change-password');
     const loginRoute = router.getRoutes().find((route) => route.name === 'login');
@@ -65,6 +68,7 @@ describe('router', () => {
     expect(subProjectCreateRoute?.path).toBe('/sub-projects/new');
     expect(subProjectEditRoute?.path).toBe('/sub-projects/:id/edit');
     expect(subProjectReviewRoute?.path).toBe('/sub-projects/:id/review');
+    expect(subProjectPaymentsRoute?.path).toBe('/sub-projects/:id/payments');
     expect(profileRoute?.path).toBe('/profile');
     expect(passwordRoute?.path).toBe('/change-password');
     expect(loginRoute?.path).toBe('/login');

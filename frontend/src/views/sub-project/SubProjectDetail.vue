@@ -161,6 +161,12 @@ function formatDate(value: unknown): string {
         <el-button>返回列表</el-button>
       </router-link>
       <router-link
+        v-if="subProject"
+        :to="{ name: 'sub-project-payments', params: { id: subProject.id } }"
+      >
+        <el-button>付款记录</el-button>
+      </router-link>
+      <router-link
         v-if="subProject && canEditRejected"
         :to="{ name: 'sub-project-edit', params: { id: subProject.id } }"
       >
