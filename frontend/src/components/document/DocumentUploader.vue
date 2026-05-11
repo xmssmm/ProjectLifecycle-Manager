@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { RefreshRight, UploadFilled } from '@element-plus/icons-vue';
+import { Check, Close, RefreshRight, UploadFilled } from '@element-plus/icons-vue';
 import { computed, ref } from 'vue';
 
+import {
+  confirmDocumentType,
+  suggestDocumentType,
+  type DocumentTypeSuggestion,
+} from '@/api/documentClassification';
 import { uploadDocument } from '@/api/documents';
 import {
   DOCUMENT_MAX_UPLOAD_BYTES,
@@ -31,10 +36,16 @@ const emit = defineEmits<{
 const errorMessage = ref('');
 const isDragging = ref(false);
 const lastFile = ref<File | null>(null);
+const pendingFile = ref<File | null>(null);
 const progress = ref(0);
+const suggestedType = ref<DocumentTypeSuggestion | null>(null);
+const suggesting = ref(false);
 const uploading = ref(false);
 
 const hasRetry = computed(() => Boolean(errorMessage.value && lastFile.value && !uploading.value));
+const hasSuggestion = computed(() =>
+  Boolean(suggestedType.value && pendingFile.value && !uploading.value),
+);
 
 async function handleDrop(event: DragEvent): Promise<void> {
   isDragging.value = false;
@@ -62,6 +73,8 @@ async function retryUpload(): Promise<void> {
 
 async function startUpload(file: File): Promise<void> {
   lastFile.value = file;
+  pendingFile.value = null;
+  suggestedType.value = null;
   errorMessage.value = '';
   progress.value = 0;
 
@@ -72,11 +85,60 @@ async function startUpload(file: File): Promise<void> {
     return;
   }
 
+  const suggestion = await loadSuggestion(file);
+  if (suggestion && suggestion.doc_type !== props.docType) {
+    pendingFile.value = file;
+    suggestedType.value = suggestion;
+    return;
+  }
+
+  await uploadFile(file, props.docType);
+}
+
+async function loadSuggestion(file: File): Promise<DocumentTypeSuggestion | null> {
+  suggesting.value = true;
+  try {
+    const result = await suggestDocumentType({
+      currentDocType: props.docType,
+      fileName: file.name,
+      phaseId: props.phaseId,
+      subProjectId: props.subProjectId,
+    });
+    return result.suggestions[0] ?? null;
+  } catch {
+    return null;
+  } finally {
+    suggesting.value = false;
+  }
+}
+
+async function confirmSuggestedType(): Promise<void> {
+  if (!pendingFile.value || !suggestedType.value) {
+    return;
+  }
+  const file = pendingFile.value;
+  const docType = suggestedType.value.doc_type;
+  pendingFile.value = null;
+  suggestedType.value = null;
+  await uploadFile(file, docType, true);
+}
+
+async function ignoreSuggestedType(): Promise<void> {
+  if (!pendingFile.value) {
+    return;
+  }
+  const file = pendingFile.value;
+  pendingFile.value = null;
+  suggestedType.value = null;
+  await uploadFile(file, props.docType);
+}
+
+async function uploadFile(file: File, docType: string, auditConfirmation = false): Promise<void> {
   uploading.value = true;
   try {
     const payload: DocumentUploadPayload = {
       acceptanceStepId: props.acceptanceStepId,
-      docType: props.docType,
+      docType,
       file,
       phaseId: props.phaseId,
       subProjectId: props.subProjectId,
@@ -85,7 +147,10 @@ async function startUpload(file: File): Promise<void> {
       progress.value = percentage;
     });
     progress.value = 100;
-    emit('uploaded', document);
+    const confirmedDocument = auditConfirmation
+      ? await confirmDocumentType(document.id, docType).catch(() => document)
+      : document;
+    emit('uploaded', confirmedDocument);
   } catch (error) {
     const message = extractUploadError(error);
     errorMessage.value = message;
@@ -138,8 +203,30 @@ function formatFileSize(bytes: number): string {
       <input class="sr-only" data-test="document-file-input" type="file" @change="handleFileChange">
       <UploadFilled class="document-uploader__icon" />
       <span class="document-uploader__title">{{ docType }}</span>
+      <span v-if="suggesting" class="document-uploader__meta">正在识别文档类型...</span>
       <span class="document-uploader__meta">{{ lastFile?.name ?? '选择或拖入文件' }}</span>
     </label>
+
+    <section
+      v-if="hasSuggestion && suggestedType"
+      class="document-uploader__suggestion"
+      data-test="document-type-suggestion"
+    >
+      <div>
+        <strong>{{ suggestedType.doc_type }}</strong>
+        <span>{{ suggestedType.reason }}</span>
+      </div>
+      <div class="document-uploader__suggestion-actions">
+        <button data-test="confirm-document-type" type="button" @click="confirmSuggestedType">
+          <Check class="document-uploader__action-icon" />
+          使用建议
+        </button>
+        <button data-test="ignore-document-type" type="button" @click="ignoreSuggestedType">
+          <Close class="document-uploader__action-icon" />
+          仍按 {{ docType }}
+        </button>
+      </div>
+    </section>
 
     <div v-if="uploading || progress > 0" class="document-uploader__progress">
       <el-progress :percentage="progress" />
@@ -215,6 +302,57 @@ function formatFileSize(bytes: number): string {
 
 .document-uploader__progress {
   min-height: 28px;
+}
+
+.document-uploader__suggestion {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.document-uploader__suggestion strong,
+.document-uploader__suggestion span {
+  display: block;
+}
+
+.document-uploader__suggestion strong {
+  color: #172033;
+  font-size: 15px;
+}
+
+.document-uploader__suggestion span {
+  margin-top: 2px;
+  color: #475467;
+  font-size: 13px;
+}
+
+.document-uploader__suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.document-uploader__suggestion-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #1f6feb;
+  border-radius: 6px;
+  color: #1f6feb;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.document-uploader__action-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .document-uploader__retry {

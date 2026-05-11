@@ -530,6 +530,34 @@ class DocumentService:
             include_history=include_history,
         )
 
+    async def confirm_document_type(
+        self,
+        *,
+        actor: User,
+        document_id: UUID,
+        doc_type: str,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> Document:
+        cleaned_doc_type = self._clean_doc_type(doc_type)
+        document = await self._get_authorized_document(actor=actor, document_id=document_id)
+        if document.is_deleted or not document.is_latest:
+            raise ValidationFailedError("Only the latest active document can be reclassified")
+
+        before_state = self._document_type_audit_state(document)
+        if document.doc_type != cleaned_doc_type:
+            await self._move_document_to_doc_type(document=document, doc_type=cleaned_doc_type)
+        after_state = self._document_type_audit_state(document)
+        self._record_document_type_confirmed(
+            actor=actor,
+            audit_context=audit_context,
+            audit_writer=audit_writer,
+            before_state=before_state,
+            document=document,
+            after_state=after_state,
+        )
+        return document
+
     async def download_document(self, *, actor: User, document_id: UUID) -> DocumentDownload:
         document = await self._get_authorized_document(actor=actor, document_id=document_id)
         self._ensure_scan_allows_access(document)
@@ -606,6 +634,52 @@ class DocumentService:
             raise ResourceNotFoundError("Sub project does not exist")
         await self._ensure_visible(actor, sub_project)
         return document
+
+    async def _move_document_to_doc_type(self, *, document: Document, doc_type: str) -> None:
+        old_doc_type = document.doc_type
+        for lock_doc_type in sorted({old_doc_type, doc_type}):
+            await self._repository.lock_document_group(
+                sub_project_id=document.sub_project_id,
+                phase_id=document.phase_id,
+                doc_type=lock_doc_type,
+            )
+
+        old_group_documents = await self._repository.list_group_documents_for_update(
+            sub_project_id=document.sub_project_id,
+            phase_id=document.phase_id,
+            doc_type=old_doc_type,
+        )
+        new_group_documents = await self._repository.list_group_documents_for_update(
+            sub_project_id=document.sub_project_id,
+            phase_id=document.phase_id,
+            doc_type=doc_type,
+        )
+
+        now = datetime.now(UTC)
+        previous_old_latest = next(
+            (
+                item
+                for item in old_group_documents
+                if item.id != document.id and not item.is_deleted
+            ),
+            None,
+        )
+        if previous_old_latest is not None:
+            previous_old_latest.is_latest = True
+            previous_old_latest.updated_at = now
+
+        for item in new_group_documents:
+            if item.is_latest:
+                item.is_latest = False
+                item.updated_at = now
+
+        document.doc_type = doc_type
+        document.version = max((item.version for item in new_group_documents), default=0) + 1
+        document.is_latest = True
+        document.updated_at = now
+        await self._repository.commit()
+        await self._repository.refresh(document)
+        self._enqueue_search_index(document)
 
     @staticmethod
     def _ensure_scan_allows_access(document: Document) -> None:
@@ -813,6 +887,46 @@ class DocumentService:
                 extra={
                     "doc_type": document.doc_type,
                     "file_name": document.file_name,
+                    "version": document.version,
+                },
+                request_id=context.request_id,
+            ),
+        )
+
+    @staticmethod
+    def _document_type_audit_state(document: Document) -> dict[str, object]:
+        return {
+            "doc_type": document.doc_type,
+            "id": str(document.id),
+            "version": document.version,
+        }
+
+    @staticmethod
+    def _record_document_type_confirmed(
+        *,
+        actor: User,
+        audit_context: AuditContext | None,
+        audit_writer: AuditLogWriter | None,
+        before_state: dict[str, object],
+        document: Document,
+        after_state: dict[str, object],
+    ) -> None:
+        if audit_writer is None:
+            return
+        context = audit_context or AuditContext(actor_id=actor.id)
+        audit_writer.enqueue(
+            AuditLogEntry(
+                actor_id=context.actor_id,
+                action="document_classification.confirm",
+                target_type="document",
+                target_id=str(document.id),
+                before_state=before_state,
+                after_state=after_state,
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                extra={
+                    "file_name": document.file_name,
+                    "new_doc_type": document.doc_type,
                     "version": document.version,
                 },
                 request_id=context.request_id,
