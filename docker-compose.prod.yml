@@ -38,12 +38,21 @@ services:
       dockerfile: Dockerfile.prod
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
+      DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_SENTINEL_ENABLED: ${REDIS_SENTINEL_ENABLED:-false}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_MASTER_NAME: ${REDIS_SENTINEL_MASTER_NAME:-mymaster}
+      REDIS_SENTINEL_DB: ${REDIS_SENTINEL_DB:-0}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-}
       CORS_ALLOW_ORIGINS: ${PROD_CORS_ALLOW_ORIGINS:-https://localhost}
       STORAGE_ROOT: /app/storage
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
@@ -84,6 +93,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-2}
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
 
   celery-worker:
     build:
@@ -91,11 +106,20 @@ services:
       dockerfile: Dockerfile.prod
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
+      DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_SENTINEL_ENABLED: ${REDIS_SENTINEL_ENABLED:-false}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_MASTER_NAME: ${REDIS_SENTINEL_MASTER_NAME:-mymaster}
+      REDIS_SENTINEL_DB: ${REDIS_SENTINEL_DB:-0}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-}
       STORAGE_ROOT: /app/storage
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
@@ -117,6 +141,12 @@ services:
         condition: service_healthy
       clamav:
         condition: service_started
+    deploy:
+      replicas: ${CELERY_WORKER_REPLICAS:-2}
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
 
   celery-beat:
     build:
@@ -124,11 +154,20 @@ services:
       dockerfile: Dockerfile.prod
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
+      DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_SENTINEL_ENABLED: ${REDIS_SENTINEL_ENABLED:-false}
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-}
+      REDIS_SENTINEL_MASTER_NAME: ${REDIS_SENTINEL_MASTER_NAME:-mymaster}
+      REDIS_SENTINEL_DB: ${REDIS_SENTINEL_DB:-0}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-}
       STORAGE_ROOT: /app/storage
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}

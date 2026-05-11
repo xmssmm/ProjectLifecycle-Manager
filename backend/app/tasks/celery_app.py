@@ -37,6 +37,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
     )
     app.conf.update(
         accept_content=["json"],
+        broker_transport_options=resolved_settings.celery_sentinel_transport_options,
         beat_schedule={
             "celery-smoke-ping-every-minute": {
                 "task": CELERY_SMOKE_TASK_NAME,
@@ -71,6 +72,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
                 "schedule": crontab(minute=30, hour=3),
             },
         },
+        result_backend_transport_options=resolved_settings.celery_sentinel_transport_options,
         result_serializer="json",
         task_serializer="json",
         timezone="Asia/Shanghai",

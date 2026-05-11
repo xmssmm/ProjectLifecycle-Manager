@@ -14,6 +14,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.core.exceptions import AuthenticationError, BusinessException
 from app.core.middleware import RateLimitStore, RedisRateLimitStore
+from app.core.redis import create_redis_client
 from app.models.api_keys import ApiKey
 from app.services.api_keys import ApiKeyService, SqlAlchemyApiKeyRepository
 
@@ -106,6 +107,10 @@ async def get_external_api_key_service(
 async def get_external_rate_limit_store(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ExternalApiRateLimitStore:
+    if settings.redis_sentinel_enabled:
+        return RedisExternalApiRateLimitStore(
+            counter_store=RedisRateLimitStore(redis_client=create_redis_client(settings)),
+        )
     return build_external_rate_limit_store(settings.redis_url)
 
 

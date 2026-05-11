@@ -8,6 +8,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.core.deps import CurrentUserContext, get_auth_token_store, get_current_token_context
 from app.core.exceptions import AuthenticationError
+from app.core.redis import create_redis_client
 from app.core.responses import success_response
 from app.schemas.auth import AccessTokenRead, CurrentUserRead, LoginRequest, TokenPairRead
 from app.services.auth import (
@@ -27,7 +28,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def get_auth_failure_store(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthFailureStore:
-    return RedisAuthFailureStore(settings.redis_url)
+    return RedisAuthFailureStore(redis_client=create_redis_client(settings))
 
 
 @router.post("/login")
