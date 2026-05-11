@@ -41,6 +41,7 @@ export default {
     archives: 'Archive',
     audit: 'Audit',
     components: 'Components',
+    customReports: 'Reports',
     dashboard: 'Dashboard',
     departments: 'Departments',
     exports: 'Export',
