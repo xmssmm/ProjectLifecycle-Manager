@@ -289,6 +289,7 @@ async def test_close_sub_project_requires_all_six_phases_completed() -> None:
 
     assert closed.status == SubProjectStatus.closed
     assert closed.actual_end_date == date(2026, 5, 10)
+    assert closed.closed_at is not None
     assert audit_writer.entries[0].action == "sub_project.close"
     assert audit_writer.entries[0].extra["phase_count"] == 6
 
@@ -327,6 +328,7 @@ async def test_terminate_sub_project_requires_privileged_role_and_reason() -> No
 
     assert terminated.status == SubProjectStatus.terminated
     assert terminated.actual_end_date == date(2026, 5, 10)
+    assert terminated.closed_at is not None
     assert audit_writer.entries[0].action == "sub_project.terminate"
     assert audit_writer.entries[0].extra["reason"] == "采购取消"
 

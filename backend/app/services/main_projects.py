@@ -503,6 +503,10 @@ class MainProjectService:
 
         project = await self._get_existing_project(project_id)
         if project.status == MainProjectStatus.closed:
+            if project.closed_at is None:
+                project.closed_at = datetime.now(UTC)
+                await self._repository.commit()
+                await self._repository.refresh(project)
             return project
         if project.status not in {MainProjectStatus.not_started, MainProjectStatus.in_progress}:
             raise self._invalid_status(project.status, "当前状态不允许结项主项目")
@@ -516,7 +520,10 @@ class MainProjectService:
                 data={"open_sub_project_count": open_sub_project_count},
             )
 
+        now = datetime.now(UTC)
         project.status = MainProjectStatus.closed
+        project.closed_at = now
+        project.updated_at = now
         await self._repository.commit()
         await self._repository.refresh(project)
         return project

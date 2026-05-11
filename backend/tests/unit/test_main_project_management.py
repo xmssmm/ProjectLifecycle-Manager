@@ -309,6 +309,7 @@ async def test_close_main_project_requires_all_sub_projects_closed_or_terminated
     closed = await service.close_project(actor=actor, project_id=project.id)
 
     assert closed.status == MainProjectStatus.closed
+    assert closed.closed_at is not None
 
 
 @pytest.mark.asyncio

@@ -1035,6 +1035,10 @@ class SubProjectService:
 
         sub_project = await self._get_existing_sub_project(sub_project_id)
         if sub_project.status == SubProjectStatus.closed:
+            if sub_project.closed_at is None:
+                sub_project.closed_at = datetime.now(UTC)
+                await self._repository.commit()
+                await self._repository.refresh(sub_project)
             return sub_project
         if sub_project.status not in {SubProjectStatus.in_progress, SubProjectStatus.completed}:
             raise self._invalid_status(sub_project.status.value, "当前状态不允许结项子项目")
@@ -1051,8 +1055,11 @@ class SubProjectService:
             )
 
         before_state = to_audit_state(sub_project)
+        now = datetime.now(UTC)
         sub_project.status = SubProjectStatus.closed
         sub_project.actual_end_date = self._today_provider()
+        sub_project.closed_at = now
+        sub_project.updated_at = now
         await self._repository.commit()
         await self._repository.refresh(sub_project)
         self._record_audit(
@@ -1086,8 +1093,11 @@ class SubProjectService:
             raise self._invalid_status(sub_project.status.value, "当前状态不允许中止子项目")
 
         before_state = to_audit_state(sub_project)
+        now = datetime.now(UTC)
         sub_project.status = SubProjectStatus.terminated
         sub_project.actual_end_date = self._today_provider()
+        sub_project.closed_at = now
+        sub_project.updated_at = now
         await self._repository.commit()
         await self._repository.refresh(sub_project)
         self._record_audit(
