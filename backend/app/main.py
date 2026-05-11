@@ -17,6 +17,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.departments import router as departments_router
 from app.api.v1.documents import router as documents_router
+from app.api.v1.exports import router as exports_router
 from app.api.v1.handover_requests import router as handover_requests_router
 from app.api.v1.imports import router as imports_router
 from app.api.v1.main_projects import router as main_projects_router
@@ -158,6 +159,7 @@ def create_app(
             {"name": "archives", "description": "Archive batch and restore endpoints."},
             {"name": "audit-logs", "description": "Audit log query endpoints."},
             {"name": "dashboard", "description": "Role-scoped dashboard endpoints."},
+            {"name": "exports", "description": "Database export job endpoints."},
             {"name": "payments", "description": "Payment creation and reversal endpoints."},
             {"name": "reports", "description": "Report generation and progress endpoints."},
             {"name": "notifications", "description": "Notification query endpoints."},
@@ -209,6 +211,7 @@ def create_app(
     app.include_router(dashboard_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
+    app.include_router(exports_router, prefix="/api/v1")
     app.include_router(handover_requests_router, prefix="/api/v1")
     app.include_router(imports_router, prefix="/api/v1")
     app.include_router(main_projects_router, prefix="/api/v1")

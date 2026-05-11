@@ -6,6 +6,7 @@ import ArchiveManagementView from '@/views/admin/ArchiveManagement.vue';
 import ComponentDemoView from '@/views/admin/ComponentDemoView.vue';
 import ApiKeyManagementView from '@/views/admin/ApiKeyManagement.vue';
 import AuditLogQueryView from '@/views/admin/AuditLogQuery.vue';
+import DatabaseExportView from '@/views/admin/DatabaseExport.vue';
 import DepartmentListView from '@/views/admin/DepartmentList.vue';
 import HandoverHistoryView from '@/views/admin/HandoverHistory.vue';
 import ProjectImportView from '@/views/admin/ProjectImport.vue';
@@ -95,6 +96,12 @@ const router = createRouter({
       name: 'admin-project-imports',
       component: ProjectImportView,
       meta: { permission: 'project.import', requiresAuth: true },
+    },
+    {
+      path: '/admin/exports/database',
+      name: 'admin-database-export',
+      component: DatabaseExportView,
+      meta: { permission: 'database.export', requiresAuth: true },
     },
     {
       path: '/admin/handover',
