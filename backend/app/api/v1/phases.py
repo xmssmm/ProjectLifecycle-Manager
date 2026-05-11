@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.webhook_events import enqueue_webhook_event
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
 from app.core.permissions import require_permission
@@ -27,6 +28,7 @@ from app.services.phases import (
     PhaseService,
     SqlAlchemyPhaseRepository,
 )
+from app.services.webhooks import WebhookEventType
 
 router = APIRouter(prefix="/phases", tags=["phases"])
 
@@ -114,7 +116,25 @@ async def get_phase(
 async def promote_phase(
     phase_id: UUID,
     service: Annotated[PhaseService, Depends(get_phase_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     current_user: Annotated[User, Depends(require_permission("phase.promote"))],
 ) -> dict[str, object]:
     result = await service.promote_phase(actor=current_user, phase_id=phase_id)
+    source_id = result.activated_phase.id if result.activated_phase is not None else result.phase.id
+    await enqueue_webhook_event(
+        event_type=WebhookEventType.phase_promoted,
+        session=session,
+        source_id=source_id,
+        payload={
+            "activated_phase_id": str(result.activated_phase.id)
+            if result.activated_phase is not None
+            else None,
+            "activated_phase_no": result.activated_phase.phase_no
+            if result.activated_phase is not None
+            else None,
+            "completed_phase_id": str(result.phase.id),
+            "completed_phase_no": result.phase.phase_no,
+            "sub_project_id": str(result.phase.sub_project_id),
+        },
+    )
     return success_response(serialize_phase_promotion(result))

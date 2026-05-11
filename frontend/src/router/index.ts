@@ -9,6 +9,7 @@ import DepartmentListView from '@/views/admin/DepartmentList.vue';
 import HandoverHistoryView from '@/views/admin/HandoverHistory.vue';
 import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
+import WebhookManagementView from '@/views/admin/WebhookManagement.vue';
 import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
 import DashboardView from '@/views/dashboard/DashboardView.vue';
@@ -72,6 +73,12 @@ const router = createRouter({
       path: '/admin/api-keys',
       name: 'admin-api-keys',
       component: ApiKeyManagementView,
+      meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/webhooks',
+      name: 'admin-webhooks',
+      component: WebhookManagementView,
       meta: { requireRole: ['admin'], requiresAuth: true },
     },
     {

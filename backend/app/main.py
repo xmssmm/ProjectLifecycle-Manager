@@ -28,6 +28,7 @@ from app.api.v1.sub_projects import router as sub_projects_router
 from app.api.v1.system import router as system_router
 from app.api.v1.tasks import router as tasks_router
 from app.api.v1.users import router as users_router
+from app.api.v1.webhooks import router as webhooks_router
 from app.core.config import Settings, get_settings
 from app.core.db import AsyncSessionLocal
 from app.core.deps import get_auth_token_store
@@ -148,6 +149,7 @@ def create_app(
         lifespan=lifespan_context,
         openapi_tags=[
             {"name": "external-api", "description": "External read-only API endpoints."},
+            {"name": "webhooks", "description": "Webhook endpoint and delivery endpoints."},
             {"name": "acceptance-steps", "description": "Acceptance step endpoints."},
             {"name": "api-keys", "description": "API key management endpoints."},
             {"name": "audit-logs", "description": "Audit log query endpoints."},
@@ -212,6 +214,7 @@ def create_app(
     app.include_router(system_router, prefix="/api/v1")
     app.include_router(tasks_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
+    app.include_router(webhooks_router, prefix="/api/v1")
 
     @app.get("/health", tags=["system"])
     async def health() -> dict[str, Any]:

@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.webhook_events import enqueue_webhook_event
 from app.core.db import AsyncSessionLocal, get_db_session
 from app.core.deps import get_current_user
 from app.core.permissions import require_permission
@@ -22,6 +23,7 @@ from app.services.revoke_requests import (
     RevokeRequestService,
     SqlAlchemyRevokeRequestRepository,
 )
+from app.services.webhooks import WebhookEventType
 
 router = APIRouter(prefix="/revoke-requests", tags=["revoke-requests"])
 
@@ -69,6 +71,7 @@ async def review_revoke_request(
     payload: RevokeRequestReview,
     background_tasks: BackgroundTasks,
     service: Annotated[RevokeRequestService, Depends(get_revoke_request_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     current_user: Annotated[User, Depends(require_permission("revoke_request.review"))],
 ) -> dict[str, object]:
     request = await service.review_request(
@@ -80,5 +83,16 @@ async def review_revoke_request(
         ),
         payload=payload,
         request_id=request_id,
+    )
+    await enqueue_webhook_event(
+        event_type=WebhookEventType.revoke_request_reviewed,
+        session=session,
+        source_id=request.id,
+        payload={
+            "decision": request.status.value,
+            "phase_id": str(request.phase_id),
+            "request_id": str(request.id),
+            "sub_project_id": str(request.sub_project_id),
+        },
     )
     return success_response(serialize_revoke_request(request))
