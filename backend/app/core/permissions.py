@@ -15,6 +15,7 @@ PERMISSION_MATRIX: dict[str, frozenset[UserRole]] = {
     "user.manage": frozenset({UserRole.admin}),
     "system.config": frozenset({UserRole.admin}),
     "audit_log.read": frozenset({UserRole.admin}),
+    "database.export": frozenset({UserRole.admin}),
     "main_project.create": frozenset({UserRole.admin, UserRole.dept_manager}),
     "main_project.edit": frozenset({UserRole.admin, UserRole.dept_manager}),
     "main_project.review": frozenset({UserRole.admin, UserRole.dept_manager}),

@@ -2,6 +2,7 @@
 import {
   Box,
   DataAnalysis,
+  Download,
   Folder,
   House,
   List,
@@ -58,6 +59,7 @@ const navItems: NavItem[] = [
   { icon: Setting, index: '/admin/webhooks', label: 'Webhook', requireRole: ['admin'] },
   { icon: Box, index: '/admin/archives', label: '归档', requireRole: ['admin'] },
   { icon: Upload, index: '/admin/imports/projects', label: '导入', requireRole: ['admin'] },
+  { icon: Download, index: '/admin/exports/database', label: '导出', requireRole: ['admin'] },
   { icon: User, index: '/admin/handover', label: '转交', requireRole: ['admin'] },
   { icon: Box, index: '/component-demo', label: '组件', requireRole: ['admin'] },
   { disabled: true, icon: Setting, index: '/admin', label: '管理', requireRole: ['admin'] },

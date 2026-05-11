@@ -277,27 +277,35 @@
 
 **Files:**
 
-- Create: `backend/app/schemas/exports.py`
-- Create: `backend/app/services/database_exports.py`
-- Create: `backend/app/api/v1/exports.py`
-- Modify: `backend/app/api/v1/router.py`
-- Create: `frontend/src/api/exports.ts`
-- Create: `frontend/src/views/admin/DatabaseExport.vue`
-- Test: `backend/tests/unit/test_database_exports.py`
-- Test: `backend/tests/api/test_database_exports_api.py`
+- [x] Create: `backend/alembic/versions/0031_create_database_export_jobs.py`
+- [x] Create: `backend/app/models/exports.py`
+- [x] Create: `backend/app/schemas/exports.py`
+- [x] Create: `backend/app/services/database_exports.py`
+- [x] Create: `backend/app/api/v1/exports.py`
+- [x] Modify: `backend/app/main.py`
+- [x] Modify: `backend/app/tasks/celery_app.py`
+- [x] Create: `backend/app/tasks/database_exports.py`
+- [x] Create: `frontend/src/api/exports.ts`
+- [x] Create: `frontend/src/stores/useDatabaseExportStore.ts`
+- [x] Create: `frontend/src/types/exports.ts`
+- [x] Create: `frontend/src/views/admin/DatabaseExport.vue`
+- [x] Test: `backend/tests/unit/test_database_exports.py`
+- [x] Test: `backend/tests/api/test_database_exports_api.py`
+- [x] Test: `frontend/tests/exports-api.test.ts`
+- [x] Test: `frontend/tests/database-export-page.test.ts`
 
 **Implementation:**
 
-- admin 可发起全库导出任务。
-- 导出包包含 CSV/Excel、manifest、外键说明和生成审计信息。
-- 大导出异步执行，并提供任务状态和下载地址。
+- [x] admin 可发起全库导出任务。
+- [x] 导出包包含 CSV/Excel、manifest、外键说明和生成审计信息。
+- [x] 大导出异步执行，并提供任务状态和下载地址。
 
 **Test plan:**
 
-- [ ] 非 admin 被拒绝。
-- [ ] manifest 包含表、行数、生成时间、操作者。
-- [ ] 外键引用能在导出包中追踪。
-- [ ] 审计日志记录导出发起和下载。
+- [x] 非 admin 被拒绝。
+- [x] manifest 包含表、行数、生成时间、操作者。
+- [x] 外键引用能在导出包中追踪。
+- [x] 审计日志记录导出发起和下载。
 
 **Verification:**
 

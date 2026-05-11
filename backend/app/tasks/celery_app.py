@@ -27,6 +27,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "app.tasks.file_cleanup",
             "app.tasks.audit_partitions",
             "app.tasks.reports",
+            "app.tasks.database_exports",
             "app.tasks.notifications",
             "app.tasks.notification_delivery",
             "app.tasks.webhooks",
