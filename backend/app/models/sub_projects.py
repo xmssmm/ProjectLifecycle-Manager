@@ -55,6 +55,7 @@ class SubProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("spent_amount >= 0", name="ck_sub_projects_spent_amount_non_negative"),
         Index("ix_sub_projects_status", "status"),
         Index("ix_sub_projects_main_status", "main_project_id", "status"),
+        Index("ix_sub_projects_closed_at", "closed_at"),
     )
 
     project_no: Mapped[str] = mapped_column(String(48), nullable=False, unique=True, index=True)
@@ -99,6 +100,7 @@ class SubProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         server_default=text("0"),
     )
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     main_project: Mapped[MainProject] = relationship()
     department: Mapped[Department] = relationship()

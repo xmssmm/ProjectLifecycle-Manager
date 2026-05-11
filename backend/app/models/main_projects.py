@@ -52,6 +52,7 @@ class MainProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("total_budget >= 0", name="ck_main_projects_total_budget_non_negative"),
         CheckConstraint("spent_amount >= 0", name="ck_main_projects_spent_amount_non_negative"),
         Index("ix_main_projects_status", "status"),
+        Index("ix_main_projects_closed_at", "closed_at"),
     )
 
     project_no: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
@@ -77,6 +78,7 @@ class MainProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         server_default=text("0"),
     )
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     creator_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
