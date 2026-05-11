@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.core.exceptions import AuthenticationError
+from app.core.redis import create_redis_client
 from app.models.users import User
 from app.services.audit import set_audit_actor
 from app.services.auth import (
@@ -33,7 +34,7 @@ class CurrentUserContext:
 def get_auth_token_store(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthTokenStore:
-    return RedisAuthTokenStore(settings.redis_url)
+    return RedisAuthTokenStore(redis_client=create_redis_client(settings))
 
 
 async def get_current_token_context(

@@ -12,7 +12,14 @@ class Settings(BaseSettings):
     app_port: int = 8000
 
     database_url: str = "postgresql+asyncpg://project_mgmt:change-me@localhost:5432/project_mgmt"
+    database_replica_url: str | None = None
     redis_url: str = "redis://localhost:6379/0"
+    redis_sentinel_enabled: bool = False
+    redis_sentinel_hosts: str = ""
+    redis_sentinel_master_name: str = "mymaster"
+    redis_sentinel_db: int = 0
+    redis_sentinel_password: str = ""
+    redis_sentinel_socket_timeout_seconds: float = 1.0
     celery_broker_url: str | None = None
     celery_result_backend: str | None = None
 
@@ -83,12 +90,56 @@ class Settings(BaseSettings):
         return self.max_upload_size_mb * 1024 * 1024
 
     @property
+    def effective_read_database_url(self) -> str:
+        return self.database_replica_url or self.database_url
+
+    @property
+    def redis_sentinel_host_tuples(self) -> list[tuple[str, int]]:
+        hosts: list[tuple[str, int]] = []
+        for raw_host in self.redis_sentinel_hosts.split(","):
+            host = raw_host.strip()
+            if not host:
+                continue
+            name, separator, port = host.rpartition(":")
+            if not separator or not name or not port:
+                raise ValueError("Redis Sentinel hosts must use host:port entries")
+            hosts.append((name, int(port)))
+        return hosts
+
+    @property
+    def effective_redis_sentinel_url(self) -> str:
+        return ";".join(
+            f"sentinel://{host}:{port}" for host, port in self.redis_sentinel_host_tuples
+        )
+
+    @property
+    def celery_sentinel_transport_options(self) -> dict[str, object]:
+        if not self.redis_sentinel_enabled:
+            return {}
+        options: dict[str, object] = {
+            "master_name": self.redis_sentinel_master_name,
+            "db": self.redis_sentinel_db,
+        }
+        if self.redis_sentinel_password:
+            options["password"] = self.redis_sentinel_password
+            options["sentinel_kwargs"] = {"password": self.redis_sentinel_password}
+        return options
+
+    @property
     def effective_celery_broker_url(self) -> str:
-        return self.celery_broker_url or self.redis_url
+        if self.celery_broker_url:
+            return self.celery_broker_url
+        if self.redis_sentinel_enabled and self.redis_sentinel_host_tuples:
+            return self.effective_redis_sentinel_url
+        return self.redis_url
 
     @property
     def effective_celery_result_backend(self) -> str:
-        return self.celery_result_backend or self.redis_url
+        if self.celery_result_backend:
+            return self.celery_result_backend
+        if self.redis_sentinel_enabled and self.redis_sentinel_host_tuples:
+            return self.effective_redis_sentinel_url
+        return self.redis_url
 
 
 @lru_cache

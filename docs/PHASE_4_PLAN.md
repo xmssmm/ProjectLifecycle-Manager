@@ -360,10 +360,10 @@
 
 **Test plan:**
 
-- [ ] 未配置 HA 时保持现有单机行为。
-- [ ] 配置 replica URL 时生成只读连接。
-- [ ] Redis Sentinel 配置解析正确。
-- [ ] compose 配置可通过 `docker compose config`。
+- [x] 未配置 HA 时保持现有单机行为。
+- [x] 配置 replica URL 时生成只读连接。
+- [x] Redis Sentinel 配置解析正确。
+- [x] compose 配置可通过 `docker compose config`。
 
 **Verification:**
 

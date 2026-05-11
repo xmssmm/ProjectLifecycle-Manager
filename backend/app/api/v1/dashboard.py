@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
+from app.core.redis import create_redis_client
 from app.core.responses import success_response
 from app.models.users import User, UserRole
 from app.services.dashboard import (
@@ -23,7 +24,7 @@ async def get_dashboard_service(
 ) -> DashboardService:
     return DashboardService(
         repository=SqlAlchemyDashboardRepository(session),
-        cache=RedisDashboardCache(settings.redis_url),
+        cache=RedisDashboardCache(redis_client=create_redis_client(settings)),
     )
 
 

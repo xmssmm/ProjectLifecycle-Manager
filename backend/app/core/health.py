@@ -1,11 +1,11 @@
 from collections.abc import Awaitable
 from typing import cast
 
-from redis.asyncio import Redis
 from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.db import engine
+from app.core.redis import create_redis_client
 
 
 async def check_database() -> str:
@@ -19,7 +19,7 @@ async def check_database() -> str:
 
 async def check_redis() -> str:
     settings = get_settings()
-    redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
+    redis_client = create_redis_client(settings)
     try:
         await cast(Awaitable[bool], redis_client.ping())
     except Exception:

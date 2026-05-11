@@ -52,6 +52,7 @@ from app.core.middleware import (
     SecurityHeadersMiddleware,
     configure_logging,
 )
+from app.core.redis import create_redis_client
 from app.core.responses import success_response
 from app.services.auth import (
     AuthFailureStore,
@@ -134,11 +135,15 @@ def create_app(
     configure_logging()
     resolved_settings = settings or get_settings()
     resolved_health_checker = health_checker or collect_health
-    resolved_rate_limit_store = rate_limit_store or RedisRateLimitStore(resolved_settings.redis_url)
-    resolved_auth_failure_store = auth_failure_store or RedisAuthFailureStore(
-        resolved_settings.redis_url,
+    resolved_rate_limit_store = rate_limit_store or RedisRateLimitStore(
+        redis_client=create_redis_client(resolved_settings),
     )
-    resolved_auth_token_store = auth_token_store or RedisAuthTokenStore(resolved_settings.redis_url)
+    resolved_auth_failure_store = auth_failure_store or RedisAuthFailureStore(
+        redis_client=create_redis_client(resolved_settings),
+    )
+    resolved_auth_token_store = auth_token_store or RedisAuthTokenStore(
+        redis_client=create_redis_client(resolved_settings),
+    )
     http_metrics = create_http_metrics()
     lifespan_context = (
         build_startup_health_warning_lifespan(health_warning_checker)

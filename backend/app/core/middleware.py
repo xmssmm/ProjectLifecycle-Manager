@@ -100,8 +100,10 @@ class InMemoryRateLimitStore:
 
 
 class RedisRateLimitStore:
-    def __init__(self, redis_url: str) -> None:
-        self._client = Redis.from_url(redis_url, decode_responses=True)
+    def __init__(self, redis_url: str | None = None, *, redis_client: Redis | None = None) -> None:
+        if redis_client is None and redis_url is None:
+            raise ValueError("redis_url or redis_client is required")
+        self._client = redis_client or Redis.from_url(str(redis_url), decode_responses=True)
 
     async def increment(self, key: str, ttl_seconds: int) -> int:
         value = await self._client.incr(key)
