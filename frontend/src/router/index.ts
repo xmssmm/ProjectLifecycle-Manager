@@ -15,6 +15,7 @@ import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import WebhookManagementView from '@/views/admin/WebhookManagement.vue';
 import WorkflowTemplateManagementView from '@/views/admin/WorkflowTemplateManagement.vue';
+import ProjectBenchmarkView from '@/views/analytics/ProjectBenchmark.vue';
 import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
 import DashboardView from '@/views/dashboard/DashboardView.vue';
@@ -245,6 +246,13 @@ const router = createRouter({
       name: 'custom-reports',
       component: CustomReportBuilderView,
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/analytics/project-benchmarks/:projectId?',
+      name: 'project-benchmarks',
+      component: ProjectBenchmarkView,
+      meta: { requiresAuth: true },
+      props: (route) => ({ projectId: route.params.projectId as string | undefined }),
     },
     {
       path: '/tasks/:id',
