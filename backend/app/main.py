@@ -17,6 +17,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.custom_reports import router as custom_reports_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.departments import router as departments_router
+from app.api.v1.document_classification import router as document_classification_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.exports import router as exports_router
 from app.api.v1.handover_requests import router as handover_requests_router
@@ -168,6 +169,10 @@ def create_app(
             {"name": "custom-reports", "description": "Custom report builder endpoints."},
             {"name": "project-benchmarks", "description": "Cross-project benchmark endpoints."},
             {"name": "project-risk", "description": "Project risk scoring endpoints."},
+            {
+                "name": "document-classification",
+                "description": "Document type suggestion and confirmation endpoints.",
+            },
             {"name": "acceptance-steps", "description": "Acceptance step endpoints."},
             {"name": "api-keys", "description": "API key management endpoints."},
             {"name": "archives", "description": "Archive batch and restore endpoints."},
@@ -225,6 +230,7 @@ def create_app(
     app.include_router(custom_reports_router, prefix="/api/v1")
     app.include_router(dashboard_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
+    app.include_router(document_classification_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(exports_router, prefix="/api/v1")
     app.include_router(handover_requests_router, prefix="/api/v1")

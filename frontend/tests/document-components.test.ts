@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { suggestDocumentType } from '@/api/documentClassification';
 import { previewDocument, previewOfficeDocument, uploadDocument } from '@/api/documents';
 import DocumentList from '@/components/document/DocumentList.vue';
 import PdfPreview from '@/components/document/PdfPreview.vue';
@@ -11,6 +12,11 @@ vi.mock('@/api/documents', () => ({
   previewDocument: vi.fn(),
   previewOfficeDocument: vi.fn(),
   uploadDocument: vi.fn(),
+}));
+
+vi.mock('@/api/documentClassification', () => ({
+  confirmDocumentType: vi.fn(),
+  suggestDocumentType: vi.fn(),
 }));
 
 const pdfMocks = vi.hoisted(() => {
@@ -45,6 +51,14 @@ vi.mock('pdfjs-dist/build/pdf.worker.mjs?url', () => ({ default: 'worker-url' })
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(suggestDocumentType).mockResolvedValue({
+    current_doc_type: 'contract',
+    document_id: null,
+    file_name: 'contract.pdf',
+    phase_id: 'phase-1',
+    sub_project_id: 'sub-1',
+    suggestions: [],
+  });
 });
 
 describe('DocumentUploader', () => {
