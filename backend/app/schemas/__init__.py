@@ -1,4 +1,5 @@
 """Pydantic schemas package."""
+from app.schemas.api_keys import ApiKeyRead
 from app.schemas.auth import AccessTokenRead, CurrentUserRead, LoginRequest, TokenPairRead
 from app.schemas.departments import DepartmentRead
 from app.schemas.documents import DocumentRead
@@ -10,6 +11,7 @@ from app.schemas.tasks import TaskCreate, TaskExecutorAssign, TaskExecutorRead, 
 from app.schemas.users import UserRead
 
 __all__ = [
+    "ApiKeyRead",
     "DepartmentRead",
     "DocumentRead",
     "HandoverRequestRead",

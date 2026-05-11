@@ -1,5 +1,6 @@
 """SQLAlchemy models package."""
 from app.models.acceptance_steps import AcceptanceStep, AcceptanceStepStatus
+from app.models.api_keys import ApiKey
 from app.models.audit_logs import AuditLog
 from app.models.base import Base
 from app.models.departments import Department
@@ -48,6 +49,7 @@ __all__ = [
     "Base",
     "AcceptanceStep",
     "AcceptanceStepStatus",
+    "ApiKey",
     "AuditLog",
     "Department",
     "Document",
