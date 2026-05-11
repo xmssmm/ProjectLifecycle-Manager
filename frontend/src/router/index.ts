@@ -15,6 +15,7 @@ import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import WebhookManagementView from '@/views/admin/WebhookManagement.vue';
 import WorkflowTemplateManagementView from '@/views/admin/WorkflowTemplateManagement.vue';
+import AnalyticsQuestionAnswerView from '@/views/analytics/AnalyticsQuestionAnswer.vue';
 import ProjectBenchmarkView from '@/views/analytics/ProjectBenchmark.vue';
 import ProjectRiskView from '@/views/analytics/ProjectRisk.vue';
 import LoginView from '@/views/auth/LoginView.vue';
@@ -246,6 +247,12 @@ const router = createRouter({
       path: '/reports/custom',
       name: 'custom-reports',
       component: CustomReportBuilderView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/analytics/qa',
+      name: 'analytics-qa',
+      component: AnalyticsQuestionAnswerView,
       meta: { requiresAuth: true },
     },
     {

@@ -37,6 +37,7 @@ export default {
   },
   nav: {
     admin: '管理',
+    analyticsQa: '指标问答',
     apiKeys: 'API Key',
     archives: '归档',
     audit: '审计',

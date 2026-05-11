@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError
 
 from app.core.exceptions import ValidationFailedError
+from app.schemas.custom_reports import ReportQueryConfig
 
 
 class AiRiskSummary(BaseModel):
@@ -22,7 +23,16 @@ class AiDocumentTypeSuggestions(BaseModel):
     suggestions: list[AiDocumentTypeSuggestion] = Field(default_factory=list, max_length=5)
 
 
+class AiAnalyticsQueryConfig(BaseModel):
+    query_config: ReportQueryConfig
+    answer_template: str = Field(min_length=1, max_length=500)
+    chart_type: str = Field(default="table", max_length=32)
+    x_field: str | None = Field(default=None, max_length=64)
+    y_field: str | None = Field(default=None, max_length=64)
+
+
 AI_SCHEMA_REGISTRY: dict[str, type[BaseModel]] = {
+    "analytics_query_config": AiAnalyticsQueryConfig,
     "document_type_suggestions": AiDocumentTypeSuggestions,
     "risk_summary": AiRiskSummary,
 }
