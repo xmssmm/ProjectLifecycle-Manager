@@ -48,6 +48,7 @@ export default {
     handover: '转交',
     home: '工作台',
     imports: '导入',
+    projectTemplates: '模板库',
     management: '管理',
     me: '我的',
     projects: '项目',

@@ -37,6 +37,12 @@ from app.models.phases import (
     PhaseStatus,
     ProcurementType,
 )
+from app.models.project_taxonomy import (
+    ProjectCategory,
+    ProjectTag,
+    ProjectTemplate,
+    ProjectTemplateScope,
+)
 from app.models.project_types import ProjectType
 from app.models.reports import ReportJob, ReportJobStatus, ReportType
 from app.models.revoke_requests import (
@@ -91,6 +97,10 @@ __all__ = [
     "ProjectReview",
     "ProjectReviewDecision",
     "ProjectType",
+    "ProjectCategory",
+    "ProjectTag",
+    "ProjectTemplate",
+    "ProjectTemplateScope",
     "SubProject",
     "SubProjectHandover",
     "SubProjectMember",
