@@ -1,6 +1,6 @@
 # 企业项目过程管理与资料归档系统
 
-这是采购类项目过程管理与资料归档系统的全功能开发仓库。当前 `develop` 已完成 MVP（Phase 1）到 Phase 4“规模与合规”功能，覆盖项目流程、资料归档、任务协作、付款、撤销、审计、报表、仪表盘、移动端适配、Office 预览、通知增强、企业集成、归档恢复、全文检索、批量导入导出、多时区、国际化和生产高可用部署能力。
+这是采购类项目过程管理与资料归档系统的全功能开发仓库。当前 `develop` 已完成 MVP（Phase 1）到 Phase 4“规模与合规”功能，覆盖项目流程、资料归档、任务协作、付款、撤销、审计、报表、仪表盘、移动端适配、Office 预览、通知增强、企业集成、归档恢复、全文检索、批量导入导出、多时区、国际化和生产高可用部署能力。Phase 5 将继续推进平台化与智能化，目标是支持工作流自定义、自定义报表、多项目类型、跨项目分析和可审计 AI 辅助。
 
 ## 本地启动 5 步指南
 
@@ -64,6 +64,8 @@ npm.cmd run typecheck
 - Phase 4 使用手册：`docs/USER_MANUAL.md`
 - 管理员与运维手册：`docs/ADMIN_OPERATIONS_MANUAL.md`
 - Phase 4 发布说明：`docs/PHASE_4_RELEASE_NOTES.md`
+- Phase 5 实施计划：`docs/PHASE_5_PLAN.md`
+- Phase 5 默认决策：`docs/PHASE_5_OPEN_QUESTIONS.md`
 - Phase 2 发布说明：`docs/RELEASE_NOTES_PHASE_2.md`
 - Phase 3 实施计划：`docs/PHASE_3_PLAN.md`
 - Phase 3 默认决策：`docs/PHASE_3_OPEN_QUESTIONS.md`
@@ -80,4 +82,4 @@ npm.cmd run typecheck
 
 ## 当前状态
 
-Phase 4 功能已合并到 `develop`。后续演进按 `docs/ROADMAP.md` 继续推进 Phase 5 平台化与智能化。
+Phase 4 功能已合并到 `develop`。Phase 5 计划已立项，后续按 `docs/PHASE_5_PLAN.md` 继续推进平台化与智能化。
