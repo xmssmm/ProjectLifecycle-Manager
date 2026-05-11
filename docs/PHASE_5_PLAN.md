@@ -82,7 +82,7 @@
 
 - Create: `backend/app/seeds/workflow_templates.py`
 - Modify: `backend/app/seeds/run.py`
-- Modify: `backend/app/seeds/phase_doc_templates.py`
+- Modify: `backend/app/schemas/workflows.py`
 - Create: `backend/tests/unit/test_workflow_seed.py`
 - Create: `backend/tests/api/test_workflow_migration_compat.py`
 
@@ -96,10 +96,10 @@
 
 **Test plan:**
 
-- [ ] 干净库执行 seed 后存在采购项目类型和 `procurement-v1`。
-- [ ] 重复 seed 不重复写入项目类型、模板和版本。
-- [ ] 旧子项目缺少模板版本时可回填。
-- [ ] 旧环节查询仍返回原有 6 环节顺序。
+- [x] 干净库执行 seed 后存在采购项目类型和默认采购流程版本。
+- [x] 重复 seed 不重复写入项目类型、模板和版本。
+- [x] 旧主项目和旧子项目缺少平台化字段时由 seed 回填到默认采购类型与模板版本。
+- [x] 默认采购模板仍返回原有 6 环节顺序。
 
 **Verification:**
 

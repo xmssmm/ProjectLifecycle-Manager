@@ -11,6 +11,7 @@ from app.core.db import AsyncSessionLocal, engine
 from app.seeds.default_admin import seed_default_admin
 from app.seeds.default_departments import seed_default_departments
 from app.seeds.phase_doc_templates import seed_phase_doc_templates
+from app.seeds.workflow_templates import seed_workflow_templates
 
 SeedFn = Callable[[AsyncSession], Awaitable[int]]
 
@@ -18,10 +19,12 @@ SEED_TARGETS: dict[str, tuple[tuple[str, SeedFn], ...]] = {
     "admin": (("admin", seed_default_admin),),
     "deps": (("deps", seed_default_departments),),
     "phases": (("phases", seed_phase_doc_templates),),
+    "workflows": (("workflows", seed_workflow_templates),),
     "all": (
         ("deps", seed_default_departments),
         ("admin", seed_default_admin),
         ("phases", seed_phase_doc_templates),
+        ("workflows", seed_workflow_templates),
     ),
 }
 
