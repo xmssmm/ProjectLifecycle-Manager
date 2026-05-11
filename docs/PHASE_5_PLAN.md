@@ -154,17 +154,15 @@
 
 - Modify: `backend/app/services/sub_projects.py`
 - Modify: `backend/app/services/phases.py`
-- Modify: `backend/app/services/documents.py`
 - Modify: `backend/app/schemas/sub_projects.py`
-- Modify: `frontend/src/views/sub-project/SubProjectEdit.vue`
-- Modify: `frontend/src/components/phase/PhaseProgress.vue`
-- Test: `backend/tests/unit/test_dynamic_phase_generation.py`
-- Test: `backend/tests/unit/test_dynamic_phase_promote.py`
-- Test: `frontend/tests/sub-project-workflow.test.ts`
+- Modify: `frontend/src/types/projects.ts`
+- Test: `backend/tests/unit/test_sub_project_management.py`
+- Test: `backend/tests/unit/test_sub_project_review_flow.py`
+- Test: `backend/tests/unit/test_phase_promote.py`
 
 **Implementation:**
 
-- 新建子项目时按所选项目类型选择已发布默认模板版本。
+- 新建子项目时显式记录所选模板版本；未显式选择且主项目已有项目类型时，自动绑定该项目类型最新已发布模板版本。
 - 子项目审核通过后根据 `phase_definitions` 动态生成环节，不再只依赖硬编码 6 环节。
 - 必传文档校验读取模板版本快照，支持不同项目类型不同文档要求。
 - 环节推进仍保持现有状态机和审计日志，新增模板版本上下文。
@@ -172,17 +170,18 @@
 
 **Test plan:**
 
-- [ ] 采购子项目仍生成 6 个默认环节。
-- [ ] 自定义 3 环节模板生成 3 个环节且顺序正确。
-- [ ] 自定义必传文档缺失时推进被拒。
-- [ ] 模板发布新版本后，旧子项目推进仍使用旧版本规则。
+- [x] 采购子项目仍生成 6 个默认环节。
+- [x] 自定义 3 环节模板生成 3 个环节且顺序正确。
+- [x] 自定义必传文档缺失时推进被拒。
+- [x] 模板发布新版本后，旧子项目推进仍使用旧版本规则。
+- [x] 主项目绑定项目类型时，新建子项目自动选择该类型最新已发布模板版本。
 
 **Verification:**
 
-- `cd backend && python -B -m pytest -q tests/unit/test_dynamic_phase_generation.py tests/unit/test_dynamic_phase_promote.py --no-cov`
-- `cd frontend && npm.cmd run test:unit -- sub-project-workflow`
+- `cd backend && python -B -m pytest -q tests/unit/test_sub_project_management.py tests/unit/test_sub_project_review_flow.py tests/unit/test_phase_promote.py --no-cov`
 - `cd backend && python -B -m ruff check .`
 - `cd backend && python -B -m mypy app tests`
+- `cd backend && python -B -m compileall -q app tests alembic`
 - `cd frontend && npm.cmd run lint`
 - `cd frontend && npm.cmd run typecheck`
 

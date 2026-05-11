@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, or_, select, text
@@ -30,6 +30,7 @@ from app.models.sub_projects import (
     SubProjectStatus,
 )
 from app.models.users import User, UserRole, UserStatus
+from app.models.workflows import WorkflowTemplate, WorkflowTemplateStatus, WorkflowTemplateVersion
 from app.schemas.sub_projects import (
     SubProjectBatchHandoverItem,
     SubProjectCreate,
@@ -133,6 +134,18 @@ class SubProjectRepository(Protocol):
         ...
 
     async def phase_completion_counts(self, sub_project_id: UUID) -> tuple[int, int]:
+        ...
+
+    async def get_workflow_template_version(
+        self,
+        version_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
+        ...
+
+    async def get_default_workflow_template_version(
+        self,
+        project_type_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
         ...
 
     def add(self, sub_project: SubProject) -> None:
@@ -331,6 +344,34 @@ class SqlAlchemySubProjectRepository:
         )
         return int(total or 0), int(incomplete or 0)
 
+    async def get_workflow_template_version(
+        self,
+        version_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
+        version = await self._session.get(WorkflowTemplateVersion, version_id)
+        return version if isinstance(version, WorkflowTemplateVersion) else None
+
+    async def get_default_workflow_template_version(
+        self,
+        project_type_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
+        version = await self._session.scalar(
+            select(WorkflowTemplateVersion)
+            .join(WorkflowTemplate, WorkflowTemplate.id == WorkflowTemplateVersion.template_id)
+            .where(
+                WorkflowTemplate.project_type_id == project_type_id,
+                WorkflowTemplate.status == WorkflowTemplateStatus.published,
+                WorkflowTemplateVersion.status == WorkflowTemplateStatus.published,
+            )
+            .order_by(
+                WorkflowTemplateVersion.published_at.desc().nullslast(),
+                WorkflowTemplateVersion.version_no.desc(),
+                WorkflowTemplate.name.asc(),
+            )
+            .limit(1),
+        )
+        return version if isinstance(version, WorkflowTemplateVersion) else None
+
     def add(self, sub_project: SubProject) -> None:
         self._session.add(sub_project)
 
@@ -365,6 +406,7 @@ class InMemorySubProjectRepository:
         members: Sequence[SubProjectMember] | None = None,
         handovers: Sequence[SubProjectHandover] | None = None,
         users: Sequence[User] | None = None,
+        workflow_versions: Sequence[WorkflowTemplateVersion] | None = None,
         next_sequences: dict[UUID, int] | None = None,
     ) -> None:
         self.main_projects = list(main_projects)
@@ -372,6 +414,7 @@ class InMemorySubProjectRepository:
         self.members = list(members or [])
         self.handovers = list(handovers or [])
         self.users = list(users or [])
+        self.workflow_versions = list(workflow_versions or [])
         self.reviews: list[ProjectReview] = []
         self.phases: list[Phase] = []
         self.next_sequences = dict(next_sequences or {})
@@ -507,6 +550,37 @@ class InMemorySubProjectRepository:
         phases = [phase for phase in self.phases if phase.sub_project_id == sub_project_id]
         incomplete = [phase for phase in phases if phase.status != PhaseStatus.completed]
         return len(phases), len(incomplete)
+
+    async def get_workflow_template_version(
+        self,
+        version_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
+        return next(
+            (version for version in self.workflow_versions if version.id == version_id),
+            None,
+        )
+
+    async def get_default_workflow_template_version(
+        self,
+        project_type_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
+        candidates = [
+            version
+            for version in self.workflow_versions
+            if version.status == WorkflowTemplateStatus.published
+            and version.template is not None
+            and version.template.status == WorkflowTemplateStatus.published
+            and version.template.project_type_id == project_type_id
+        ]
+        candidates.sort(
+            key=lambda version: (
+                version.published_at or datetime.min.replace(tzinfo=UTC),
+                version.version_no,
+                version.template.name if version.template is not None else "",
+            ),
+            reverse=True,
+        )
+        return candidates[0] if candidates else None
 
     def add(self, sub_project: SubProject) -> None:
         self.sub_projects.append(sub_project)
@@ -837,6 +911,24 @@ class SubProjectService:
         if main_project.status not in OPEN_MAIN_PROJECT_STATUSES:
             raise self._invalid_status(main_project.status.value, "当前主项目状态不允许创建子项目")
 
+        version: WorkflowTemplateVersion | None = None
+        workflow_template_version_id = payload.workflow_template_version_id
+        if workflow_template_version_id is not None:
+            version = await self._repository.get_workflow_template_version(
+                workflow_template_version_id,
+            )
+            if version is None:
+                raise ResourceNotFoundError("工作流模板版本不存在")
+            if version.status != WorkflowTemplateStatus.published:
+                raise ResourceConflictError("工作流模板版本尚未发布")
+        elif main_project.project_type_id is not None:
+            version = await self._repository.get_default_workflow_template_version(
+                main_project.project_type_id,
+            )
+            if version is None:
+                raise ResourceNotFoundError("项目类型没有已发布工作流模板版本")
+            workflow_template_version_id = version.id
+
         sequence = await self._repository.next_sub_project_sequence(main_project.id)
         now = datetime.now(UTC)
         sub_project = SubProject(
@@ -851,6 +943,7 @@ class SubProjectService:
             status=SubProjectStatus.pending_review,
             plan_end_date=payload.plan_end_date,
             actual_end_date=None,
+            workflow_template_version_id=workflow_template_version_id,
             spent_amount=Decimal("0.00"),
             remark=payload.remark,
             created_at=now,
@@ -969,7 +1062,7 @@ class SubProjectService:
         from_status = sub_project.status
         if payload.decision == ProjectReviewDecision.approve:
             sub_project.status = SubProjectStatus.in_progress
-            self._create_default_phases(sub_project_id=sub_project.id, actor_id=actor.id)
+            await self._create_phases_for_sub_project(sub_project=sub_project, actor_id=actor.id)
         else:
             sub_project.status = SubProjectStatus.rejected
 
@@ -1231,6 +1324,45 @@ class SubProjectService:
                     if phase_no in {1, 5}
                     else PhaseStatus.waiting,
                     enter_at=now if phase_no in {1, 5} else None,
+                    finish_at=None,
+                    procurement_type=None,
+                    created_at=now,
+                    updated_at=now,
+                ),
+            )
+
+    async def _create_phases_for_sub_project(
+        self,
+        *,
+        sub_project: SubProject,
+        actor_id: UUID,
+    ) -> None:
+        if sub_project.workflow_template_version_id is None:
+            self._create_default_phases(sub_project_id=sub_project.id, actor_id=actor_id)
+            return
+
+        version = await self._repository.get_workflow_template_version(
+            sub_project.workflow_template_version_id,
+        )
+        if version is None or not version.phase_definitions:
+            self._create_default_phases(sub_project_id=sub_project.id, actor_id=actor_id)
+            return
+
+        now = datetime.now(UTC)
+        for definition in sorted(
+            version.phase_definitions,
+            key=lambda item: int(cast(int | str, item["order"])),
+        ):
+            phase_no = int(cast(int | str, definition["order"]))
+            self._repository.add_phase(
+                Phase(
+                    id=uuid4(),
+                    sub_project_id=sub_project.id,
+                    phase_no=phase_no,
+                    code=str(definition["key"]),
+                    name=str(definition["name"]),
+                    status=PhaseStatus.in_progress if phase_no == 1 else PhaseStatus.waiting,
+                    enter_at=now if phase_no == 1 else None,
                     finish_at=None,
                     procurement_type=None,
                     created_at=now,

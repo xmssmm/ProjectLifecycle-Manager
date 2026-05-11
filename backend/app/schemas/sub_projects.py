@@ -15,6 +15,7 @@ class SubProjectCreate(BaseModel):
     dept_id: UUID
     budget: Decimal = Field(ge=Decimal("0.00"), max_digits=15, decimal_places=2)
     plan_end_date: date | None = None
+    workflow_template_version_id: UUID | None = None
     remark: str | None = None
 
     model_config = ConfigDict(extra="forbid")
@@ -100,6 +101,7 @@ class SubProjectRead(BaseModel):
     creator_id: UUID | None
     status: SubProjectStatus
     plan_end_date: date | None
+    workflow_template_version_id: UUID | None
     actual_end_date: date | None
     spent_amount: Decimal
     remark: str | None

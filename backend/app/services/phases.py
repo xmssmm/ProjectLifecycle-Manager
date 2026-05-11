@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, or_, select
@@ -22,6 +22,7 @@ from app.models.phases import (
 )
 from app.models.sub_projects import SubProject, SubProjectMember, SubProjectStatus
 from app.models.users import User, UserRole
+from app.models.workflows import WorkflowTemplateVersion
 from app.services.notifications import NotificationService
 
 VIEW_ALL_PHASE_ROLES = frozenset(
@@ -115,6 +116,12 @@ class PhaseRepository(Protocol):
     ) -> list[PhaseDocTemplate]:
         ...
 
+    async def get_workflow_template_version(
+        self,
+        version_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
+        ...
+
     async def list_latest_documents(self, phase_id: UUID) -> list[Document]:
         ...
 
@@ -201,6 +208,13 @@ class SqlAlchemyPhaseRepository:
         )
         return list(result.all())
 
+    async def get_workflow_template_version(
+        self,
+        version_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
+        version = await self._session.get(WorkflowTemplateVersion, version_id)
+        return version if isinstance(version, WorkflowTemplateVersion) else None
+
     async def list_latest_documents(self, phase_id: UUID) -> list[Document]:
         result = await self._session.scalars(
             select(Document)
@@ -245,6 +259,7 @@ class InMemoryPhaseRepository:
         sub_projects: list[SubProject] | None = None,
         members: list[SubProjectMember] | None = None,
         histories: list[PhaseHistory] | None = None,
+        workflow_versions: list[WorkflowTemplateVersion] | None = None,
     ) -> None:
         self.phases = list(phases or [])
         self.phase_doc_templates = list(phase_doc_templates or [])
@@ -253,6 +268,7 @@ class InMemoryPhaseRepository:
         self.sub_projects = list(sub_projects or [])
         self.members = list(members or [])
         self.histories = list(histories or [])
+        self.workflow_versions = list(workflow_versions or [])
 
     async def list_phases(self, sub_project_id: UUID) -> list[Phase]:
         phases = [phase for phase in self.phases if phase.sub_project_id == sub_project_id]
@@ -304,6 +320,15 @@ class InMemoryPhaseRepository:
             )
         ]
         return sorted(templates, key=lambda template: template.doc_type)
+
+    async def get_workflow_template_version(
+        self,
+        version_id: UUID,
+    ) -> WorkflowTemplateVersion | None:
+        return next(
+            (version for version in self.workflow_versions if version.id == version_id),
+            None,
+        )
 
     async def list_latest_documents(self, phase_id: UUID) -> list[Document]:
         documents = [
@@ -432,10 +457,69 @@ class PhaseService:
         return sub_project
 
     async def _required_documents_for_phase(self, phase: Phase) -> list[PhaseDocTemplate]:
+        sub_project = await self._get_existing_sub_project(phase.sub_project_id)
+        if sub_project.workflow_template_version_id is not None:
+            version = await self._repository.get_workflow_template_version(
+                sub_project.workflow_template_version_id,
+            )
+            if version is not None:
+                return self._required_documents_from_workflow_version(version, phase)
         return await self._repository.list_required_doc_templates(
             phase_no=phase.phase_no,
             procurement_type=phase.procurement_type,
         )
+
+    @staticmethod
+    def _required_documents_from_workflow_version(
+        version: WorkflowTemplateVersion,
+        phase: Phase,
+    ) -> list[PhaseDocTemplate]:
+        definitions = [
+            definition
+            for definition in version.phase_definitions
+            if int(cast(int | str, definition["order"])) == phase.phase_no
+            or definition["key"] == phase.code
+        ]
+        if not definitions:
+            return []
+
+        now = datetime.now(UTC)
+        documents: list[PhaseDocTemplate] = []
+        required_documents = cast(
+            list[dict[str, object]],
+            definitions[0].get("required_documents", []),
+        )
+        for document in required_documents:
+            if not isinstance(document, dict):
+                continue
+            requirement = PhaseDocRequirement(str(document["requirement"]))
+            procurement_type_value = document.get("procurement_type")
+            if requirement == PhaseDocRequirement.optional:
+                continue
+            if (
+                requirement == PhaseDocRequirement.conditional
+                and procurement_type_value is not None
+                and phase.procurement_type != ProcurementType(str(procurement_type_value))
+            ):
+                continue
+            documents.append(
+                PhaseDocTemplate(
+                    id=uuid4(),
+                    phase_no=phase.phase_no,
+                    doc_type=str(document["doc_type"]),
+                    requirement=requirement,
+                    qty_rule=str(document["qty_rule"]),
+                    procurement_type=(
+                        ProcurementType(str(procurement_type_value))
+                        if procurement_type_value is not None
+                        else None
+                    ),
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                ),
+            )
+        return sorted(documents, key=lambda item: item.doc_type)
 
     async def _ensure_visible(self, actor: User, sub_project: SubProject) -> None:
         if actor.role in VIEW_ALL_PHASE_ROLES or sub_project.manager_id == actor.id:

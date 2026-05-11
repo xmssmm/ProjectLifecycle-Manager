@@ -26,6 +26,7 @@ from app.models.sub_projects import (
     SubProjectStatus,
 )
 from app.models.users import User, UserRole, UserStatus
+from app.models.workflows import WorkflowTemplate, WorkflowTemplateStatus, WorkflowTemplateVersion
 from app.schemas.sub_projects import SubProjectCreate, SubProjectMemberCreate, SubProjectUpdate
 from app.services.sub_projects import InMemorySubProjectRepository, SubProjectService
 
@@ -47,7 +48,11 @@ def make_user(role: UserRole, *, username: str) -> User:
     )
 
 
-def make_main_project(*, status: MainProjectStatus = MainProjectStatus.not_started) -> MainProject:
+def make_main_project(
+    *,
+    status: MainProjectStatus = MainProjectStatus.not_started,
+    project_type_id: UUID | None = None,
+) -> MainProject:
     now = datetime.now(UTC)
     return MainProject(
         id=uuid4(),
@@ -60,6 +65,21 @@ def make_main_project(*, status: MainProjectStatus = MainProjectStatus.not_start
         spent_amount=Decimal("0.00"),
         remark=None,
         creator_id=uuid4(),
+        project_type_id=project_type_id,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def make_workflow_version() -> WorkflowTemplateVersion:
+    now = datetime.now(UTC)
+    return WorkflowTemplateVersion(
+        id=uuid4(),
+        template_id=uuid4(),
+        version_no=1,
+        status=WorkflowTemplateStatus.published,
+        phase_definitions=[],
+        published_at=now,
         created_at=now,
         updated_at=now,
     )
@@ -76,17 +96,35 @@ def make_payload(main_project: MainProject, *, name: str = "子项目A") -> SubP
     )
 
 
+def bind_workflow_version_to_project_type(
+    version: WorkflowTemplateVersion,
+    *,
+    project_type_id: UUID,
+    name: str = "default-template",
+) -> None:
+    version.template = WorkflowTemplate(
+        id=version.template_id,
+        project_type_id=project_type_id,
+        name=name,
+        description=None,
+        status=WorkflowTemplateStatus.published,
+        created_by_id=None,
+    )
+
+
 def make_service(
     *,
     main_projects: list[MainProject],
     sub_projects: list[SubProject] | None = None,
     users: list[User] | None = None,
+    workflow_versions: list[WorkflowTemplateVersion] | None = None,
     next_sequence: int = 1,
 ) -> tuple[SubProjectService, InMemorySubProjectRepository]:
     repository = InMemorySubProjectRepository(
         main_projects=main_projects,
         sub_projects=sub_projects or [],
         users=users or [],
+        workflow_versions=workflow_versions or [],
         next_sequences={main_projects[0].id: next_sequence} if main_projects else {},
     )
     return SubProjectService(repository=repository), repository
@@ -170,6 +208,59 @@ async def test_create_sub_project_generates_main_scoped_project_no() -> None:
     assert repository.members[0].sub_project_id == sub_project.id
     assert repository.members[0].user_id == leader.id
     assert repository.members[0].role_in_project == SubProjectMemberRole.proj_leader
+
+
+@pytest.mark.asyncio
+async def test_create_sub_project_records_selected_workflow_template_version() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    main_project = make_main_project()
+    workflow_version = make_workflow_version()
+    service, _repository = make_service(
+        main_projects=[main_project],
+        workflow_versions=[workflow_version],
+    )
+
+    sub_project = await service.create_sub_project(
+        actor=leader,
+        payload=make_payload(main_project).model_copy(
+            update={"workflow_template_version_id": workflow_version.id},
+        ),
+    )
+
+    assert sub_project.workflow_template_version_id == workflow_version.id
+
+
+@pytest.mark.asyncio
+async def test_create_sub_project_selects_latest_published_workflow_version() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    project_type_id = uuid4()
+    main_project = make_main_project(project_type_id=project_type_id)
+    older_version = make_workflow_version()
+    older_version.version_no = 1
+    older_version.published_at = datetime(2026, 1, 1, tzinfo=UTC)
+    bind_workflow_version_to_project_type(
+        older_version,
+        project_type_id=project_type_id,
+    )
+    latest_version = make_workflow_version()
+    latest_version.template_id = older_version.template_id
+    latest_version.version_no = 2
+    latest_version.published_at = datetime(2026, 2, 1, tzinfo=UTC)
+    bind_workflow_version_to_project_type(
+        latest_version,
+        project_type_id=project_type_id,
+    )
+    service, _repository = make_service(
+        main_projects=[main_project],
+        workflow_versions=[older_version, latest_version],
+    )
+
+    sub_project = await service.create_sub_project(
+        actor=leader,
+        payload=make_payload(main_project),
+    )
+
+    assert sub_project.workflow_template_version_id == latest_version.id
 
 
 @pytest.mark.asyncio
