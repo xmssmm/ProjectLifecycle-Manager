@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.webhook_events import enqueue_webhook_event
 from app.core.db import AsyncSessionLocal, get_db_session
 from app.core.deps import get_current_user
 from app.core.permissions import require_permission, require_role
@@ -27,6 +28,7 @@ from app.services.main_projects import (
     SqlAlchemyMainProjectRepository,
 )
 from app.services.notification_runtime import build_notification_service
+from app.services.webhooks import WebhookEventType
 
 router = APIRouter(prefix="/main-projects", tags=["main-projects"])
 
@@ -142,6 +144,7 @@ async def submit_main_project(
     project_id: UUID,
     background_tasks: BackgroundTasks,
     service: Annotated[MainProjectService, Depends(get_main_project_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, object]:
     project = await service.submit_project(
@@ -153,6 +156,7 @@ async def submit_main_project(
         ),
         audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
     )
+    await enqueue_main_project_status_webhook(session=session, project=project)
     return success_response(serialize_main_project(project))
 
 
@@ -162,6 +166,7 @@ async def review_main_project(
     payload: MainProjectReviewRequest,
     background_tasks: BackgroundTasks,
     service: Annotated[MainProjectService, Depends(get_main_project_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, object]:
     project = await service.review_project(
@@ -174,6 +179,7 @@ async def review_main_project(
         ),
         audit_context=get_audit_context() or AuditContext(actor_id=current_user.id),
     )
+    await enqueue_main_project_status_webhook(session=session, project=project)
     return success_response(serialize_main_project(project))
 
 
@@ -181,7 +187,26 @@ async def review_main_project(
 async def close_main_project(
     project_id: UUID,
     service: Annotated[MainProjectService, Depends(get_main_project_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     current_user: Annotated[User, Depends(require_role(UserRole.dept_manager))],
 ) -> dict[str, object]:
     project = await service.close_project(actor=current_user, project_id=project_id)
+    await enqueue_main_project_status_webhook(session=session, project=project)
     return success_response(serialize_main_project(project))
+
+
+async def enqueue_main_project_status_webhook(
+    *,
+    project: MainProject,
+    session: AsyncSession,
+) -> None:
+    await enqueue_webhook_event(
+        event_type=WebhookEventType.project_status_changed,
+        session=session,
+        source_id=project.id,
+        payload={
+            "project_id": str(project.id),
+            "project_no": project.project_no,
+            "status": project.status.value,
+        },
+    )

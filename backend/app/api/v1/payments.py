@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.webhook_events import enqueue_webhook_event
 from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
@@ -21,6 +22,7 @@ from app.services.payments import (
     PaymentVoucherUpload,
     SqlAlchemyPaymentRepository,
 )
+from app.services.webhooks import WebhookEventType
 from app.storage.factory import create_storage_backend
 
 router = APIRouter(prefix="/sub-projects/{sub_project_id}/payments", tags=["payments"])
@@ -72,6 +74,7 @@ async def list_payments(
 async def create_payment(
     sub_project_id: UUID,
     service: Annotated[PaymentService, Depends(get_payment_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     current_user: Annotated[User, Depends(require_permission("payment.create"))],
     files: Annotated[list[UploadFile] | None, File(alias="files")] = None,
     amount: Annotated[Decimal | None, Form()] = None,
@@ -90,6 +93,18 @@ async def create_payment(
             sub_project_id=sub_project_id,
             reverses_payment_id=reverses_payment_id,
             remark=remark,
+        )
+        await enqueue_webhook_event(
+            event_type=WebhookEventType.payment_created,
+            session=session,
+            source_id=payment.id,
+            payload={
+                "amount": str(payment.amount),
+                "payment_id": str(payment.id),
+                "payment_no": payment.payment_no,
+                "payment_type": payment.payment_type.value,
+                "sub_project_id": str(payment.sub_project_id),
+            },
         )
         return success_response(serialize_payment(payment))
 
@@ -115,6 +130,18 @@ async def create_payment(
         confirm_over_budget=confirm_over_budget,
         over_budget_reason=over_budget_reason,
         voucher_files=voucher_files,
+    )
+    await enqueue_webhook_event(
+        event_type=WebhookEventType.payment_created,
+        session=session,
+        source_id=payment.id,
+        payload={
+            "amount": str(payment.amount),
+            "payment_id": str(payment.id),
+            "payment_no": payment.payment_no,
+            "payment_type": payment.payment_type.value,
+            "sub_project_id": str(payment.sub_project_id),
+        },
     )
     return success_response(serialize_payment(payment))
 

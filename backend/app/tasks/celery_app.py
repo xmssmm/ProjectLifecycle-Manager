@@ -12,6 +12,7 @@ from app.tasks.task_names import (
     NOTIFICATION_DIGEST_TASK_NAME,
     REPORT_CLEANUP_TASK_NAME,
     TASK_DEADLINE_SCAN_TASK_NAME,
+    WEBHOOK_DELIVERY_RETRY_TASK_NAME,
 )
 
 
@@ -28,6 +29,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "app.tasks.reports",
             "app.tasks.notifications",
             "app.tasks.notification_delivery",
+            "app.tasks.webhooks",
             "app.tasks.document_scanning",
         ],
     )
@@ -48,6 +50,10 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             },
             "notification-delivery-retry-every-minute": {
                 "task": NOTIFICATION_DELIVERY_RETRY_TASK_NAME,
+                "schedule": 60.0,
+            },
+            "webhook-delivery-retry-every-minute": {
+                "task": WEBHOOK_DELIVERY_RETRY_TASK_NAME,
                 "schedule": 60.0,
             },
             "file-cleanup-weekly-monday-0300": {

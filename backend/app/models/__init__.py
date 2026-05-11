@@ -44,6 +44,7 @@ from app.models.sub_projects import (
 )
 from app.models.tasks import Task, TaskExecutor, TaskStatus
 from app.models.users import User, UserRole, UserStatus
+from app.models.webhooks import WebhookDelivery, WebhookDeliveryStatus, WebhookEndpoint
 
 __all__ = [
     "Base",
@@ -93,4 +94,7 @@ __all__ = [
     "User",
     "UserRole",
     "UserStatus",
+    "WebhookDelivery",
+    "WebhookDeliveryStatus",
+    "WebhookEndpoint",
 ]

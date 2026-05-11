@@ -11,3 +11,4 @@ NOTIFICATION_DIGEST_TASK_NAME = "app.tasks.notifications.generate_notification_d
 NOTIFICATION_DELIVERY_RETRY_TASK_NAME = (
     "app.tasks.notification_delivery.retry_notification_deliveries"
 )
+WEBHOOK_DELIVERY_RETRY_TASK_NAME = "app.tasks.webhooks.retry_webhook_deliveries"
