@@ -13,6 +13,7 @@ import ProjectImportView from '@/views/admin/ProjectImport.vue';
 import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import WebhookManagementView from '@/views/admin/WebhookManagement.vue';
+import WorkflowTemplateManagementView from '@/views/admin/WorkflowTemplateManagement.vue';
 import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
 import DashboardView from '@/views/dashboard/DashboardView.vue';
@@ -83,6 +84,12 @@ const router = createRouter({
       path: '/admin/webhooks',
       name: 'admin-webhooks',
       component: WebhookManagementView,
+      meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/workflows',
+      name: 'admin-workflows',
+      component: WorkflowTemplateManagementView,
       meta: { requireRole: ['admin'], requiresAuth: true },
     },
     {

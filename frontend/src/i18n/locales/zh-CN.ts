@@ -57,6 +57,7 @@ export default {
     tasks: '任务',
     users: '用户',
     webhooks: 'Webhook',
+    workflows: '工作流',
   },
   status: {
     active: '启用',

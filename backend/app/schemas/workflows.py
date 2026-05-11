@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal, Self
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -47,3 +49,63 @@ class WorkflowTemplateVersionCreate(BaseModel):
             raise ValueError("phase order must start at 1 and be continuous")
 
         return self
+
+
+class WorkflowPhaseDefinitionsUpdate(WorkflowTemplateVersionCreate):
+    pass
+
+
+class ProjectTypeCreate(BaseModel):
+    code: CodeText
+    name: NameText
+    description: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ProjectTypeRead(BaseModel):
+    id: UUID
+    code: str
+    name: str
+    description: str | None
+    is_builtin: bool
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkflowTemplateCreate(BaseModel):
+    project_type_id: UUID
+    name: NameText
+    description: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class WorkflowTemplateVersionRead(BaseModel):
+    id: UUID
+    template_id: UUID
+    version_no: int
+    status: str
+    phase_definitions: list[dict[str, object]]
+    published_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkflowTemplateRead(BaseModel):
+    id: UUID
+    project_type_id: UUID
+    name: str
+    description: str | None
+    status: str
+    created_by_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+    versions: list[WorkflowTemplateVersionRead] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
