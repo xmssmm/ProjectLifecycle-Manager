@@ -53,6 +53,19 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_documents_doc_type", "doc_type"),
         Index("ix_documents_scan_status", "scan_status"),
         Index(
+            "ix_documents_sub_project_latest_created",
+            "sub_project_id",
+            "created_at",
+            postgresql_where=text("is_latest IS true AND is_deleted IS false"),
+        ),
+        Index(
+            "ix_documents_phase_latest_doc_type",
+            "phase_id",
+            "doc_type",
+            "version",
+            postgresql_where=text("is_latest IS true AND is_deleted IS false"),
+        ),
+        Index(
             "uq_documents_latest_per_group",
             "sub_project_id",
             "phase_id",

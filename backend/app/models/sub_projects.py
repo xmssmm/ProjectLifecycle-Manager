@@ -56,6 +56,10 @@ class SubProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_sub_projects_status", "status"),
         Index("ix_sub_projects_main_status", "main_project_id", "status"),
         Index("ix_sub_projects_closed_at", "closed_at"),
+        Index("ix_sub_projects_created_at", "created_at"),
+        Index("ix_sub_projects_manager_created_at", "manager_id", "created_at"),
+        Index("ix_sub_projects_status_created_at", "status", "created_at"),
+        Index("ix_sub_projects_dept_created_at", "dept_id", "created_at"),
     )
 
     project_no: Mapped[str] = mapped_column(String(48), nullable=False, unique=True, index=True)
@@ -118,6 +122,7 @@ class SubProjectMember(UuidPrimaryKeyMixin, TimestampMixin, Base):
         ),
         Index("ix_sub_project_members_sub_project_id", "sub_project_id"),
         Index("ix_sub_project_members_user_id", "user_id"),
+        Index("ix_sub_project_members_user_sub_project", "user_id", "sub_project_id"),
     )
 
     sub_project_id: Mapped[UUID] = mapped_column(

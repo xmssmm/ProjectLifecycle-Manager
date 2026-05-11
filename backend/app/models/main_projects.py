@@ -53,6 +53,9 @@ class MainProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("spent_amount >= 0", name="ck_main_projects_spent_amount_non_negative"),
         Index("ix_main_projects_status", "status"),
         Index("ix_main_projects_closed_at", "closed_at"),
+        Index("ix_main_projects_created_at", "created_at"),
+        Index("ix_main_projects_status_created_at", "status", "created_at"),
+        Index("ix_main_projects_dept_created_at", "dept_id", "created_at"),
     )
 
     project_no: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
