@@ -17,6 +17,7 @@ export type DatasetFilterOperator =
 export type SortDirection = 'asc' | 'desc';
 export type CustomReportShareScope = 'department' | 'global' | 'private';
 export type CustomReportChartType = 'bar' | 'line' | 'table';
+export type CustomReportScheduleFrequency = 'daily' | 'monthly' | 'weekly';
 
 export interface ReportDatasetFieldRead {
   aggregates: DatasetAggregate[];
@@ -71,6 +72,11 @@ export interface CustomReportDefinitionCreatePayload {
   description: string | null;
   name: string;
   query_config: ReportQueryConfig;
+  schedule_day_of_month?: number | null;
+  schedule_day_of_week?: number | null;
+  schedule_frequency?: CustomReportScheduleFrequency | null;
+  schedule_time?: string | null;
+  schedule_timezone?: string | null;
   share_scope: CustomReportShareScope;
 }
 
@@ -84,5 +90,12 @@ export interface CustomReportDefinitionRead {
   owner_dept_id: string | null;
   owner_id: string;
   query_config: ReportQueryConfig;
+  last_run_at?: string | null;
+  next_run_at?: string | null;
+  schedule_day_of_month?: number | null;
+  schedule_day_of_week?: number | null;
+  schedule_frequency?: CustomReportScheduleFrequency | null;
+  schedule_time?: string | null;
+  schedule_timezone?: string | null;
   share_scope: CustomReportShareScope;
 }

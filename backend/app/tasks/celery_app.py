@@ -7,6 +7,7 @@ from app.core.config import Settings, get_settings
 from app.tasks.task_names import (
     AUDIT_PARTITION_TASK_NAME,
     CELERY_SMOKE_TASK_NAME,
+    CUSTOM_REPORT_SCHEDULE_SCAN_TASK_NAME,
     FILE_CLEANUP_TASK_NAME,
     NOTIFICATION_DELIVERY_RETRY_TASK_NAME,
     NOTIFICATION_DIGEST_TASK_NAME,
@@ -28,6 +29,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "app.tasks.audit_partitions",
             "app.tasks.reports",
             "app.tasks.database_exports",
+            "app.tasks.custom_reports",
             "app.tasks.notifications",
             "app.tasks.notification_delivery",
             "app.tasks.webhooks",
@@ -70,6 +72,10 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "report-cleanup-daily-0330": {
                 "task": REPORT_CLEANUP_TASK_NAME,
                 "schedule": crontab(minute=30, hour=3),
+            },
+            "custom-report-schedule-scan-every-minute": {
+                "task": CUSTOM_REPORT_SCHEDULE_SCAN_TASK_NAME,
+                "schedule": 60.0,
             },
         },
         result_backend_transport_options=resolved_settings.celery_sentinel_transport_options,

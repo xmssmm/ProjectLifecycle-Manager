@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -44,6 +44,82 @@ class DatabaseExportDownload:
     file_name: str
     content_type: str
     content: bytes
+
+
+@dataclass(frozen=True)
+class TabularExportColumn:
+    key: str
+    label: str
+
+
+class TabularExportRenderer:
+    @staticmethod
+    def render_csv(
+        *,
+        columns: Sequence[TabularExportColumn],
+        rows: Sequence[Mapping[str, object]],
+    ) -> bytes:
+        output = StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[column.key for column in columns],
+            lineterminator="\n",
+        )
+        writer.writerow({column.key: column.label for column in columns})
+        for row in rows:
+            writer.writerow(
+                {
+                    column.key: DatabaseExportService.csv_value(row.get(column.key))
+                    for column in columns
+                },
+            )
+        return output.getvalue().encode("utf-8-sig")
+
+    @staticmethod
+    def render_xlsx(
+        *,
+        columns: Sequence[TabularExportColumn],
+        rows: Sequence[Mapping[str, object]],
+        summary: Mapping[str, object],
+    ) -> bytes:
+        workbook = Workbook()
+        summary_sheet = workbook.active
+        summary_sheet.title = "summary"
+        for key, value in summary.items():
+            summary_sheet.append([key, DatabaseExportService.csv_value(value)])
+
+        data_sheet = workbook.create_sheet("data")
+        data_sheet.append([column.key for column in columns])
+        for row in rows:
+            data_sheet.append(
+                [DatabaseExportService.csv_value(row.get(column.key)) for column in columns],
+            )
+        buffer = BytesIO()
+        workbook.save(buffer)
+        return buffer.getvalue()
+
+    @staticmethod
+    def render_zip(
+        *,
+        columns: Sequence[TabularExportColumn],
+        rows: Sequence[Mapping[str, object]],
+        summary: Mapping[str, object],
+    ) -> bytes:
+        buffer = BytesIO()
+        with ZipFile(buffer, mode="w", compression=ZIP_DEFLATED) as archive:
+            archive.writestr(
+                "custom_report.csv",
+                TabularExportRenderer.render_csv(columns=columns, rows=rows),
+            )
+            archive.writestr(
+                "custom_report.xlsx",
+                TabularExportRenderer.render_xlsx(
+                    columns=columns,
+                    rows=rows,
+                    summary=summary,
+                ),
+            )
+        return buffer.getvalue()
 
 
 class DatabaseExportTaskDispatcher(Protocol):
