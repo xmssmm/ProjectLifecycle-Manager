@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.models.custom_reports import CustomReportShareScope
+
 
 class DatasetFieldType(enum.StrEnum):
     uuid = "uuid"
@@ -94,7 +96,14 @@ class CustomReportDefinitionCreate(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     query_config: ReportQueryConfig
     chart_type: str = Field(default="table", max_length=32)
-    share_scope: str = Field(default="private")
+    share_scope: CustomReportShareScope = CustomReportShareScope.private
+
+
+class CustomReportPreviewRead(BaseModel):
+    columns: list[ReportDatasetFieldRead]
+    rows: list[dict[str, Any]]
+    row_count: int
+    limit: int
 
 
 class CustomReportDefinitionRead(BaseModel):
@@ -104,7 +113,7 @@ class CustomReportDefinitionRead(BaseModel):
     dataset: str
     query_config: dict[str, Any]
     chart_type: str
-    share_scope: str
+    share_scope: CustomReportShareScope
     owner_id: UUID
     owner_dept_id: UUID | None
     is_active: bool
