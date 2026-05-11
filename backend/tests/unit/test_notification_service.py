@@ -393,6 +393,77 @@ async def test_generate_daily_digest_groups_previous_day_and_marks_items() -> No
 
 
 @pytest.mark.asyncio
+async def test_generate_daily_digest_for_due_timezones_uses_receiver_local_0900() -> None:
+    shanghai_user = make_user()
+    shanghai_user.timezone = "Asia/Shanghai"
+    new_york_user = make_user()
+    new_york_user.timezone = "America/New_York"
+    now = datetime(2026, 5, 10, 1, 0, tzinfo=UTC)
+    shanghai_pending = make_notification(
+        receiver_id=shanghai_user.id,
+        scenario="task_assigned",
+        source_id="task-shanghai",
+        created_at=datetime(2026, 5, 9, 15, 0, tzinfo=UTC),
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+    new_york_pending = make_notification(
+        receiver_id=new_york_user.id,
+        scenario="task_assigned",
+        source_id="task-new-york",
+        created_at=datetime(2026, 5, 9, 15, 0, tzinfo=UTC),
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+    repository = InMemoryNotificationRepository(
+        [shanghai_pending, new_york_pending],
+        users=[shanghai_user, new_york_user],
+    )
+    service = NotificationService(repository=repository, now_provider=lambda: now)
+
+    result = await service.generate_daily_digest_for_due_timezones(now=now)
+
+    assert result.processed_timezone_count == 1
+    assert result.processed_receiver_count == 1
+    assert result.source_notification_count == 1
+    assert result.digest_notification_count == 1
+    assert shanghai_pending.digest_sent_at == now
+    assert new_york_pending.digest_sent_at is None
+    digest = next(
+        notification
+        for notification in repository.notifications
+        if notification.receiver_id == shanghai_user.id
+        and notification.scenario == "daily_digest"
+    )
+    assert digest.source_id == "2026-05-09"
+
+
+@pytest.mark.asyncio
+async def test_generate_daily_digest_for_due_timezones_handles_new_york_local_0900() -> None:
+    new_york_user = make_user()
+    new_york_user.timezone = "America/New_York"
+    now = datetime(2026, 5, 10, 13, 0, tzinfo=UTC)
+    new_york_pending = make_notification(
+        receiver_id=new_york_user.id,
+        scenario="task_assigned",
+        source_id="task-new-york",
+        created_at=datetime(2026, 5, 9, 14, 0, tzinfo=UTC),
+        delivery_mode=NotificationDeliveryMode.daily_digest,
+    )
+    repository = InMemoryNotificationRepository([new_york_pending], users=[new_york_user])
+    service = NotificationService(repository=repository, now_provider=lambda: now)
+
+    result = await service.generate_daily_digest_for_due_timezones(now=now)
+    repeat = await service.generate_daily_digest_for_due_timezones(now=now)
+
+    assert result.processed_timezone_count == 1
+    assert result.processed_receiver_count == 1
+    assert result.source_notification_count == 1
+    assert result.digest_notification_count == 1
+    assert repeat.source_notification_count == 0
+    assert repeat.digest_notification_count == 0
+    assert new_york_pending.digest_sent_at == now
+
+
+@pytest.mark.asyncio
 async def test_lists_and_updates_notification_preferences() -> None:
     user = make_user()
     service, repository = make_service()

@@ -172,13 +172,86 @@ async def test_deadline_scan_deduplicates_repeated_runs_but_keeps_distinct_tasks
     }
 
 
-def test_celery_beat_schedules_deadline_scan_at_0900_business_time() -> None:
+@pytest.mark.asyncio
+async def test_deadline_scan_for_due_timezones_uses_executor_local_0900() -> None:
+    deadline_module = load_deadline_module()
+    shanghai_user = make_user(UserRole.proj_member, username="shanghai")
+    shanghai_user.timezone = "Asia/Shanghai"
+    new_york_user = make_user(UserRole.proj_member, username="new-york")
+    new_york_user.timezone = "America/New_York"
+    scan_date = date(2026, 5, 10)
+    now = datetime(2026, 5, 10, 1, 0, tzinfo=UTC)
+    shanghai_task = make_task(sequence=1, plan_end_date=scan_date)
+    new_york_task = make_task(sequence=2, plan_end_date=scan_date)
+    shanghai_executor = make_executor(shanghai_task, shanghai_user, plan_end_date=scan_date)
+    new_york_executor = make_executor(new_york_task, new_york_user, plan_end_date=scan_date)
+    notification_repository = InMemoryNotificationRepository()
+    service = deadline_module.TaskDeadlineService(
+        repository=deadline_module.InMemoryTaskDeadlineRepository(
+            executors=[shanghai_executor, new_york_executor],
+            users=[shanghai_user, new_york_user],
+        ),
+        notification_service=NotificationService(
+            repository=notification_repository,
+            business_date_provider=lambda: scan_date,
+            now_provider=lambda: now,
+        ),
+        business_date_provider=lambda: scan_date,
+        now_provider=lambda: now,
+    )
+
+    result = await service.scan_deadlines_for_due_timezones(now=now)
+
+    assert result.due_today == 1
+    assert result.due_notifications == 1
+    assert [
+        (item.scenario, item.receiver_id, item.source_id)
+        for item in notification_repository.notifications
+    ] == [("task_due_today", shanghai_user.id, str(shanghai_executor.id))]
+    assert new_york_executor.status == TaskStatus.in_progress
+
+
+@pytest.mark.asyncio
+async def test_deadline_scan_for_due_timezones_handles_new_york_local_0900() -> None:
+    deadline_module = load_deadline_module()
+    new_york_user = make_user(UserRole.proj_member, username="new-york")
+    new_york_user.timezone = "America/New_York"
+    scan_date = date(2026, 5, 10)
+    now = datetime(2026, 5, 10, 13, 0, tzinfo=UTC)
+    task = make_task(sequence=1, plan_end_date=scan_date)
+    executor = make_executor(task, new_york_user, plan_end_date=scan_date)
+    notification_repository = InMemoryNotificationRepository()
+    service = deadline_module.TaskDeadlineService(
+        repository=deadline_module.InMemoryTaskDeadlineRepository(
+            executors=[executor],
+            users=[new_york_user],
+        ),
+        notification_service=NotificationService(
+            repository=notification_repository,
+            business_date_provider=lambda: scan_date,
+            now_provider=lambda: now,
+        ),
+        business_date_provider=lambda: scan_date,
+        now_provider=lambda: now,
+    )
+
+    result = await service.scan_deadlines_for_due_timezones(now=now)
+
+    assert result.due_today == 1
+    assert result.due_notifications == 1
+    assert [
+        (item.scenario, item.receiver_id, item.source_id)
+        for item in notification_repository.notifications
+    ] == [("task_due_today", new_york_user.id, str(executor.id))]
+
+
+def test_celery_beat_schedules_deadline_scan_hourly_for_user_timezones() -> None:
     from app.tasks.celery_app import create_celery_app
     from app.tasks.task_names import TASK_DEADLINE_SCAN_TASK_NAME
 
     celery_app = create_celery_app()
 
-    schedule = celery_app.conf.beat_schedule["task-deadline-scan-daily-0900"]
+    schedule = celery_app.conf.beat_schedule["task-deadline-scan-hourly-by-timezone"]
     assert celery_app.conf.timezone == "Asia/Shanghai"
     assert schedule["task"] == TASK_DEADLINE_SCAN_TASK_NAME
-    assert "0 9 * * *" in str(schedule["schedule"])
+    assert "0 * * * *" in str(schedule["schedule"])

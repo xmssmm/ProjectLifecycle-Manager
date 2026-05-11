@@ -15,7 +15,7 @@ async def run_task_deadline_scan() -> dict[str, int]:
             repository=SqlAlchemyTaskDeadlineRepository(session),
             notification_service=build_notification_service(session=session),
         )
-        result = await service.scan_deadlines()
+        result = await service.scan_deadlines_for_due_timezones()
         return result.to_dict()
 
 

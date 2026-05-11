@@ -40,13 +40,13 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
                 "task": CELERY_SMOKE_TASK_NAME,
                 "schedule": 60.0,
             },
-            "task-deadline-scan-daily-0900": {
+            "task-deadline-scan-hourly-by-timezone": {
                 "task": TASK_DEADLINE_SCAN_TASK_NAME,
-                "schedule": crontab(minute=0, hour=9),
+                "schedule": crontab(minute=0),
             },
-            "notification-digest-daily-0900": {
+            "notification-digest-hourly-by-timezone": {
                 "task": NOTIFICATION_DIGEST_TASK_NAME,
-                "schedule": crontab(minute=0, hour=9),
+                "schedule": crontab(minute=0),
             },
             "notification-delivery-retry-every-minute": {
                 "task": NOTIFICATION_DELIVERY_RETRY_TASK_NAME,
