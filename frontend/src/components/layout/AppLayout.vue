@@ -51,6 +51,7 @@ const navItems: NavItem[] = [
   { icon: User, index: '/admin/users', label: '用户', requireRole: ['admin'] },
   { icon: Setting, index: '/admin/departments', label: '部门', requireRole: ['admin'] },
   { icon: List, index: '/admin/audit-logs', label: '审计', requireRole: ['admin'] },
+  { icon: Setting, index: '/admin/api-keys', label: 'API Key', requireRole: ['admin'] },
   { icon: User, index: '/admin/handover', label: '转交', requireRole: ['admin'] },
   { icon: Box, index: '/component-demo', label: '组件', requireRole: ['admin'] },
   { disabled: true, icon: Setting, index: '/admin', label: '管理', requireRole: ['admin'] },
