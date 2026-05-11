@@ -240,28 +240,32 @@
 
 **Files:**
 
-- Create: `backend/app/schemas/imports.py`
-- Create: `backend/app/services/project_imports.py`
-- Create: `backend/app/api/v1/imports.py`
-- Modify: `backend/app/api/v1/router.py`
-- Create: `frontend/src/api/imports.ts`
-- Create: `frontend/src/views/admin/ProjectImport.vue`
-- Test: `backend/tests/unit/test_project_imports.py`
-- Test: `backend/tests/api/test_project_imports_api.py`
+- [x] Create: `backend/app/schemas/imports.py`
+- [x] Create: `backend/app/services/project_imports.py`
+- [x] Create: `backend/app/api/v1/imports.py`
+- [x] Modify: `backend/app/main.py`
+- [x] Create: `frontend/src/api/imports.ts`
+- [x] Create: `frontend/src/stores/useProjectImportStore.ts`
+- [x] Create: `frontend/src/types/imports.ts`
+- [x] Create: `frontend/src/views/admin/ProjectImport.vue`
+- [x] Test: `backend/tests/unit/test_project_imports.py`
+- [x] Test: `backend/tests/api/test_project_imports_api.py`
+- [x] Test: `frontend/tests/imports-api.test.ts`
+- [x] Test: `frontend/tests/project-import-page.test.ts`
 
 **Implementation:**
 
-- 提供 Excel 模板下载。
-- 导入时逐行校验，失败行不阻塞成功行。
-- 返回成功数、失败数、逐行错误、导入批次号。
-- 1000 行导入目标时间不超过 60 秒。
+- [x] 提供 Excel 模板下载。
+- [x] 导入时逐行校验，失败行不阻塞成功行。
+- [x] 返回成功数、失败数、逐行错误、导入批次号。
+- [x] 1000 行导入目标时间不超过 60 秒。
 
 **Test plan:**
 
-- [ ] 模板字段完整。
-- [ ] 部分失败时成功行落库、失败行返回错误。
-- [ ] 重复项目编号被拒绝。
-- [ ] 1000 行本地性能基准可记录。
+- [x] 模板字段完整。
+- [x] 部分失败时成功行落库、失败行返回错误。
+- [x] 重复项目编号被拒绝。
+- [x] 1000 行本地性能基准可记录。
 
 **Verification:**
 

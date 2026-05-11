@@ -8,6 +8,7 @@ import ApiKeyManagementView from '@/views/admin/ApiKeyManagement.vue';
 import AuditLogQueryView from '@/views/admin/AuditLogQuery.vue';
 import DepartmentListView from '@/views/admin/DepartmentList.vue';
 import HandoverHistoryView from '@/views/admin/HandoverHistory.vue';
+import ProjectImportView from '@/views/admin/ProjectImport.vue';
 import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import WebhookManagementView from '@/views/admin/WebhookManagement.vue';
@@ -88,6 +89,12 @@ const router = createRouter({
       name: 'admin-archives',
       component: ArchiveManagementView,
       meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/imports/projects',
+      name: 'admin-project-imports',
+      component: ProjectImportView,
+      meta: { permission: 'project.import', requiresAuth: true },
     },
     {
       path: '/admin/handover',
