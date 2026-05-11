@@ -7,6 +7,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
+from app.api.external.v1.router import router as external_api_router
 from app.api.v1.acceptance_steps import router as acceptance_steps_router
 from app.api.v1.api_keys import router as api_keys_router
 from app.api.v1.audit_logs import router as audit_logs_router
@@ -146,6 +147,7 @@ def create_app(
         description="企业项目过程管理与资料归档系统后端接口。",
         lifespan=lifespan_context,
         openapi_tags=[
+            {"name": "external-api", "description": "External read-only API endpoints."},
             {"name": "acceptance-steps", "description": "Acceptance step endpoints."},
             {"name": "api-keys", "description": "API key management endpoints."},
             {"name": "audit-logs", "description": "Audit log query endpoints."},
@@ -190,6 +192,7 @@ def create_app(
     app.dependency_overrides[get_settings] = lambda: resolved_settings
     app.dependency_overrides[get_auth_failure_store] = lambda: resolved_auth_failure_store
     app.dependency_overrides[get_auth_token_store] = lambda: resolved_auth_token_store
+    app.include_router(external_api_router)
     app.include_router(acceptance_steps_router, prefix="/api/v1")
     app.include_router(api_keys_router, prefix="/api/v1")
     app.include_router(audit_logs_router, prefix="/api/v1")
