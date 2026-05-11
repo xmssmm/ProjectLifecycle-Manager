@@ -55,11 +55,12 @@ describe('users api', () => {
         email: 'admin@example.com',
         password: 'ChangeMe123!',
         role: 'admin',
+        timezone: 'Asia/Shanghai',
         username: 'admin',
       },
       client,
     );
-    await updateUser('user-1', { email: 'next@example.com' }, client);
+    await updateUser('user-1', { email: 'next@example.com', timezone: 'America/New_York' }, client);
     await updateUser('user-1', { sso_required: true }, client);
     await disableUser('user-1', client);
     await resetUserPassword('user-1', { new_password: 'NextPass123!' }, client);
@@ -183,6 +184,7 @@ const sampleUser = {
   role: 'admin',
   sso_required: false,
   status: 'active',
+  timezone: 'Asia/Shanghai',
   updated_at: '2026-05-10T00:00:00Z',
   username: 'admin',
 };

@@ -55,6 +55,7 @@ describe('useAuthStore', () => {
       id: 'user-1',
       role: 'admin',
       status: 'active',
+      timezone: 'America/New_York',
       username: 'admin',
     });
     const store = useAuthStore();
@@ -65,6 +66,7 @@ describe('useAuthStore', () => {
     expect(store.user).toMatchObject({
       email: 'admin@example.com',
       status: 'active',
+      timezone: 'America/New_York',
       username: 'admin',
     });
   });
@@ -83,6 +85,7 @@ describe('useAuthStore', () => {
       id: 'user-1',
       role: 'admin',
       status: 'active',
+      timezone: 'Asia/Shanghai',
       username: 'admin',
     });
 

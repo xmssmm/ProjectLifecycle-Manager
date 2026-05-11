@@ -5,6 +5,7 @@ import { downloadDocument, listDocuments } from '@/api/documents';
 import DocumentList from '@/components/document/DocumentList.vue';
 import DocumentUploader from '@/components/document/DocumentUploader.vue';
 import { useAcceptanceStepStore } from '@/stores/useAcceptanceStepStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { usePhaseStore } from '@/stores/usePhaseStore';
 import { ACCEPTANCE_STEP_STATUS_LABELS, type AcceptanceStepRead } from '@/types/acceptanceSteps';
 import type { DocumentRead } from '@/types/documents';
@@ -14,6 +15,7 @@ const props = defineProps<{
   subProjectId: string;
 }>();
 
+const authStore = useAuthStore();
 const phaseStore = usePhaseStore();
 const acceptanceStepStore = useAcceptanceStepStore();
 const documents = ref<DocumentRead[]>([]);
@@ -336,7 +338,12 @@ function formatOptionalDate(value: string | null): string {
         <el-empty v-else description="暂无验收步骤" />
       </section>
 
-      <DocumentList :documents="documents" :loading="documentsLoading" @download="handleDownload" />
+      <DocumentList
+        :documents="documents"
+        :loading="documentsLoading"
+        :timezone="authStore.user?.timezone"
+        @download="handleDownload"
+      />
     </template>
 
     <el-empty v-else-if="!phaseStore.loading" description="暂无环节文档" />

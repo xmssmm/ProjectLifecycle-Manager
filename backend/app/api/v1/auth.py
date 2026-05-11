@@ -108,5 +108,6 @@ async def me(
             role=user.role,
             dept_id=user.dept_id,
             status=user.status,
+            timezone=user.timezone,
         ).model_dump(mode="json"),
     )

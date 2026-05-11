@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useDashboardStore } from '@/stores/useDashboardStore';
 import type { DashboardListItem, DashboardRoleScope } from '@/types/dashboard';
 import { ROLE_LABELS } from '@/types/users';
+import { formatUserDateTime } from '@/utils/timezone';
 
 const METRIC_LABELS: Record<string, string> = {
   api_error_rate_source: '接口错误率来源',
@@ -105,7 +106,7 @@ function listItemFields(item: DashboardListItem): [string, string][] {
 }
 
 function formatGeneratedAt(value: string | null): string {
-  return value ? value.replace('T', ' ').slice(0, 19) : '-';
+  return formatUserDateTime(value, authStore.user?.timezone);
 }
 
 function humanizeKey(key: string): string {

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useUserStore } from '@/stores/useUserStore';
+import { formatUserDateTime } from '@/utils/timezone';
 
+const authStore = useAuthStore();
 const userStore = useUserStore();
 
 onMounted(async () => {
@@ -10,7 +13,7 @@ onMounted(async () => {
 });
 
 function formatDate(value: string): string {
-  return value.replace('T', ' ').slice(0, 16);
+  return formatUserDateTime(value, authStore.user?.timezone);
 }
 </script>
 

@@ -16,6 +16,7 @@ vi.mock('@/api/auth', () => ({
     id: 'user-1',
     role: 'admin',
     status: 'active',
+    timezone: 'Asia/Shanghai',
     username: 'admin',
   }),
   login: vi.fn(),
@@ -70,6 +71,7 @@ describe('profile and password pages', () => {
       id: 'user-1',
       role: 'admin',
       status: 'active',
+      timezone: 'Asia/Shanghai',
       username: 'admin',
     });
   });
@@ -83,7 +85,10 @@ describe('profile and password pages', () => {
     await wrapper.find('[data-test="profile-save"]').trigger('click');
     await flushPromises();
 
-    expect(updateUser).toHaveBeenCalledWith('user-1', { email: 'next@example.com' });
+    expect(updateUser).toHaveBeenCalledWith('user-1', {
+      email: 'next@example.com',
+      timezone: 'Asia/Shanghai',
+    });
   });
 
   it('loads and saves notification preferences from the profile page', async () => {
@@ -145,6 +150,7 @@ const sampleUser = {
   role: 'admin',
   sso_required: false,
   status: 'active',
+  timezone: 'Asia/Shanghai',
   updated_at: '2026-05-10T00:00:00Z',
   username: 'admin',
 } as const;

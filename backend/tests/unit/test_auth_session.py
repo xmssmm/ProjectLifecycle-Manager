@@ -36,7 +36,7 @@ def make_settings() -> Settings:
 
 def make_user() -> User:
     now = datetime.now(UTC)
-    return User(
+    user = User(
         id=uuid4(),
         username="admin",
         email="admin@example.local",
@@ -49,6 +49,8 @@ def make_user() -> User:
         created_at=now,
         updated_at=now,
     )
+    user.timezone = "America/Los_Angeles"
+    return user
 
 
 def tamper_jwt_payload(token: str) -> str:
@@ -129,6 +131,7 @@ def test_refresh_me_logout_and_blacklisted_access_token_flow() -> None:
         "role": UserRole.admin.value,
         "dept_id": None,
         "status": UserStatus.active.value,
+        "timezone": "America/Los_Angeles",
     }
 
     refresh_response = client.post("/api/v1/auth/refresh")

@@ -4,6 +4,7 @@ import { computed, reactive, watch } from 'vue';
 import type { UserCreatePayload, UserRead, UserUpdatePayload } from '@/types/users';
 import { ROLE_LABELS } from '@/types/users';
 import type { UserRole } from '@/stores/useAuthStore';
+import { DEFAULT_USER_TIMEZONE } from '@/utils/timezone';
 
 const props = withDefaults(
   defineProps<{
@@ -33,6 +34,7 @@ const form = reactive({
   password: '',
   role: 'proj_member' as UserRole,
   ssoRequired: false,
+  timezone: DEFAULT_USER_TIMEZONE,
   username: '',
 });
 
@@ -51,6 +53,7 @@ watch(
     form.password = '';
     form.role = props.user?.role ?? 'proj_member';
     form.ssoRequired = props.user?.sso_required ?? false;
+    form.timezone = props.user?.timezone ?? DEFAULT_USER_TIMEZONE;
     form.username = props.user?.username ?? '';
   },
   { immediate: true },
@@ -67,6 +70,7 @@ function submitForm(): void {
     email: normalizeNullable(form.email),
     role: form.role,
     sso_required: form.ssoRequired,
+    timezone: form.timezone,
     username: form.username.trim(),
   };
 
@@ -115,6 +119,14 @@ function submitForm(): void {
           active-text="仅 SSO"
           data-test="user-sso-required"
           inactive-text="本地+SSO"
+        />
+      </el-form-item>
+      <el-form-item label="时区">
+        <el-input
+          v-model="form.timezone"
+          autocomplete="off"
+          data-test="user-timezone-input"
+          placeholder="Asia/Shanghai"
         />
       </el-form-item>
       <el-form-item v-if="!isEditMode" label="初始密码">

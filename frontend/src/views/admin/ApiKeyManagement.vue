@@ -3,13 +3,16 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { ConfirmDialog, DataTable, StatusTag } from '@/components/common';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useApiKeyStore } from '@/stores/useApiKeyStore';
 import {
   API_KEY_PERMISSION_OPTIONS,
   type ApiKeyPermission,
   type ApiKeyRead,
 } from '@/types/apiKeys';
+import { formatUserDateTime } from '@/utils/timezone';
 
+const authStore = useAuthStore();
 const apiKeyStore = useApiKeyStore();
 
 const createDialogVisible = ref(false);
@@ -104,7 +107,7 @@ function formatExpiresAt(value: string): string | null {
 }
 
 function formatDate(value: unknown): string {
-  return typeof value === 'string' ? value.replace('T', ' ').slice(0, 16) : '-';
+  return typeof value === 'string' ? formatUserDateTime(value, authStore.user?.timezone) : '-';
 }
 
 function permissionLabels(permissions: unknown): string {

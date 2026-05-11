@@ -3,12 +3,14 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 
 import { ConfirmDialog, DataTable, SearchBar } from '@/components/common';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useDepartmentStore } from '@/stores/useDepartmentStore';
 import type {
   DepartmentCreatePayload,
   DepartmentRead,
   DepartmentUpdatePayload,
 } from '@/types/departments';
+import { formatUserDateTime } from '@/utils/timezone';
 
 import DepartmentEdit from './DepartmentEdit.vue';
 
@@ -21,6 +23,7 @@ interface ApiErrorResponse {
 }
 
 const departmentStore = useDepartmentStore();
+const authStore = useAuthStore();
 const searchModel = ref<Record<string, string | number>>({ keyword: '' });
 const keyword = ref('');
 const editDialogVisible = ref(false);
@@ -118,7 +121,7 @@ async function submitDelete(): Promise<void> {
 }
 
 function formatDate(value: unknown): string {
-  return typeof value === 'string' ? value.replace('T', ' ').slice(0, 16) : '-';
+  return typeof value === 'string' ? formatUserDateTime(value, authStore.user?.timezone) : '-';
 }
 
 function readErrorMessage(error: unknown, fallback: string): string {

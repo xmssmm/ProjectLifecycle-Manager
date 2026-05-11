@@ -266,6 +266,7 @@ const baseUser = {
   role: 'proj_leader',
   sso_required: false,
   status: 'active',
+  timezone: 'Asia/Shanghai',
   updated_at: '2026-05-10T00:00:00Z',
 } as const;
 

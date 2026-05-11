@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { DocumentRead } from '@/types/documents';
+import { formatUserDateTime } from '@/utils/timezone';
 
-defineProps<{
+const props = defineProps<{
   baseline: DocumentRead;
   current: DocumentRead;
+  timezone?: string;
 }>();
 
 function formatFileSize(bytes: number): string {
@@ -17,7 +19,7 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatDate(value: string): string {
-  return value ? value.replace('T', ' ').slice(0, 16) : '-';
+  return formatUserDateTime(value, props.timezone);
 }
 </script>
 

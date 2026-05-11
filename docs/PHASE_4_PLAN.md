@@ -66,10 +66,10 @@
 
 **Test plan:**
 
-- [ ] 用户默认时区为 `Asia/Shanghai`。
-- [ ] 有效 IANA timezone 可写入。
-- [ ] 无效 timezone 被拒绝。
-- [ ] 前端同一 UTC 时间在不同时区显示不同本地时间。
+- [x] 用户默认时区为 `Asia/Shanghai`。
+- [x] 有效 IANA timezone 可写入。
+- [x] 无效 timezone 被拒绝。
+- [x] 前端同一 UTC 时间在不同时区显示不同本地时间。
 
 **Verification:**
 
