@@ -153,14 +153,15 @@
 **Files:**
 
 - Create: `backend/app/api/v1/archives.py`
-- Modify: `backend/app/api/v1/router.py`
+- Modify: `backend/app/main.py`
 - Create: `frontend/src/api/archives.ts`
 - Create: `frontend/src/stores/useArchiveStore.ts`
 - Create: `frontend/src/types/archives.ts`
 - Create: `frontend/src/views/admin/ArchiveManagement.vue`
 - Modify: `frontend/src/router/index.ts`
 - Test: `backend/tests/api/test_archives_api.py`
-- Test: `frontend/src/views/admin/ArchiveManagement.test.ts`
+- Test: `frontend/tests/archive-management-page.test.ts`
+- Test: `frontend/tests/archives-api.test.ts`
 
 **Implementation:**
 
@@ -171,15 +172,15 @@
 
 **Test plan:**
 
-- [ ] 非 admin 不能归档或恢复。
-- [ ] admin 归档成功后写审计日志。
-- [ ] 恢复冲突返回 409 和冲突字段。
-- [ ] 前端能完成候选查询、归档、恢复主流程。
+- [x] 非 admin 不能归档或恢复。
+- [x] admin 归档成功后写审计日志。
+- [x] 恢复冲突返回 409 和冲突字段。
+- [x] 前端能完成候选查询、归档、恢复主流程。
 
 **Verification:**
 
-- `cd backend && python -B -m pytest -q tests/api/test_archives_api.py --no-cov`
-- `cd frontend && npm.cmd run test:unit -- ArchiveManagement`
+- `cd backend && python -B -m pytest -q tests/api/test_archives_api.py tests/unit/test_archive_service.py --no-cov`
+- `cd frontend && npm.cmd run test:unit -- archives-api archive-management-page`
 - `cd backend && python -B -m ruff check .`
 - `cd backend && python -B -m mypy app tests`
 - `cd frontend && npm.cmd run lint`

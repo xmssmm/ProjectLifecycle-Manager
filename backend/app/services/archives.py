@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import PermissionDeniedError, ResourceConflictError, ResourceNotFoundError
 from app.models.acceptance_steps import AcceptanceStep
 from app.models.archives import ArchiveBatch, ArchiveMainProject, ArchiveSubProject
 from app.models.documents import Document
@@ -28,6 +29,8 @@ from app.models.sub_projects import (
     SubProjectStatus,
 )
 from app.models.tasks import Task, TaskExecutor
+from app.models.users import User, UserRole
+from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter, to_audit_state
 
 ARCHIVE_RETENTION_DAYS = 365 * 2
 ARCHIVABLE_SUB_PROJECT_STATUSES = {SubProjectStatus.closed, SubProjectStatus.terminated}
@@ -53,6 +56,21 @@ class ArchiveRunResult:
     duration_ms: int
 
 
+@dataclass(frozen=True)
+class ArchiveBatchPage:
+    items: list[ArchiveBatch]
+    page: int
+    page_size: int
+    total: int
+
+
+@dataclass(frozen=True)
+class ArchiveBatchDetail:
+    batch: ArchiveBatch
+    main_projects: list[ArchiveMainProject]
+    sub_projects: list[ArchiveSubProject]
+
+
 class ArchiveRepository(Protocol):
     def begin(self) -> None:
         ...
@@ -67,6 +85,53 @@ class ArchiveRepository(Protocol):
         ...
 
     async def count_main_projects(self) -> int:
+        ...
+
+    async def list_batches(self, *, page: int, page_size: int) -> tuple[list[ArchiveBatch], int]:
+        ...
+
+    async def get_batch(self, batch_id: UUID) -> ArchiveBatch | None:
+        ...
+
+    async def list_archive_main_projects(self, batch_id: UUID) -> list[ArchiveMainProject]:
+        ...
+
+    async def list_archive_sub_projects(self, batch_id: UUID) -> list[ArchiveSubProject]:
+        ...
+
+    async def get_archive_main_project(
+        self,
+        archive_main_project_id: UUID,
+    ) -> ArchiveMainProject | None:
+        ...
+
+    async def list_archive_sub_projects_for_main(
+        self,
+        *,
+        batch_id: UUID,
+        original_main_project_id: UUID,
+    ) -> list[ArchiveSubProject]:
+        ...
+
+    async def main_project_no_exists(self, project_no: str) -> bool:
+        ...
+
+    async def sub_project_no_conflicts(self, project_nos: Sequence[str]) -> list[str]:
+        ...
+
+    def restore_main_project(
+        self,
+        project: MainProject,
+        sub_projects: Sequence[SubProject],
+    ) -> None:
+        ...
+
+    async def delete_archive_project_snapshots(
+        self,
+        *,
+        archive_main_project_id: UUID,
+        archive_sub_project_ids: Sequence[UUID],
+    ) -> None:
         ...
 
     def add_batch(self, batch: ArchiveBatch) -> None:
@@ -132,6 +197,99 @@ class SqlAlchemyArchiveRepository:
     async def count_main_projects(self) -> int:
         total = await self._session.scalar(select(func.count()).select_from(MainProject))
         return int(total or 0)
+
+    async def list_batches(self, *, page: int, page_size: int) -> tuple[list[ArchiveBatch], int]:
+        total = await self._session.scalar(select(func.count()).select_from(ArchiveBatch))
+        result = await self._session.scalars(
+            select(ArchiveBatch)
+            .order_by(ArchiveBatch.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size),
+        )
+        return list(result.all()), int(total or 0)
+
+    async def get_batch(self, batch_id: UUID) -> ArchiveBatch | None:
+        batch = await self._session.get(ArchiveBatch, batch_id)
+        return batch if isinstance(batch, ArchiveBatch) else None
+
+    async def list_archive_main_projects(self, batch_id: UUID) -> list[ArchiveMainProject]:
+        result = await self._session.scalars(
+            select(ArchiveMainProject)
+            .where(ArchiveMainProject.batch_id == batch_id)
+            .order_by(ArchiveMainProject.project_no.asc()),
+        )
+        return list(result.all())
+
+    async def list_archive_sub_projects(self, batch_id: UUID) -> list[ArchiveSubProject]:
+        result = await self._session.scalars(
+            select(ArchiveSubProject)
+            .where(ArchiveSubProject.batch_id == batch_id)
+            .order_by(ArchiveSubProject.project_no.asc()),
+        )
+        return list(result.all())
+
+    async def get_archive_main_project(
+        self,
+        archive_main_project_id: UUID,
+    ) -> ArchiveMainProject | None:
+        archive = await self._session.get(ArchiveMainProject, archive_main_project_id)
+        return archive if isinstance(archive, ArchiveMainProject) else None
+
+    async def list_archive_sub_projects_for_main(
+        self,
+        *,
+        batch_id: UUID,
+        original_main_project_id: UUID,
+    ) -> list[ArchiveSubProject]:
+        result = await self._session.scalars(
+            select(ArchiveSubProject)
+            .where(
+                ArchiveSubProject.batch_id == batch_id,
+                ArchiveSubProject.original_main_project_id == original_main_project_id,
+            )
+            .order_by(ArchiveSubProject.project_no.asc()),
+        )
+        return list(result.all())
+
+    async def main_project_no_exists(self, project_no: str) -> bool:
+        total = await self._session.scalar(
+            select(func.count())
+            .select_from(MainProject)
+            .where(MainProject.project_no == project_no),
+        )
+        return bool(total)
+
+    async def sub_project_no_conflicts(self, project_nos: Sequence[str]) -> list[str]:
+        if not project_nos:
+            return []
+        result = await self._session.scalars(
+            select(SubProject.project_no).where(SubProject.project_no.in_(project_nos)),
+        )
+        return list(result.all())
+
+    def restore_main_project(
+        self,
+        project: MainProject,
+        sub_projects: Sequence[SubProject],
+    ) -> None:
+        self._session.add(project)
+        self._session.add_all(list(sub_projects))
+
+    async def delete_archive_project_snapshots(
+        self,
+        *,
+        archive_main_project_id: UUID,
+        archive_sub_project_ids: Sequence[UUID],
+    ) -> None:
+        if archive_sub_project_ids:
+            await self._session.execute(
+                delete(ArchiveSubProject).where(
+                    ArchiveSubProject.id.in_(archive_sub_project_ids),
+                ),
+            )
+        await self._session.execute(
+            delete(ArchiveMainProject).where(ArchiveMainProject.id == archive_main_project_id),
+        )
 
     def add_batch(self, batch: ArchiveBatch) -> None:
         self._session.add(batch)
@@ -307,6 +465,92 @@ class InMemoryArchiveRepository:
     async def count_main_projects(self) -> int:
         return len(self.projects)
 
+    async def list_batches(self, *, page: int, page_size: int) -> tuple[list[ArchiveBatch], int]:
+        ordered = sorted(self.archive_batches, key=lambda batch: batch.created_at, reverse=True)
+        start = (page - 1) * page_size
+        return ordered[start : start + page_size], len(ordered)
+
+    async def get_batch(self, batch_id: UUID) -> ArchiveBatch | None:
+        return next((batch for batch in self.archive_batches if batch.id == batch_id), None)
+
+    async def list_archive_main_projects(self, batch_id: UUID) -> list[ArchiveMainProject]:
+        return sorted(
+            [archive for archive in self.archive_main_projects if archive.batch_id == batch_id],
+            key=lambda archive: archive.project_no,
+        )
+
+    async def list_archive_sub_projects(self, batch_id: UUID) -> list[ArchiveSubProject]:
+        return sorted(
+            [archive for archive in self.archive_sub_projects if archive.batch_id == batch_id],
+            key=lambda archive: archive.project_no,
+        )
+
+    async def get_archive_main_project(
+        self,
+        archive_main_project_id: UUID,
+    ) -> ArchiveMainProject | None:
+        return next(
+            (
+                archive
+                for archive in self.archive_main_projects
+                if archive.id == archive_main_project_id
+            ),
+            None,
+        )
+
+    async def list_archive_sub_projects_for_main(
+        self,
+        *,
+        batch_id: UUID,
+        original_main_project_id: UUID,
+    ) -> list[ArchiveSubProject]:
+        return sorted(
+            [
+                archive
+                for archive in self.archive_sub_projects
+                if archive.batch_id == batch_id
+                and archive.original_main_project_id == original_main_project_id
+            ],
+            key=lambda archive: archive.project_no,
+        )
+
+    async def main_project_no_exists(self, project_no: str) -> bool:
+        return any(project.project_no == project_no for project in self.projects)
+
+    async def sub_project_no_conflicts(self, project_nos: Sequence[str]) -> list[str]:
+        candidates = set(project_nos)
+        return sorted(
+            [
+                sub_project.project_no
+                for sub_project in self.sub_projects
+                if sub_project.project_no in candidates
+            ],
+        )
+
+    def restore_main_project(
+        self,
+        project: MainProject,
+        sub_projects: Sequence[SubProject],
+    ) -> None:
+        self.projects.append(project)
+        self.sub_projects.extend(sub_projects)
+
+    async def delete_archive_project_snapshots(
+        self,
+        *,
+        archive_main_project_id: UUID,
+        archive_sub_project_ids: Sequence[UUID],
+    ) -> None:
+        sub_project_ids = set(archive_sub_project_ids)
+        self.archive_sub_projects = [
+            archive for archive in self.archive_sub_projects if archive.id not in sub_project_ids
+        ]
+        self.archive_main_projects = [
+            archive
+            for archive in self.archive_main_projects
+            if archive.id != archive_main_project_id
+        ]
+
     def add_batch(self, batch: ArchiveBatch) -> None:
         self.archive_batches.append(batch)
 
@@ -382,7 +626,27 @@ class ArchiveService:
             )
         return candidates
 
-    async def archive_eligible_projects(self, *, actor_id: UUID | None = None) -> ArchiveRunResult:
+    async def list_batches(self, *, page: int = 1, page_size: int = 20) -> ArchiveBatchPage:
+        items, total = await self._repository.list_batches(page=page, page_size=page_size)
+        return ArchiveBatchPage(items=items, page=page, page_size=page_size, total=total)
+
+    async def get_batch_detail(self, batch_id: UUID) -> ArchiveBatchDetail:
+        batch = await self._repository.get_batch(batch_id)
+        if batch is None:
+            raise ResourceNotFoundError("归档批次不存在")
+        return ArchiveBatchDetail(
+            batch=batch,
+            main_projects=await self._repository.list_archive_main_projects(batch.id),
+            sub_projects=await self._repository.list_archive_sub_projects(batch.id),
+        )
+
+    async def archive_eligible_projects(
+        self,
+        *,
+        actor_id: UUID | None = None,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> ArchiveRunResult:
         self._repository.begin()
         try:
             started_at = self._now()
@@ -445,7 +709,7 @@ class ArchiveService:
             await self._repository.delete_project_graph(project_ids)
             after_count = await self._repository.count_main_projects()
             await self._repository.commit()
-            return ArchiveRunResult(
+            result = ArchiveRunResult(
                 batch_id=batch_id,
                 batch_no=batch_no,
                 archived_main_project_count=len(projects),
@@ -454,9 +718,92 @@ class ArchiveService:
                 main_projects_after=after_count,
                 duration_ms=duration_ms,
             )
+            self._record_audit(
+                action="archive.create_batch",
+                target_type="archive_batch",
+                target_id=str(batch_id),
+                actor_id=actor_id,
+                before_state={},
+                after_state=to_audit_state(result),
+                audit_writer=audit_writer,
+                audit_context=audit_context,
+                extra={
+                    "archived_main_project_ids": [str(project.id) for project in projects],
+                    "archived_sub_project_count": len(sub_projects),
+                },
+            )
+            return result
         except Exception:
             await self._repository.rollback()
             raise
+
+    async def restore_main_project(
+        self,
+        *,
+        actor: User,
+        archive_main_project_id: UUID,
+        audit_writer: AuditLogWriter | None = None,
+        audit_context: AuditContext | None = None,
+    ) -> MainProject:
+        if actor.role != UserRole.admin:
+            raise PermissionDeniedError()
+
+        archive = await self._repository.get_archive_main_project(archive_main_project_id)
+        if archive is None:
+            raise ResourceNotFoundError("归档主项目不存在")
+        if await self._repository.main_project_no_exists(archive.project_no):
+            raise ResourceConflictError(
+                "恢复主项目存在唯一键冲突",
+                data={"fields": ["project_no"], "project_no": archive.project_no},
+            )
+
+        sub_archives = await self._repository.list_archive_sub_projects_for_main(
+            batch_id=archive.batch_id,
+            original_main_project_id=archive.original_id,
+        )
+        sub_project_conflicts = await self._repository.sub_project_no_conflicts(
+            [sub_archive.project_no for sub_archive in sub_archives],
+        )
+        if sub_project_conflicts:
+            raise ResourceConflictError(
+                "恢复子项目存在唯一键冲突",
+                data={
+                    "fields": ["sub_project.project_no"],
+                    "project_nos": sub_project_conflicts,
+                },
+            )
+        project = main_project_from_snapshot(archive.snapshot)
+        sub_projects = [
+            sub_project_from_snapshot(sub_archive.snapshot) for sub_archive in sub_archives
+        ]
+        self._repository.begin()
+        try:
+            self._repository.restore_main_project(project, sub_projects)
+            await self._repository.delete_archive_project_snapshots(
+                archive_main_project_id=archive.id,
+                archive_sub_project_ids=[sub_archive.id for sub_archive in sub_archives],
+            )
+            await self._repository.commit()
+        except Exception:
+            await self._repository.rollback()
+            raise
+
+        self._record_audit(
+            action="archive.restore_main_project",
+            target_type="main_project",
+            target_id=str(project.id),
+            actor_id=actor.id,
+            before_state=archive.snapshot,
+            after_state=serialize_model(project),
+            audit_writer=audit_writer,
+            audit_context=audit_context,
+            extra={
+                "archive_main_project_id": str(archive.id),
+                "archive_batch_id": str(archive.batch_id),
+                "restored_sub_project_count": len(sub_projects),
+            },
+        )
+        return project
 
     def _cutoff_at(self, now: datetime | None = None) -> datetime:
         return (now or self._now()) - timedelta(days=ARCHIVE_RETENTION_DAYS)
@@ -482,6 +829,37 @@ class ArchiveService:
     def _duration_ms(*, started_at: datetime, finished_at: datetime) -> int:
         return max(int((finished_at - started_at).total_seconds() * 1000), 0)
 
+    @staticmethod
+    def _record_audit(
+        *,
+        action: str,
+        target_type: str,
+        target_id: str,
+        actor_id: UUID | None,
+        before_state: dict[str, object],
+        after_state: dict[str, object],
+        audit_writer: AuditLogWriter | None,
+        audit_context: AuditContext | None,
+        extra: dict[str, object],
+    ) -> None:
+        if audit_writer is None:
+            return
+        context = audit_context or AuditContext(actor_id=actor_id)
+        audit_writer.enqueue(
+            AuditLogEntry(
+                actor_id=context.actor_id or actor_id,
+                action=action,
+                target_type=target_type,
+                target_id=target_id,
+                before_state=before_state,
+                after_state=after_state,
+                ip_address=context.ip_address,
+                user_agent=context.user_agent,
+                extra=extra,
+                request_id=context.request_id,
+            ),
+        )
+
 
 def serialize_model(model: object) -> dict[str, object | None]:
     table = cast(Any, model).__table__
@@ -504,3 +882,82 @@ def archive_json_value(value: object | None) -> object | None:
     if isinstance(value, str | int | float | bool):
         return value
     return str(value)
+
+
+def main_project_from_snapshot(snapshot: dict[str, object]) -> MainProject:
+    return MainProject(
+        id=_snapshot_uuid(snapshot, "id"),
+        project_no=_snapshot_str(snapshot, "project_no"),
+        name=_snapshot_str(snapshot, "name"),
+        dept_id=_snapshot_uuid(snapshot, "dept_id"),
+        status=MainProjectStatus(_snapshot_str(snapshot, "status")),
+        total_budget=Decimal(_snapshot_str(snapshot, "total_budget")),
+        expected_finish_date=_snapshot_date(snapshot, "expected_finish_date"),
+        spent_amount=Decimal(_snapshot_str(snapshot, "spent_amount")),
+        remark=_snapshot_optional_str(snapshot, "remark"),
+        creator_id=_snapshot_optional_uuid(snapshot, "creator_id"),
+        closed_at=_snapshot_optional_datetime(snapshot, "closed_at"),
+        created_at=_snapshot_datetime(snapshot, "created_at"),
+        updated_at=_snapshot_datetime(snapshot, "updated_at"),
+    )
+
+
+def sub_project_from_snapshot(snapshot: dict[str, object]) -> SubProject:
+    return SubProject(
+        id=_snapshot_uuid(snapshot, "id"),
+        project_no=_snapshot_str(snapshot, "project_no"),
+        name=_snapshot_str(snapshot, "name"),
+        main_project_id=_snapshot_uuid(snapshot, "main_project_id"),
+        dept_id=_snapshot_uuid(snapshot, "dept_id"),
+        budget=Decimal(_snapshot_str(snapshot, "budget")),
+        manager_id=_snapshot_uuid(snapshot, "manager_id"),
+        creator_id=_snapshot_optional_uuid(snapshot, "creator_id"),
+        status=SubProjectStatus(_snapshot_str(snapshot, "status")),
+        plan_end_date=_snapshot_optional_date(snapshot, "plan_end_date"),
+        actual_end_date=_snapshot_optional_date(snapshot, "actual_end_date"),
+        spent_amount=Decimal(_snapshot_str(snapshot, "spent_amount")),
+        remark=_snapshot_optional_str(snapshot, "remark"),
+        closed_at=_snapshot_optional_datetime(snapshot, "closed_at"),
+        created_at=_snapshot_datetime(snapshot, "created_at"),
+        updated_at=_snapshot_datetime(snapshot, "updated_at"),
+    )
+
+
+def _snapshot_str(snapshot: dict[str, object], field: str) -> str:
+    value = snapshot[field]
+    return str(value)
+
+
+def _snapshot_optional_str(snapshot: dict[str, object], field: str) -> str | None:
+    value = snapshot.get(field)
+    return None if value is None else str(value)
+
+
+def _snapshot_uuid(snapshot: dict[str, object], field: str) -> UUID:
+    return UUID(_snapshot_str(snapshot, field))
+
+
+def _snapshot_optional_uuid(snapshot: dict[str, object], field: str) -> UUID | None:
+    value = snapshot.get(field)
+    return None if value is None else UUID(str(value))
+
+
+def _snapshot_datetime(snapshot: dict[str, object], field: str) -> datetime:
+    return datetime.fromisoformat(_snapshot_str(snapshot, field))
+
+
+def _snapshot_optional_datetime(
+    snapshot: dict[str, object],
+    field: str,
+) -> datetime | None:
+    value = snapshot.get(field)
+    return None if value is None else datetime.fromisoformat(str(value))
+
+
+def _snapshot_date(snapshot: dict[str, object], field: str) -> date:
+    return date.fromisoformat(_snapshot_str(snapshot, field))
+
+
+def _snapshot_optional_date(snapshot: dict[str, object], field: str) -> date | None:
+    value = snapshot.get(field)
+    return None if value is None else date.fromisoformat(str(value))

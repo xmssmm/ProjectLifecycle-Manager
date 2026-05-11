@@ -10,6 +10,7 @@ from fastapi.openapi.utils import get_openapi
 from app.api.external.v1.router import router as external_api_router
 from app.api.v1.acceptance_steps import router as acceptance_steps_router
 from app.api.v1.api_keys import router as api_keys_router
+from app.api.v1.archives import router as archives_router
 from app.api.v1.audit_logs import router as audit_logs_router
 from app.api.v1.auth import get_auth_failure_store
 from app.api.v1.auth import router as auth_router
@@ -152,6 +153,7 @@ def create_app(
             {"name": "webhooks", "description": "Webhook endpoint and delivery endpoints."},
             {"name": "acceptance-steps", "description": "Acceptance step endpoints."},
             {"name": "api-keys", "description": "API key management endpoints."},
+            {"name": "archives", "description": "Archive batch and restore endpoints."},
             {"name": "audit-logs", "description": "Audit log query endpoints."},
             {"name": "dashboard", "description": "Role-scoped dashboard endpoints."},
             {"name": "payments", "description": "Payment creation and reversal endpoints."},
@@ -197,6 +199,7 @@ def create_app(
     app.include_router(external_api_router)
     app.include_router(acceptance_steps_router, prefix="/api/v1")
     app.include_router(api_keys_router, prefix="/api/v1")
+    app.include_router(archives_router, prefix="/api/v1")
     app.include_router(audit_logs_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(dashboard_router, prefix="/api/v1")

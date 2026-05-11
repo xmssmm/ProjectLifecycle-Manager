@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
+import ArchiveManagementView from '@/views/admin/ArchiveManagement.vue';
 import ComponentDemoView from '@/views/admin/ComponentDemoView.vue';
 import ApiKeyManagementView from '@/views/admin/ApiKeyManagement.vue';
 import AuditLogQueryView from '@/views/admin/AuditLogQuery.vue';
@@ -79,6 +80,12 @@ const router = createRouter({
       path: '/admin/webhooks',
       name: 'admin-webhooks',
       component: WebhookManagementView,
+      meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/archives',
+      name: 'admin-archives',
+      component: ArchiveManagementView,
       meta: { requireRole: ['admin'], requiresAuth: true },
     },
     {
