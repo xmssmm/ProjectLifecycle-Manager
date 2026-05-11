@@ -16,6 +16,7 @@ import UserListView from '@/views/admin/UserList.vue';
 import WebhookManagementView from '@/views/admin/WebhookManagement.vue';
 import WorkflowTemplateManagementView from '@/views/admin/WorkflowTemplateManagement.vue';
 import ProjectBenchmarkView from '@/views/analytics/ProjectBenchmark.vue';
+import ProjectRiskView from '@/views/analytics/ProjectRisk.vue';
 import LoginView from '@/views/auth/LoginView.vue';
 import ChangePasswordView from '@/views/ChangePassword.vue';
 import DashboardView from '@/views/dashboard/DashboardView.vue';
@@ -251,6 +252,13 @@ const router = createRouter({
       path: '/analytics/project-benchmarks/:projectId?',
       name: 'project-benchmarks',
       component: ProjectBenchmarkView,
+      meta: { requiresAuth: true },
+      props: (route) => ({ projectId: route.params.projectId as string | undefined }),
+    },
+    {
+      path: '/analytics/project-risk/:projectId?',
+      name: 'project-risk',
+      component: ProjectRiskView,
       meta: { requiresAuth: true },
       props: (route) => ({ projectId: route.params.projectId as string | undefined }),
     },

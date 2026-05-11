@@ -110,6 +110,9 @@ function timelineTitle(status: ProjectStatus): string {
       >
         <el-button>对标分析</el-button>
       </router-link>
+      <router-link v-if="project" :to="{ name: 'project-risk', params: { projectId: project.id } }">
+        <el-button>风险评分</el-button>
+      </router-link>
       <router-link
         v-if="project && canEditRejectedProject"
         :to="{ name: 'main-project-edit', params: { id: project.id } }"

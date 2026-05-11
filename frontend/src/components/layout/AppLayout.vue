@@ -47,6 +47,7 @@ const navItems: NavItem[] = [
   { icon: List, index: '/tasks', labelKey: 'nav.tasks' },
   { icon: DataAnalysis, index: '/reports/custom', labelKey: 'nav.customReports' },
   { icon: DataAnalysis, index: '/analytics/project-benchmarks', labelKey: 'nav.projectBenchmarks' },
+  { icon: DataAnalysis, index: '/analytics/project-risk', labelKey: 'nav.projectRisk' },
   { icon: Search, index: '/search', labelKey: 'nav.search' },
   { icon: List, index: '/revoke-requests', labelKey: 'nav.revoke', requireRole: ['proj_leader'] },
   {

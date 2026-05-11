@@ -49,6 +49,7 @@ export default {
     home: 'Workbench',
     imports: 'Import',
     projectBenchmarks: 'Benchmarks',
+    projectRisk: 'Risk',
     projectTemplates: 'Templates',
     management: 'Administration',
     me: 'Me',
