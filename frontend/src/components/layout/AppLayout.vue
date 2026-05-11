@@ -5,6 +5,7 @@ import {
   Folder,
   House,
   List,
+  Search,
   Setting,
   SwitchButton,
   User,
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { icon: User, index: '/profile', label: '我的' },
   { icon: Folder, index: '/main-projects', label: '项目' },
   { icon: List, index: '/tasks', label: '任务' },
+  { icon: Search, index: '/search', label: '搜索' },
   { icon: List, index: '/revoke-requests', label: '撤销', requireRole: ['proj_leader'] },
   {
     icon: List,

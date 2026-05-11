@@ -24,6 +24,7 @@ import PaymentListView from '@/views/payment/PaymentList.vue';
 import ProfileView from '@/views/Profile.vue';
 import RevokeApplyView from '@/views/revoke/RevokeApply.vue';
 import RevokeReviewView from '@/views/revoke/RevokeReview.vue';
+import SearchView from '@/views/SearchView.vue';
 import SubProjectDetailView from '@/views/sub-project/SubProjectDetail.vue';
 import SubProjectEditView from '@/views/sub-project/SubProjectEdit.vue';
 import SubProjectListView from '@/views/sub-project/SubProjectList.vue';
@@ -203,6 +204,12 @@ const router = createRouter({
       name: 'tasks',
       component: TaskListView,
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/search',
+      name: 'search',
+      component: SearchView,
+      meta: { permission: 'document.download', requiresAuth: true },
     },
     {
       path: '/tasks/:id',

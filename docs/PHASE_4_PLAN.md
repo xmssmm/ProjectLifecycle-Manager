@@ -196,13 +196,21 @@
 - Create: `backend/app/services/document_text_extraction.py`
 - Create: `backend/app/services/search.py`
 - Create: `backend/app/api/v1/search.py`
-- Modify: `backend/app/tasks.py`
+- Create: `backend/app/tasks/search.py`
+- Modify: `backend/app/tasks/document_scanning.py`
+- Modify: `backend/app/tasks/task_names.py`
+- Modify: `backend/app/tasks/celery_app.py`
+- Modify: `backend/app/main.py`
 - Modify: `backend/app/services/documents.py`
 - Create: `frontend/src/api/search.ts`
 - Create: `frontend/src/stores/useSearchStore.ts`
+- Create: `frontend/src/types/search.ts`
 - Create: `frontend/src/views/SearchView.vue`
+- Modify: `frontend/src/router/index.ts`
 - Test: `backend/tests/unit/test_document_search_service.py`
 - Test: `backend/tests/api/test_search_api.py`
+- Test: `frontend/tests/search-api.test.ts`
+- Test: `frontend/tests/search-page.test.ts`
 
 **Implementation:**
 
@@ -213,10 +221,10 @@
 
 **Test plan:**
 
-- [ ] 空查询被拒绝。
-- [ ] clean 文档索引后可检索。
-- [ ] infected / deleted 文档不进入结果。
-- [ ] 抽取失败保留失败状态，不阻塞文档主流程。
+- [x] 空查询被拒绝。
+- [x] clean 文档索引后可检索。
+- [x] infected / deleted 文档不进入结果。
+- [x] 抽取失败保留失败状态，不阻塞文档主流程。
 
 **Verification:**
 
@@ -226,6 +234,7 @@
 - `cd frontend && npm.cmd run lint`
 - `cd frontend && npm.cmd run typecheck`
 - `cd frontend && npm.cmd run test:unit`
+- `cd frontend && npm.cmd run test:unit -- search-api search-page`
 
 ### T-4-DATA-03 项目批量导入
 

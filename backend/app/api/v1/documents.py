@@ -21,6 +21,7 @@ from app.services.documents import (
 )
 from app.storage.factory import create_storage_backend
 from app.tasks.document_scanning import CeleryDocumentScanScheduler
+from app.tasks.search import CeleryDocumentSearchScheduler
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -38,6 +39,7 @@ def get_document_service(
             timeout_seconds=settings.office_preview_conversion_timeout_seconds,
         ),
         scan_scheduler=CeleryDocumentScanScheduler(),
+        search_scheduler=CeleryDocumentSearchScheduler(),
     )
 
 

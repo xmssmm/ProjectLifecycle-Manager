@@ -35,6 +35,9 @@ async def run_document_scan(document_id: UUID) -> dict[str, str]:
             notification_service=build_notification_service(session=session, settings=settings),
         )
         result = await service.scan_document(document_id)
+        from app.tasks.search import run_document_search_index
+
+        await run_document_search_index(document_id)
         return {
             "document_id": str(result.document_id),
             "status": result.status.value,
