@@ -13,6 +13,7 @@ class WorkflowRequiredDocument(BaseModel):
     doc_type: CodeText
     requirement: Literal["required", "conditional", "optional"]
     qty_rule: RuleText
+    procurement_type: Literal["inquiry", "bidding", "single_source"] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
