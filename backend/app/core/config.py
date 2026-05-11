@@ -75,6 +75,13 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = ""
     s3_bucket: str = ""
 
+    ai_enabled: bool = False
+    ai_provider: str = "disabled"
+    ai_base_url: str = "https://api.openai.com/v1"
+    ai_model: str = ""
+    ai_api_key: str = ""
+    ai_timeout_seconds: float = 30.0
+
     model_config = SettingsConfigDict(
         env_file=("../.env", ".env"),
         env_file_encoding="utf-8",

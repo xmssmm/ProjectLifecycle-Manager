@@ -430,10 +430,10 @@
 
 **Test plan:**
 
-- [ ] 默认关闭时调用返回未启用错误。
-- [ ] fake provider 可返回符合 schema 的结果。
-- [ ] schema 校验失败时记录失败审计。
-- [ ] 审计日志不保存 API key 和完整敏感 payload。
+- [x] 默认关闭时调用返回未启用错误。
+- [x] fake provider 可返回符合 schema 的结果。
+- [x] schema 校验失败时记录失败审计。
+- [x] 审计日志不保存 API key 和完整敏感 payload。
 
 **Verification:**
 
