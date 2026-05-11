@@ -5,6 +5,7 @@ import { createApp } from 'vue';
 
 import { apiClient, installApiInterceptors } from './api/client';
 import App from './App.vue';
+import { i18n } from './i18n';
 import { installGlobalErrorHandler } from './plugins/errorHandler';
 import router from './router';
 import { createAppPinia } from './stores';
@@ -16,6 +17,7 @@ const pinia = createAppPinia();
 app.use(pinia);
 app.use(router);
 app.use(ElementPlus);
+app.use(i18n);
 installApiInterceptors(apiClient, { router });
 installGlobalErrorHandler(app);
 

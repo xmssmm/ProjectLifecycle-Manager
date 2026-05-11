@@ -41,6 +41,11 @@ describe('App', () => {
           ElMain: { template: '<main><slot /></main>' },
           ElMenu: { template: '<nav><slot /></nav>' },
           ElMenuItem: { template: '<a><slot /></a>' },
+          ElSegmented: {
+            props: ['modelValue', 'options'],
+            template:
+              '<div><button v-for="option in options" :key="option.value">{{ option.label }}</button></div>',
+          },
           ElTooltip: { template: '<span><slot /></span>' },
           NotificationCenter: { template: '<button>通知</button>' },
         },

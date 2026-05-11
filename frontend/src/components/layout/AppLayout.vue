@@ -17,6 +17,7 @@ import { useRouter } from 'vue-router';
 
 import NotificationCenter from '@/components/notification/NotificationCenter.vue';
 import { usePermission } from '@/composables/usePermission';
+import { getCurrentLocale, localeOptions, setLocale, t, type SupportedLocale } from '@/i18n';
 import { useAuthStore } from '@/stores/useAuthStore';
 import type { UserRole } from '@/stores/useAuthStore';
 
@@ -24,7 +25,7 @@ interface NavItem {
   disabled?: boolean;
   icon: Component;
   index: string;
-  label: string;
+  labelKey: string;
   requireRole?: UserRole[];
 }
 
@@ -36,36 +37,40 @@ const navItems: NavItem[] = [
   {
     icon: User,
     index: '/handover',
-    label: '自助转交',
+    labelKey: 'nav.selfServiceHandover',
     requireRole: ['admin', 'dept_manager', 'proj_leader'],
   },
-  { icon: House, index: '/', label: '工作台' },
-  { icon: DataAnalysis, index: '/dashboard', label: '驾驶舱' },
-  { icon: User, index: '/profile', label: '我的' },
-  { icon: Folder, index: '/main-projects', label: '项目' },
-  { icon: List, index: '/tasks', label: '任务' },
-  { icon: Search, index: '/search', label: '搜索' },
-  { icon: List, index: '/revoke-requests', label: '撤销', requireRole: ['proj_leader'] },
+  { icon: House, index: '/', labelKey: 'nav.home' },
+  { icon: DataAnalysis, index: '/dashboard', labelKey: 'nav.dashboard' },
+  { icon: User, index: '/profile', labelKey: 'nav.me' },
+  { icon: Folder, index: '/main-projects', labelKey: 'nav.projects' },
+  { icon: List, index: '/tasks', labelKey: 'nav.tasks' },
+  { icon: Search, index: '/search', labelKey: 'nav.search' },
+  { icon: List, index: '/revoke-requests', labelKey: 'nav.revoke', requireRole: ['proj_leader'] },
   {
     icon: List,
     index: '/revoke-requests/review',
-    label: '撤销审批',
+    labelKey: 'nav.revokeReview',
     requireRole: ['admin', 'dept_manager'],
   },
-  { icon: User, index: '/admin/users', label: '用户', requireRole: ['admin'] },
-  { icon: Setting, index: '/admin/departments', label: '部门', requireRole: ['admin'] },
-  { icon: List, index: '/admin/audit-logs', label: '审计', requireRole: ['admin'] },
-  { icon: Setting, index: '/admin/api-keys', label: 'API Key', requireRole: ['admin'] },
-  { icon: Setting, index: '/admin/webhooks', label: 'Webhook', requireRole: ['admin'] },
-  { icon: Box, index: '/admin/archives', label: '归档', requireRole: ['admin'] },
-  { icon: Upload, index: '/admin/imports/projects', label: '导入', requireRole: ['admin'] },
-  { icon: Download, index: '/admin/exports/database', label: '导出', requireRole: ['admin'] },
-  { icon: User, index: '/admin/handover', label: '转交', requireRole: ['admin'] },
-  { icon: Box, index: '/component-demo', label: '组件', requireRole: ['admin'] },
-  { disabled: true, icon: Setting, index: '/admin', label: '管理', requireRole: ['admin'] },
+  { icon: User, index: '/admin/users', labelKey: 'nav.users', requireRole: ['admin'] },
+  { icon: Setting, index: '/admin/departments', labelKey: 'nav.departments', requireRole: ['admin'] },
+  { icon: List, index: '/admin/audit-logs', labelKey: 'nav.audit', requireRole: ['admin'] },
+  { icon: Setting, index: '/admin/api-keys', labelKey: 'nav.apiKeys', requireRole: ['admin'] },
+  { icon: Setting, index: '/admin/webhooks', labelKey: 'nav.webhooks', requireRole: ['admin'] },
+  { icon: Box, index: '/admin/archives', labelKey: 'nav.archives', requireRole: ['admin'] },
+  { icon: Upload, index: '/admin/imports/projects', labelKey: 'nav.imports', requireRole: ['admin'] },
+  { icon: Download, index: '/admin/exports/database', labelKey: 'nav.exports', requireRole: ['admin'] },
+  { icon: User, index: '/admin/handover', labelKey: 'nav.handover', requireRole: ['admin'] },
+  { icon: Box, index: '/component-demo', labelKey: 'nav.components', requireRole: ['admin'] },
+  { disabled: true, icon: Setting, index: '/admin', labelKey: 'nav.management', requireRole: ['admin'] },
 ];
 
 const visibleNavItems = computed(() => navItems.filter((item) => hasRole(item.requireRole)));
+const currentLocale = computed<SupportedLocale>({
+  get: getCurrentLocale,
+  set: setLocale,
+});
 
 async function logout() {
   await authStore.logout();
@@ -78,7 +83,7 @@ async function logout() {
     <el-aside class="app-sidebar" width="248px">
       <div class="brand">
         <span class="brand-mark">PM</span>
-        <span class="brand-text">项目归档</span>
+        <span class="brand-text">{{ t('app.brand') }}</span>
       </div>
       <el-menu class="nav-menu" default-active="/" router>
         <el-menu-item
@@ -88,7 +93,7 @@ async function logout() {
           :index="item.index"
         >
           <el-icon><component :is="item.icon" /></el-icon>
-          <span>{{ item.label }}</span>
+          <span>{{ t(item.labelKey) }}</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -96,15 +101,22 @@ async function logout() {
     <el-container>
       <el-header class="app-header">
         <div>
-          <h1>企业项目过程管理与资料归档系统</h1>
-          <p>基础工作区</p>
+          <h1>{{ t('app.title') }}</h1>
+          <p>{{ t('app.workspace') }}</p>
         </div>
         <div class="header-account">
           <NotificationCenter />
+          <el-segmented
+            v-model="currentLocale"
+            class="locale-switch"
+            :aria-label="t('app.language')"
+            :options="localeOptions"
+            size="small"
+          />
           <router-link class="header-account__name" to="/profile">
-            {{ authStore.user?.username ?? '未登录' }}
+            {{ authStore.user?.username ?? t('auth.notLoggedIn') }}
           </router-link>
-          <el-tooltip content="退出登录" placement="bottom">
+          <el-tooltip :content="t('auth.logout')" placement="bottom">
             <el-button circle :icon="SwitchButton" @click="logout" />
           </el-tooltip>
         </div>
