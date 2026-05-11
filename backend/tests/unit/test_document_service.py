@@ -62,6 +62,14 @@ class RecordingScanScheduler:
         self.document_ids.append(document_id)
 
 
+class RecordingSearchScheduler:
+    def __init__(self) -> None:
+        self.document_ids: list[UUID] = []
+
+    def enqueue(self, document_id: UUID) -> None:
+        self.document_ids.append(document_id)
+
+
 class FailingScanScheduler:
     def enqueue(self, document_id: UUID) -> None:
         _ = document_id
@@ -159,6 +167,7 @@ async def test_upload_sets_document_pending_and_enqueues_scan() -> None:
     sub_project = make_sub_project(leader)
     phase = make_phase(sub_project)
     scheduler = RecordingScanScheduler()
+    search_scheduler = RecordingSearchScheduler()
     repository = InMemoryDocumentRepository(sub_projects=[sub_project], phases=[phase])
     service = DocumentService(
         repository=repository,
@@ -166,6 +175,7 @@ async def test_upload_sets_document_pending_and_enqueues_scan() -> None:
         max_file_size_bytes=1024,
         file_validator=NoopFileValidator(),
         scan_scheduler=scheduler,
+        search_scheduler=search_scheduler,
     )
 
     document = await service.upload_document(
@@ -182,6 +192,7 @@ async def test_upload_sets_document_pending_and_enqueues_scan() -> None:
     assert document.scan_result is None
     assert document.scanned_at is None
     assert scheduler.document_ids == [document.id]
+    assert search_scheduler.document_ids == [document.id]
 
 
 @pytest.mark.asyncio

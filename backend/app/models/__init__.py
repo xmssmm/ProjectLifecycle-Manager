@@ -35,6 +35,7 @@ from app.models.revoke_requests import (
     RevokeRequestStatus,
     RevokeReviewDecision,
 )
+from app.models.search import DocumentSearchEntry, DocumentSearchStatus
 from app.models.sub_projects import (
     SubProject,
     SubProjectHandover,
@@ -59,6 +60,8 @@ __all__ = [
     "Department",
     "Document",
     "DocumentScanStatus",
+    "DocumentSearchEntry",
+    "DocumentSearchStatus",
     "HandoverRequest",
     "HandoverRequestProject",
     "HandoverRequestStatus",

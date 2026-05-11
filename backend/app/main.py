@@ -25,6 +25,7 @@ from app.api.v1.payments import router as payments_router
 from app.api.v1.phases import router as phases_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.revoke_requests import router as revoke_requests_router
+from app.api.v1.search import router as search_router
 from app.api.v1.sub_projects import router as sub_projects_router
 from app.api.v1.system import router as system_router
 from app.api.v1.tasks import router as tasks_router
@@ -161,6 +162,7 @@ def create_app(
             {"name": "notifications", "description": "Notification query endpoints."},
             {"name": "oauth", "description": "OAuth2/OIDC SSO endpoints."},
             {"name": "revoke-requests", "description": "Phase revoke request endpoints."},
+            {"name": "search", "description": "Document full-text search endpoints."},
             {"name": "handover-requests", "description": "Self-service handover workflow."},
             {"name": "auth", "description": "Authentication endpoints."},
             {"name": "users", "description": "用户管理接口。"},
@@ -213,6 +215,7 @@ def create_app(
     app.include_router(phases_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(revoke_requests_router, prefix="/api/v1")
+    app.include_router(search_router, prefix="/api/v1")
     app.include_router(sub_projects_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
     app.include_router(tasks_router, prefix="/api/v1")

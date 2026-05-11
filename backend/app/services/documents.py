@@ -50,6 +50,11 @@ class DocumentScanScheduler(Protocol):
         ...
 
 
+class DocumentSearchScheduler(Protocol):
+    def enqueue(self, document_id: UUID) -> None:
+        ...
+
+
 class LibreOfficeDocumentConverter:
     def __init__(self, *, binary_path: str = "libreoffice", timeout_seconds: int = 30) -> None:
         self._binary_path = binary_path
@@ -376,6 +381,7 @@ class DocumentService:
         file_validator: FileValidator | None = None,
         office_converter: OfficeDocumentConverter | None = None,
         scan_scheduler: DocumentScanScheduler | None = None,
+        search_scheduler: DocumentSearchScheduler | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
@@ -383,6 +389,7 @@ class DocumentService:
         self._file_validator = file_validator or DefaultFileValidator()
         self._office_converter = office_converter or LibreOfficeDocumentConverter()
         self._scan_scheduler = scan_scheduler
+        self._search_scheduler = search_scheduler
 
     async def upload_document(
         self,
@@ -467,6 +474,7 @@ class DocumentService:
         await self._repository.refresh(document)
         if self._scan_scheduler is not None:
             await self._enqueue_scan_or_mark_failed(document)
+        self._enqueue_search_index(document)
         return document
 
     async def _enqueue_scan_or_mark_failed(self, document: Document) -> None:
@@ -488,6 +496,14 @@ class DocumentService:
                     "Failed to persist scan scheduling failure for document %s",
                     document.id,
                 )
+
+    def _enqueue_search_index(self, document: Document) -> None:
+        if self._search_scheduler is None:
+            return
+        try:
+            self._search_scheduler.enqueue(document.id)
+        except Exception:
+            logger.exception("Failed to enqueue search indexing for document %s", document.id)
 
     async def list_documents(
         self,

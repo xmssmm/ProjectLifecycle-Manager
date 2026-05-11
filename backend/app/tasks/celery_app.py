@@ -31,6 +31,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "app.tasks.notification_delivery",
             "app.tasks.webhooks",
             "app.tasks.document_scanning",
+            "app.tasks.search",
         ],
     )
     app.conf.update(
