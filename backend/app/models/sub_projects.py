@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from app.models.departments import Department
     from app.models.main_projects import MainProject
     from app.models.users import User
+    from app.models.workflows import WorkflowTemplateVersion
 
 
 class SubProjectStatus(enum.StrEnum):
@@ -60,6 +61,7 @@ class SubProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_sub_projects_manager_created_at", "manager_id", "created_at"),
         Index("ix_sub_projects_status_created_at", "status", "created_at"),
         Index("ix_sub_projects_dept_created_at", "dept_id", "created_at"),
+        Index("ix_sub_projects_workflow_template_version_id", "workflow_template_version_id"),
     )
 
     project_no: Mapped[str] = mapped_column(String(48), nullable=False, unique=True, index=True)
@@ -105,11 +107,17 @@ class SubProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
     )
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    workflow_template_version_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workflow_template_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     main_project: Mapped[MainProject] = relationship()
     department: Mapped[Department] = relationship()
     manager: Mapped[User] = relationship(foreign_keys=[manager_id])
     creator: Mapped[User | None] = relationship(foreign_keys=[creator_id])
+    workflow_template_version: Mapped[WorkflowTemplateVersion | None] = relationship()
 
 
 class SubProjectMember(UuidPrimaryKeyMixin, TimestampMixin, Base):

@@ -30,6 +30,7 @@ from app.models.phases import (
     PhaseStatus,
     ProcurementType,
 )
+from app.models.project_types import ProjectType
 from app.models.reports import ReportJob, ReportJobStatus, ReportType
 from app.models.revoke_requests import (
     RevokeRequest,
@@ -48,6 +49,11 @@ from app.models.sub_projects import (
 from app.models.tasks import Task, TaskExecutor, TaskStatus
 from app.models.users import User, UserRole, UserStatus
 from app.models.webhooks import WebhookDelivery, WebhookDeliveryStatus, WebhookEndpoint
+from app.models.workflows import (
+    WorkflowTemplate,
+    WorkflowTemplateStatus,
+    WorkflowTemplateVersion,
+)
 
 __all__ = [
     "Base",
@@ -72,6 +78,7 @@ __all__ = [
     "MainProjectStatus",
     "ProjectReview",
     "ProjectReviewDecision",
+    "ProjectType",
     "SubProject",
     "SubProjectHandover",
     "SubProjectMember",
@@ -107,4 +114,7 @@ __all__ = [
     "WebhookDelivery",
     "WebhookDeliveryStatus",
     "WebhookEndpoint",
+    "WorkflowTemplate",
+    "WorkflowTemplateStatus",
+    "WorkflowTemplateVersion",
 ]

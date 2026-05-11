@@ -46,7 +46,7 @@
 
 **Files:**
 
-- Create: `backend/alembic/versions/0032_create_workflow_templates.py`
+- Create: `backend/alembic/versions/0033_create_workflow_templates.py`
 - Create: `backend/app/models/project_types.py`
 - Create: `backend/app/models/workflows.py`
 - Create: `backend/app/schemas/workflows.py`
@@ -65,10 +65,10 @@
 
 **Test plan:**
 
-- [ ] 内置采购项目类型 code 唯一。
-- [ ] 模板版本同一模板下 `version_no` 唯一。
-- [ ] `phase_definitions` 缺少 key、name、order 时校验失败。
-- [ ] 已发布版本不可被原地修改。
+- [x] 内置采购项目类型 code 唯一。
+- [x] 模板版本同一模板下 `version_no` 唯一。
+- [x] `phase_definitions` 缺少 key、name、order 时校验失败。
+- [x] 已发布版本不可被原地修改。
 
 **Verification:**
 
@@ -194,7 +194,7 @@
 - Create: `backend/app/schemas/custom_reports.py`
 - Create: `backend/app/services/report_datasets.py`
 - Create: `backend/app/services/report_query_compiler.py`
-- Create: `backend/alembic/versions/0033_create_custom_reports.py`
+- Create: `backend/alembic/versions/0034_create_custom_reports.py`
 - Modify: `backend/app/models/__init__.py`
 - Test: `backend/tests/unit/test_report_datasets.py`
 - Test: `backend/tests/unit/test_report_query_compiler.py`
@@ -331,7 +331,7 @@
 - Create: `backend/app/schemas/project_taxonomy.py`
 - Create: `backend/app/services/project_templates.py`
 - Create: `backend/app/api/v1/project_templates.py`
-- Create: `backend/alembic/versions/0034_create_project_taxonomy.py`
+- Create: `backend/alembic/versions/0035_create_project_taxonomy.py`
 - Modify: `backend/app/main.py`
 - Create: `frontend/src/api/projectTemplates.ts`
 - Create: `frontend/src/stores/useProjectTemplateStore.ts`
@@ -412,7 +412,7 @@
 - Create: `backend/app/schemas/ai.py`
 - Create: `backend/app/services/ai_providers.py`
 - Create: `backend/app/services/ai_audit.py`
-- Create: `backend/alembic/versions/0035_create_ai_audit_logs.py`
+- Create: `backend/alembic/versions/0036_create_ai_audit_logs.py`
 - Modify: `backend/app/models/__init__.py`
 - Test: `backend/tests/unit/test_ai_providers.py`
 - Test: `backend/tests/unit/test_ai_audit.py`

@@ -27,6 +27,7 @@ from app.models.users import enum_values
 
 if TYPE_CHECKING:
     from app.models.departments import Department
+    from app.models.project_types import ProjectType
     from app.models.sub_projects import SubProject
     from app.models.users import User
 
@@ -56,6 +57,7 @@ class MainProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_main_projects_created_at", "created_at"),
         Index("ix_main_projects_status_created_at", "status", "created_at"),
         Index("ix_main_projects_dept_created_at", "dept_id", "created_at"),
+        Index("ix_main_projects_project_type_id", "project_type_id"),
     )
 
     project_no: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
@@ -88,9 +90,15 @@ class MainProject(UuidPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    project_type_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("project_types.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     department: Mapped[Department] = relationship()
     creator: Mapped[User | None] = relationship()
+    project_type: Mapped[ProjectType | None] = relationship()
     reviews: Mapped[list[ProjectReview]] = relationship(
         back_populates="main_project",
         cascade="all, delete-orphan",
