@@ -30,6 +30,7 @@ class Task(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         Index("ix_tasks_sub_project_phase", "sub_project_id", "phase_id"),
         Index("ix_tasks_status", "status"),
+        Index("ix_tasks_status_plan_end_date", "status", "plan_end_date"),
     )
 
     task_no: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
@@ -67,6 +68,7 @@ class TaskExecutor(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("task_id", "user_id", name="uq_task_executors_task_user"),
         Index("ix_task_executors_status", "status"),
+        Index("ix_task_executors_user_status", "user_id", "status"),
     )
 
     task_id: Mapped[UUID] = mapped_column(

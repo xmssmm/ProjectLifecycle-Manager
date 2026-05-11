@@ -38,6 +38,7 @@ class Payment(UuidPrimaryKeyMixin, TimestampMixin, Base):
         ),
         Index("ix_payments_sub_project_date", "sub_project_id", "payment_date"),
         Index("ix_payments_payment_type", "payment_type"),
+        Index("ix_payments_payment_date", "payment_date"),
     )
 
     payment_no: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)

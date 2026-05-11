@@ -48,6 +48,7 @@ class ReportJob(UuidPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_report_jobs_requested_by_created", "requested_by_id", "created_at"),
         Index("ix_report_jobs_status", "status"),
         Index("ix_report_jobs_report_type", "report_type"),
+        Index("ix_report_jobs_status_finished_at", "status", "finished_at"),
     )
 
     report_type: Mapped[ReportType] = mapped_column(
