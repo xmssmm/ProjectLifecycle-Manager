@@ -10,6 +10,7 @@
 - 确认没有未提交变更：`git status --short --branch`。
 - 确认 `.env` 已按生产环境填写，不提交到 Git。
 - 确认 `GRAFANA_ADMIN_PASSWORD`、数据库密码、JWT 密钥、OSS 凭据不使用默认值。
+- Phase 3 发布需额外确认 SSO、SMTP、企业微信、钉钉、ClamAV 配置项；未启用的外部通道应明确保持 `false`。
 
 ## 2. 构建与基础检查
 
@@ -77,7 +78,7 @@ docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml ps
 ```
 
-所有核心服务必须为 healthy 或 running：`postgres`、`redis`、`backend`、`frontend`、`nginx`、`celery-worker`、`celery-beat`、`prometheus`、`grafana`。
+所有核心服务必须为 healthy 或 running：`postgres`、`redis`、`clamav`、`backend`、`frontend`、`nginx`、`celery-worker`、`celery-beat`、`prometheus`、`grafana`。
 
 ## 7. 健康检查
 
@@ -115,6 +116,10 @@ curl -fsS http://localhost:9090/api/v1/rules
 - 推进一个阶段。
 - 创建一笔付款。
 - 查看通知中心和审计日志。
+- 使用测试用户完成 SSO 登录、绑定和解绑。
+- 在测试环境上传 EICAR 文件，确认文档隔离并禁止下载/预览。
+- 签发 API Key，调用 `/api/external/v1/projects`，吊销后确认请求被拒绝。
+- 配置测试 Webhook，触发一次业务事件并确认签名、重试或重放链路。
 
 ## 11. 回滚预案
 

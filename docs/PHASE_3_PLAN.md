@@ -408,13 +408,13 @@
 
 ## 3. Phase 3 验收
 
-- [ ] SSO 登录、绑定、解绑、强制 SSO 策略可运行。
-- [ ] 邮件、企业微信、钉钉三个外部通知通道可配置并可测试。
-- [ ] 通知失败重试和死信队列可验证。
-- [ ] ClamAV 可识别 EICAR 并阻止 infected 文档下载/预览。
-- [ ] proj_leader 自助转交流程完整跑通。
-- [ ] API Key 可签发、吊销、限流，外部只读 API 可消费。
-- [ ] Webhook 可配置、签名、重试、死信和重放。
-- [ ] 后端 `ruff`、`mypy`、`pytest` 通过。
-- [ ] 前端 `npm run lint`、`npm run typecheck`、`npm run test:unit`、`npm run build` 通过。
-- [ ] 中文部署、使用、运维、故障排查和发布说明已更新。
+- [x] SSO 登录、绑定、解绑、强制 SSO 策略可运行。
+- [x] 邮件、企业微信、钉钉三个外部通知通道可配置并可测试。
+- [x] 通知失败重试和死信队列可验证。
+- [x] ClamAV 可识别 EICAR 并阻止 infected 文档下载/预览。
+- [x] proj_leader 自助转交流程完整跑通。
+- [x] API Key 可签发、吊销、限流，外部只读 API 可消费。
+- [x] Webhook 可配置、签名、重试、死信和重放。
+- [x] 后端 `ruff`、`mypy`、`pytest` 通过。
+- [x] 前端 `npm run lint`、`npm run typecheck`、`npm run test:unit`、`npm run build` 通过。
+- [x] 中文部署、使用、运维、故障排查和发布说明已更新。
