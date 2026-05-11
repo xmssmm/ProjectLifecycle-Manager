@@ -29,6 +29,7 @@ from app.models.sub_projects import (
     SubProjectStatus,
 )
 from app.models.users import User, UserRole, UserStatus
+from app.models.workflows import WorkflowTemplateStatus, WorkflowTemplateVersion
 from app.services.notifications import InMemoryNotificationRepository, NotificationService
 from app.services.phases import InMemoryPhaseRepository, PhasePromotionResult, PhaseService
 
@@ -66,6 +67,36 @@ def make_sub_project(manager: User) -> SubProject:
         actual_end_date=None,
         spent_amount=Decimal("0.00"),
         remark=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def make_workflow_version() -> WorkflowTemplateVersion:
+    now = datetime.now(UTC)
+    return WorkflowTemplateVersion(
+        id=uuid4(),
+        template_id=uuid4(),
+        version_no=1,
+        status=WorkflowTemplateStatus.published,
+        phase_definitions=[
+            {
+                "key": "proposal",
+                "name": "课题申报",
+                "order": 1,
+                "required_documents": [
+                    {
+                        "doc_type": "proposal_doc",
+                        "requirement": "required",
+                        "qty_rule": "=1",
+                        "procurement_type": None,
+                    },
+                ],
+                "allow_parallel": False,
+                "entry_rules": {},
+            },
+        ],
+        published_at=now,
         created_at=now,
         updated_at=now,
     )
@@ -168,6 +199,7 @@ def make_service(
     templates: list[PhaseDocTemplate],
     documents: list[Document] | None = None,
     members: list[SubProjectMember] | None = None,
+    workflow_versions: list[WorkflowTemplateVersion] | None = None,
 ) -> tuple[PhaseService, InMemoryPhaseRepository, InMemoryNotificationRepository]:
     repository = InMemoryPhaseRepository(
         phases=phases,
@@ -175,6 +207,7 @@ def make_service(
         documents=documents or [],
         sub_projects=sub_projects,
         members=members or [],
+        workflow_versions=workflow_versions or [],
     )
     notification_repository = InMemoryNotificationRepository()
     service = PhaseService(
@@ -236,6 +269,91 @@ async def test_promote_phase_rejects_missing_conditional_documents() -> None:
     assert exc.value.data == {
         "missing_documents": [
             {"doc_type": "bid_document", "required": "=1", "actual": 0},
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_promote_phase_uses_workflow_template_required_documents() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    workflow_version = make_workflow_version()
+    sub_project = make_sub_project(leader)
+    sub_project.workflow_template_version_id = workflow_version.id
+    phase = Phase(
+        id=uuid4(),
+        sub_project_id=sub_project.id,
+        phase_no=1,
+        code="proposal",
+        name="课题申报",
+        status=PhaseStatus.in_progress,
+        enter_at=datetime.now(UTC),
+        finish_at=None,
+        procurement_type=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    service, _repository, _notifications = make_service(
+        sub_projects=[sub_project],
+        phases=[phase],
+        templates=[],
+        workflow_versions=[workflow_version],
+    )
+
+    with pytest.raises(BusinessException) as exc:
+        await service.promote_phase(actor=leader, phase_id=phase.id)
+
+    assert exc.value.code == 3002
+    assert exc.value.data == {
+        "missing_documents": [
+            {"doc_type": "proposal_doc", "required": "=1", "actual": 0},
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_promote_phase_uses_assigned_workflow_version_snapshot() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    legacy_version = make_workflow_version()
+    newer_version = make_workflow_version()
+    newer_version.template_id = legacy_version.template_id
+    newer_version.version_no = 2
+    newer_version.phase_definitions[0]["required_documents"] = [
+        {
+            "doc_type": "new_policy_doc",
+            "requirement": "required",
+            "qty_rule": "=1",
+            "procurement_type": None,
+        },
+    ]
+    sub_project = make_sub_project(leader)
+    sub_project.workflow_template_version_id = legacy_version.id
+    phase = Phase(
+        id=uuid4(),
+        sub_project_id=sub_project.id,
+        phase_no=1,
+        code="proposal",
+        name="Proposal",
+        status=PhaseStatus.in_progress,
+        enter_at=datetime.now(UTC),
+        finish_at=None,
+        procurement_type=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    service, _repository, _notifications = make_service(
+        sub_projects=[sub_project],
+        phases=[phase],
+        templates=[],
+        workflow_versions=[newer_version, legacy_version],
+    )
+
+    with pytest.raises(BusinessException) as exc:
+        await service.promote_phase(actor=leader, phase_id=phase.id)
+
+    assert exc.value.code == 3002
+    assert exc.value.data == {
+        "missing_documents": [
+            {"doc_type": "proposal_doc", "required": "=1", "actual": 0},
         ],
     }
 

@@ -12,6 +12,7 @@ from app.models.main_projects import MainProject, MainProjectStatus, ProjectRevi
 from app.models.phases import PhaseStatus
 from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
+from app.models.workflows import WorkflowTemplateStatus, WorkflowTemplateVersion
 from app.schemas.sub_projects import SubProjectReviewRequest, SubProjectTerminateRequest
 from app.services.audit import AuditContext, InMemoryAuditLogWriter
 from app.services.notifications import InMemoryNotificationRepository, NotificationService
@@ -80,16 +81,47 @@ def make_sub_project(
     )
 
 
+def make_workflow_version(*, phase_count: int = 3) -> WorkflowTemplateVersion:
+    now = datetime.now(UTC)
+    phase_names = [
+        ("proposal", "课题申报"),
+        ("review", "专家评审"),
+        ("acceptance", "结题验收"),
+    ][:phase_count]
+    return WorkflowTemplateVersion(
+        id=uuid4(),
+        template_id=uuid4(),
+        version_no=1,
+        status=WorkflowTemplateStatus.published,
+        phase_definitions=[
+            {
+                "key": key,
+                "name": name,
+                "order": index,
+                "required_documents": [],
+                "allow_parallel": False,
+                "entry_rules": {},
+            }
+            for index, (key, name) in enumerate(phase_names, start=1)
+        ],
+        published_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def make_service(
     *,
     users: list[User],
     main_projects: list[MainProject],
     sub_projects: list[SubProject],
+    workflow_versions: list[WorkflowTemplateVersion] | None = None,
 ) -> tuple[SubProjectService, InMemorySubProjectRepository, InMemoryNotificationRepository]:
     repository = InMemorySubProjectRepository(
         main_projects=main_projects,
         sub_projects=sub_projects,
         users=users,
+        workflow_versions=workflow_versions or [],
     )
     notification_repository = InMemoryNotificationRepository()
     service = SubProjectService(
@@ -177,6 +209,91 @@ async def test_review_sub_project_approves_and_creates_six_phases() -> None:
     assert notification_repository.notifications[0].scenario == "project_review_result"
     assert notification_repository.notifications[0].receiver_id == leader.id
     assert audit_writer.entries[0].extra["admin_override"] is False
+
+
+@pytest.mark.asyncio
+async def test_review_sub_project_uses_workflow_template_phase_definitions() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    reviewer = make_user(UserRole.dept_manager, username="reviewer")
+    main_project = make_main_project()
+    workflow_version = make_workflow_version(phase_count=3)
+    sub_project = make_sub_project(main_project=main_project, creator=leader)
+    sub_project.workflow_template_version_id = workflow_version.id
+    service, repository, _notification_repository = make_service(
+        users=[leader, reviewer],
+        main_projects=[main_project],
+        sub_projects=[sub_project],
+        workflow_versions=[workflow_version],
+    )
+
+    reviewed = await service.review_sub_project(
+        actor=reviewer,
+        sub_project_id=sub_project.id,
+        payload=SubProjectReviewRequest(decision=ProjectReviewDecision.approve),
+    )
+
+    assert reviewed.status == SubProjectStatus.in_progress
+    assert [phase.code for phase in repository.phases] == ["proposal", "review", "acceptance"]
+    assert [phase.phase_no for phase in repository.phases] == [1, 2, 3]
+    assert repository.phases[0].status == PhaseStatus.in_progress
+    assert [phase.status for phase in repository.phases[1:]] == [
+        PhaseStatus.waiting,
+        PhaseStatus.waiting,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_review_sub_project_uses_assigned_workflow_version_snapshot() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    reviewer = make_user(UserRole.dept_manager, username="reviewer")
+    main_project = make_main_project()
+    legacy_version = make_workflow_version(phase_count=2)
+    newer_version = make_workflow_version(phase_count=3)
+    newer_version.template_id = legacy_version.template_id
+    newer_version.version_no = 2
+    newer_version.phase_definitions = [
+        {
+            "key": "new-intake",
+            "name": "New intake",
+            "order": 1,
+            "required_documents": [],
+            "allow_parallel": False,
+            "entry_rules": {},
+        },
+        {
+            "key": "new-review",
+            "name": "New review",
+            "order": 2,
+            "required_documents": [],
+            "allow_parallel": False,
+            "entry_rules": {},
+        },
+        {
+            "key": "new-acceptance",
+            "name": "New acceptance",
+            "order": 3,
+            "required_documents": [],
+            "allow_parallel": False,
+            "entry_rules": {},
+        },
+    ]
+    sub_project = make_sub_project(main_project=main_project, creator=leader)
+    sub_project.workflow_template_version_id = legacy_version.id
+    service, repository, _notification_repository = make_service(
+        users=[leader, reviewer],
+        main_projects=[main_project],
+        sub_projects=[sub_project],
+        workflow_versions=[newer_version, legacy_version],
+    )
+
+    await service.review_sub_project(
+        actor=reviewer,
+        sub_project_id=sub_project.id,
+        payload=SubProjectReviewRequest(decision=ProjectReviewDecision.approve),
+    )
+
+    assert [phase.code for phase in repository.phases] == ["proposal", "review"]
+    assert [phase.phase_no for phase in repository.phases] == [1, 2]
 
 
 @pytest.mark.asyncio

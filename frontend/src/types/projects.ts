@@ -72,6 +72,7 @@ export interface SubProjectRead {
   spent_amount: string;
   status: ProjectStatus;
   updated_at: string;
+  workflow_template_version_id?: string | null;
 }
 
 export interface SubProjectListRead {
@@ -93,6 +94,7 @@ export interface SubProjectCreatePayload {
   name: string;
   plan_end_date: string | null;
   remark: string | null;
+  workflow_template_version_id?: string | null;
 }
 
 export type SubProjectUpdatePayload = Partial<Omit<SubProjectCreatePayload, 'main_project_id'>>;
