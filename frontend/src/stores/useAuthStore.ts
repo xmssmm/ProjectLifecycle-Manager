@@ -17,6 +17,7 @@ export interface AuthUser {
   id: string;
   role: UserRole;
   status: UserStatus;
+  timezone?: string;
   username: string;
 }
 
@@ -64,6 +65,7 @@ export const useAuthStore = defineStore('auth', {
         id: user.id,
         role: user.role,
         status: user.status,
+        timezone: user.timezone,
         username: user.username,
       });
     },

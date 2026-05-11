@@ -3,9 +3,12 @@ import { Bell } from '@element-plus/icons-vue';
 import { storeToRefs } from 'pinia';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 import type { NotificationRead } from '@/types/notifications';
+import { formatUserDateTime } from '@/utils/timezone';
 
+const authStore = useAuthStore();
 const store = useNotificationStore();
 const { loading, notifications, unreadCount } = storeToRefs(store);
 const panelOpen = ref(false);
@@ -124,12 +127,7 @@ function notificationTarget(notification: NotificationRead): string | null {
 }
 
 function formatCreatedAt(value: string): string {
-  return new Date(value).toLocaleString('zh-CN', {
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    month: '2-digit',
-  });
+  return formatUserDateTime(value, authStore.user?.timezone);
 }
 
 function valueText(value: unknown): string | null {

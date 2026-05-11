@@ -28,3 +28,4 @@ class CurrentUserRead(BaseModel):
     role: UserRole
     dept_id: UUID | None
     status: UserStatus
+    timezone: str

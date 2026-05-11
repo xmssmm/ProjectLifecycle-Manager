@@ -5,6 +5,7 @@ import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
 import { previewDocument, previewOfficeDocument } from '@/api/documents';
 import DocumentVersionDiff from '@/components/document/DocumentVersionDiff.vue';
 import type { DocumentRead } from '@/types/documents';
+import { formatUserDateTime } from '@/utils/timezone';
 
 const PdfPreview = defineAsyncComponent(() => import('@/components/document/PdfPreview.vue'));
 const officePreviewExtensions = new Set(['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx']);
@@ -19,6 +20,7 @@ interface DocumentGroup {
 const props = defineProps<{
   documents: DocumentRead[];
   loading?: boolean;
+  timezone?: string;
 }>();
 
 const emit = defineEmits<{
@@ -126,7 +128,7 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatDate(value: string): string {
-  return value ? value.replace('T', ' ').slice(0, 16) : '-';
+  return formatUserDateTime(value, props.timezone);
 }
 
 function scanStatusLabel(document: DocumentRead): string {
@@ -280,6 +282,7 @@ function canAccessFile(document: DocumentRead): boolean {
         v-if="selectedDocument(group).id !== group.latest.id"
         :baseline="group.latest"
         :current="selectedDocument(group)"
+        :timezone="timezone"
       />
     </section>
 

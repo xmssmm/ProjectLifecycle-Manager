@@ -221,6 +221,7 @@ class UserService:
             dept_id=payload.dept_id,
             status=UserStatus.active,
             sso_required=payload.sso_required,
+            timezone=payload.timezone,
             password_changed_at=now,
             last_login_at=None,
             created_at=now,
@@ -271,6 +272,8 @@ class UserService:
         if is_admin and "sso_required" in fields and payload.sso_required is not None:
             sso_policy_changed = payload.sso_required != user.sso_required
             user.sso_required = payload.sso_required
+        if "timezone" in fields and payload.timezone is not None:
+            user.timezone = payload.timezone
 
         await self._repository.commit()
         await self._repository.refresh(user)

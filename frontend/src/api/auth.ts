@@ -31,6 +31,7 @@ export interface CurrentUserPayload {
   id: string;
   role: UserRole;
   status: UserStatus;
+  timezone: string;
   username: string;
 }
 

@@ -45,6 +45,7 @@ describe('LoginView OAuth SSO', () => {
       id: 'user-1',
       role: 'admin',
       status: 'active',
+      timezone: 'Asia/Shanghai',
       username: 'admin',
     });
   });

@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 
 import { ConfirmDialog, DataTable, SearchBar, StatusTag } from '@/components/common';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useUserStore } from '@/stores/useUserStore';
 import type { UserRole } from '@/stores/useAuthStore';
 import type {
@@ -12,6 +13,7 @@ import type {
   UserUpdatePayload,
 } from '@/types/users';
 import { ROLE_LABELS } from '@/types/users';
+import { formatUserDateTime } from '@/utils/timezone';
 
 import UserEdit from './UserEdit.vue';
 
@@ -24,6 +26,7 @@ interface ApiErrorResponse {
 }
 
 const userStore = useUserStore();
+const authStore = useAuthStore();
 const searchModel = ref<Record<string, string | number>>({ keyword: '', role: '' });
 const keyword = ref('');
 const editDialogVisible = ref(false);
@@ -170,7 +173,7 @@ async function submitDisable(): Promise<void> {
 }
 
 function formatDate(value: unknown): string {
-  return typeof value === 'string' ? value.replace('T', ' ').slice(0, 16) : '-';
+  return typeof value === 'string' ? formatUserDateTime(value, authStore.user?.timezone) : '-';
 }
 
 function readErrorMessage(error: unknown, fallback: string): string {

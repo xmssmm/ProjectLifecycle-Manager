@@ -60,6 +60,7 @@ const sampleUser = {
   role: 'admin',
   sso_required: true,
   status: 'active',
+  timezone: 'Asia/Shanghai',
   updated_at: '2026-05-10T00:00:00Z',
   username: 'admin',
 } as const;

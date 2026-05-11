@@ -12,6 +12,7 @@ export interface UserRead {
   role: UserRole;
   sso_required: boolean;
   status: UserStatus;
+  timezone: string;
   updated_at: string;
   username: string;
 }
@@ -35,6 +36,7 @@ export interface UserCreatePayload {
   password: string;
   role: UserRole;
   sso_required?: boolean;
+  timezone?: string;
   username: string;
 }
 
@@ -43,6 +45,7 @@ export interface UserUpdatePayload {
   email?: string | null;
   role?: UserRole;
   sso_required?: boolean;
+  timezone?: string;
   username?: string;
 }
 

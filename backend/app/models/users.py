@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, false
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, false, text
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,9 @@ class UserStatus(enum.StrEnum):
     password_reset_required = "password_reset_required"
 
 
+DEFAULT_USER_TIMEZONE = "Asia/Shanghai"
+
+
 def enum_values(enum_type: type[enum.Enum]) -> list[str]:
     return [item.value for item in enum_type]
 
@@ -38,6 +41,7 @@ class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
 
     def __init__(self, **kwargs: Any) -> None:
         kwargs.setdefault("sso_required", False)
+        kwargs.setdefault("timezone", DEFAULT_USER_TIMEZONE)
         for key, value in kwargs.items():
             if not hasattr(type(self), key):
                 raise TypeError(f"{key!r} is an invalid keyword argument for User")
@@ -67,6 +71,12 @@ class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=False,
         server_default=false(),
+    )
+    timezone: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default=DEFAULT_USER_TIMEZONE,
+        server_default=text(f"'{DEFAULT_USER_TIMEZONE}'"),
     )
     password_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

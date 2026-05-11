@@ -21,6 +21,7 @@ import type {
 } from '@/types/notifications';
 import type { OAuthBindingRead, OAuthProviderRead } from '@/types/oauth';
 import { ROLE_LABELS, STATUS_LABELS } from '@/types/users';
+import { DEFAULT_USER_TIMEZONE } from '@/utils/timezone';
 
 const authStore = useAuthStore();
 const notificationStore = useNotificationStore();
@@ -30,6 +31,7 @@ const router = useRouter();
 
 const form = reactive({
   email: '',
+  timezone: DEFAULT_USER_TIMEZONE,
 });
 const notificationPreferenceForm = ref<NotificationPreferenceRead[]>([]);
 const notificationDeliveryMode = ref<NotificationDeliveryMode>('real_time');
@@ -51,6 +53,7 @@ onMounted(async () => {
     loadOAuthBindings(),
   ]);
   form.email = profile.value?.email ?? '';
+  form.timezone = profile.value?.timezone ?? DEFAULT_USER_TIMEZONE;
 });
 
 async function submitProfile(): Promise<void> {
@@ -60,6 +63,7 @@ async function submitProfile(): Promise<void> {
 
   await profileStore.updateProfile(authStore.user.id, {
     email: form.email.trim() || null,
+    timezone: form.timezone.trim() || DEFAULT_USER_TIMEZONE,
   });
   await authStore.loadCurrentUser();
   ElMessage.success('个人信息已更新');
@@ -304,6 +308,13 @@ function normalizeChannels(
       <el-form class="profile-form" label-width="96px">
         <el-form-item label="邮箱">
           <el-input v-model="form.email" data-test="profile-email" placeholder="可留空" />
+        </el-form-item>
+        <el-form-item label="时区">
+          <el-input
+            v-model="form.timezone"
+            data-test="profile-timezone"
+            placeholder="Asia/Shanghai"
+          />
         </el-form-item>
         <el-form-item>
           <el-button

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useAuditLogStore } from '@/stores/useAuditLogStore';
 import type { AuditLogListQuery, AuditLogRead } from '@/types/auditLogs';
+import { formatUserDateTime } from '@/utils/timezone';
 
+const authStore = useAuthStore();
 const auditLogStore = useAuditLogStore();
 const filters = reactive({
   action: '',
@@ -62,7 +65,7 @@ function cleanValue(value: string): string | undefined {
 }
 
 function formatDate(value: string): string {
-  return value.replace('T', ' ').slice(0, 16);
+  return formatUserDateTime(value, authStore.user?.timezone);
 }
 
 function formatJson(value: Record<string, unknown> | undefined): string {
