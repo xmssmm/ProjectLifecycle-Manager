@@ -58,6 +58,7 @@ const navItems: NavItem[] = [
   { icon: List, index: '/admin/audit-logs', labelKey: 'nav.audit', requireRole: ['admin'] },
   { icon: Setting, index: '/admin/api-keys', labelKey: 'nav.apiKeys', requireRole: ['admin'] },
   { icon: Setting, index: '/admin/webhooks', labelKey: 'nav.webhooks', requireRole: ['admin'] },
+  { icon: Setting, index: '/admin/workflows', labelKey: 'nav.workflows', requireRole: ['admin'] },
   { icon: Box, index: '/admin/archives', labelKey: 'nav.archives', requireRole: ['admin'] },
   { icon: Upload, index: '/admin/imports/projects', labelKey: 'nav.imports', requireRole: ['admin'] },
   { icon: Download, index: '/admin/exports/database', labelKey: 'nav.exports', requireRole: ['admin'] },

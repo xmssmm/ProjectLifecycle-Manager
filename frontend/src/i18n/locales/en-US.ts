@@ -57,6 +57,7 @@ export default {
     tasks: 'Tasks',
     users: 'Users',
     webhooks: 'Webhooks',
+    workflows: 'Workflows',
   },
   status: {
     active: 'Active',
