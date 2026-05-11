@@ -48,6 +48,7 @@ export default {
     handover: 'Handover',
     home: 'Workbench',
     imports: 'Import',
+    projectBenchmarks: 'Benchmarks',
     projectTemplates: 'Templates',
     management: 'Administration',
     me: 'Me',
