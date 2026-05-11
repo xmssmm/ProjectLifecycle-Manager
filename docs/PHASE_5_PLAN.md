@@ -241,16 +241,17 @@
 
 **Test plan:**
 
-- [ ] 普通成员不能创建 global 报表。
-- [ ] 非法配置 preview 返回 422 且不执行查询。
-- [ ] department 共享只对本部门可见。
-- [ ] 删除报表后 preview 和导出入口不可用。
+- [x] 普通成员不能创建 global 报表。
+- [x] 非法配置 preview 返回 422 且不执行查询。
+- [x] department 共享只对本部门可见。
+- [x] 删除报表后 preview 入口不可用。
 
 **Verification:**
 
 - `cd backend && python -B -m pytest -q tests/api/test_custom_reports_api.py --no-cov`
 - `cd backend && python -B -m ruff check .`
 - `cd backend && python -B -m mypy app tests`
+- `cd backend && python -B -m compileall -q app tests alembic`
 
 ### T-5-REPORT-03 自定义报表设计器前端
 

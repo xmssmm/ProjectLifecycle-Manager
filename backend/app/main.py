@@ -14,6 +14,7 @@ from app.api.v1.archives import router as archives_router
 from app.api.v1.audit_logs import router as audit_logs_router
 from app.api.v1.auth import get_auth_failure_store
 from app.api.v1.auth import router as auth_router
+from app.api.v1.custom_reports import router as custom_reports_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.departments import router as departments_router
 from app.api.v1.documents import router as documents_router
@@ -161,6 +162,7 @@ def create_app(
             {"name": "external-api", "description": "External read-only API endpoints."},
             {"name": "webhooks", "description": "Webhook endpoint and delivery endpoints."},
             {"name": "workflows", "description": "Workflow template management endpoints."},
+            {"name": "custom-reports", "description": "Custom report builder endpoints."},
             {"name": "acceptance-steps", "description": "Acceptance step endpoints."},
             {"name": "api-keys", "description": "API key management endpoints."},
             {"name": "archives", "description": "Archive batch and restore endpoints."},
@@ -215,6 +217,7 @@ def create_app(
     app.include_router(archives_router, prefix="/api/v1")
     app.include_router(audit_logs_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(custom_reports_router, prefix="/api/v1")
     app.include_router(dashboard_router, prefix="/api/v1")
     app.include_router(departments_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
