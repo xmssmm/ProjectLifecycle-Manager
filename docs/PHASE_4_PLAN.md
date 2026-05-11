@@ -86,24 +86,31 @@
 
 - Modify: `backend/app/services/task_deadlines.py`
 - Modify: `backend/app/services/notifications.py`
-- Modify: `backend/app/tasks.py`
-- Test: `backend/tests/unit/test_timezone_digest_schedule.py`
+- Modify: `backend/app/tasks/celery_app.py`
+- Modify: `backend/app/tasks/notifications.py`
+- Modify: `backend/app/tasks/task_deadlines.py`
+- Test: `backend/tests/unit/test_notification_service.py`
+- Test: `backend/tests/unit/test_task_deadline_cron.py`
+- Test: `backend/tests/unit/test_celery_app.py`
 
 **Implementation:**
 
 - 计算每个用户当前本地时间，筛选本地 09:00 触发摘要。
 - 摘要任务按用户时区分组，避免对每个用户创建独立 beat entry。
 - 记录摘要发送窗口，避免 worker 重试导致同一天重复发送。
+- 截止日期扫描任务按执行人时区分组，避免固定业务时区 09:00 漏发或早发。
 
 **Test plan:**
 
-- [ ] `Asia/Shanghai` 用户在 UTC 01:00 命中本地 09:00。
-- [ ] `America/New_York` 用户在对应 UTC 时间命中。
-- [ ] 同一用户同一自然日不会重复发送摘要。
+- [x] `Asia/Shanghai` 用户在 UTC 01:00 命中本地 09:00。
+- [x] `America/New_York` 用户在对应 UTC 时间命中。
+- [x] 同一用户同一自然日不会重复发送摘要。
+- [x] 截止日期扫描只处理当前本地 09:00 的执行人。
+- [x] 摘要与截止日期扫描的 Celery beat 均改为每小时触发，由服务层按用户时区筛选。
 
 **Verification:**
 
-- `cd backend && python -B -m pytest -q tests/unit/test_timezone_digest_schedule.py --no-cov`
+- `cd backend && python -B -m pytest -q tests/unit/test_notification_service.py tests/unit/test_task_deadline_cron.py tests/unit/test_celery_app.py --no-cov`
 - `cd backend && python -B -m ruff check .`
 - `cd backend && python -B -m mypy app tests`
 

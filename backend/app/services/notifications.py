@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Protocol
 from uuid import UUID
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ResourceNotFoundError, ValidationFailedError
 from app.models.notifications import Notification, NotificationPreference
-from app.models.users import User
+from app.models.users import DEFAULT_USER_TIMEZONE, User, UserStatus
 from app.services.notification_channels import (
     NotificationChannel,
     NotificationChannelMessage,
@@ -97,6 +97,22 @@ class NotificationDigestResult:
     def to_dict(self) -> dict[str, int | str]:
         return {
             "business_date": self.business_date.isoformat(),
+            "source_notification_count": self.source_notification_count,
+            "digest_notification_count": self.digest_notification_count,
+        }
+
+
+@dataclass(frozen=True)
+class NotificationDigestBatchResult:
+    processed_timezone_count: int
+    processed_receiver_count: int
+    source_notification_count: int
+    digest_notification_count: int
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "processed_timezone_count": self.processed_timezone_count,
+            "processed_receiver_count": self.processed_receiver_count,
             "source_notification_count": self.source_notification_count,
             "digest_notification_count": self.digest_notification_count,
         }
@@ -237,7 +253,16 @@ class NotificationRepository(Protocol):
     ) -> None:
         ...
 
-    async def list_pending_digest_notifications(self, business_date: date) -> list[Notification]:
+    async def list_receiver_timezones(self) -> dict[UUID, str]:
+        ...
+
+    async def list_pending_digest_notifications(
+        self,
+        business_date: date,
+        *,
+        receiver_ids: Sequence[UUID] | None = None,
+        timezone: ZoneInfo = BUSINESS_TIMEZONE,
+    ) -> list[Notification]:
         ...
 
     def mark_digest_notifications_sent(
@@ -385,16 +410,34 @@ class SqlAlchemyNotificationRepository:
             preference.channels = self._serialize_channels(preference_update)
             preference.updated_at = now
 
-    async def list_pending_digest_notifications(self, business_date: date) -> list[Notification]:
-        start_at, end_at = self._business_day_utc_range(business_date)
+    async def list_receiver_timezones(self) -> dict[UUID, str]:
+        result = await self._session.execute(
+            select(User.id, User.timezone).where(User.status != UserStatus.disabled),
+        )
+        return {user_id: timezone for user_id, timezone in result.all()}
+
+    async def list_pending_digest_notifications(
+        self,
+        business_date: date,
+        *,
+        receiver_ids: Sequence[UUID] | None = None,
+        timezone: ZoneInfo = BUSINESS_TIMEZONE,
+    ) -> list[Notification]:
+        if receiver_ids is not None and not receiver_ids:
+            return []
+
+        start_at, end_at = self._business_day_utc_range(business_date, timezone=timezone)
+        conditions = [
+            Notification.delivery_mode == NotificationDeliveryMode.daily_digest.value,
+            Notification.digest_sent_at.is_(None),
+            Notification.created_at >= start_at,
+            Notification.created_at < end_at,
+        ]
+        if receiver_ids is not None:
+            conditions.append(Notification.receiver_id.in_(receiver_ids))
         result = await self._session.scalars(
             select(Notification)
-            .where(
-                Notification.delivery_mode == NotificationDeliveryMode.daily_digest.value,
-                Notification.digest_sent_at.is_(None),
-                Notification.created_at >= start_at,
-                Notification.created_at < end_at,
-            )
+            .where(*conditions)
             .order_by(Notification.receiver_id, Notification.scenario, Notification.created_at),
         )
         return list(result.all())
@@ -480,8 +523,12 @@ class SqlAlchemyNotificationRepository:
         await self._session.refresh(notification)
 
     @staticmethod
-    def _business_day_utc_range(business_date: date) -> tuple[datetime, datetime]:
-        start = datetime.combine(business_date, time.min, tzinfo=BUSINESS_TIMEZONE)
+    def _business_day_utc_range(
+        business_date: date,
+        *,
+        timezone: ZoneInfo = BUSINESS_TIMEZONE,
+    ) -> tuple[datetime, datetime]:
+        start = datetime.combine(business_date, time.min, tzinfo=timezone)
         end = start + timedelta(days=1)
         return start.astimezone(UTC), end.astimezone(UTC)
 
@@ -505,9 +552,11 @@ class InMemoryNotificationRepository:
         self,
         notifications: Sequence[Notification] | None = None,
         preferences: Mapping[tuple[UUID, str], StoredNotificationPreference] | None = None,
+        users: Sequence[User] | None = None,
     ) -> None:
         self.notifications = list(notifications or [])
         self.preferences = dict(preferences or {})
+        self.users = list(users or [])
 
     async def existing_dedup_keys(self, dedup_keys: Sequence[str]) -> set[str]:
         requested = set(dedup_keys)
@@ -558,14 +607,29 @@ class InMemoryNotificationRepository:
         for scenario, preference in preferences.items():
             self.preferences[(user_id, scenario)] = preference
 
-    async def list_pending_digest_notifications(self, business_date: date) -> list[Notification]:
+    async def list_receiver_timezones(self) -> dict[UUID, str]:
+        return {
+            user.id: user.timezone
+            for user in self.users
+            if user.status != UserStatus.disabled
+        }
+
+    async def list_pending_digest_notifications(
+        self,
+        business_date: date,
+        *,
+        receiver_ids: Sequence[UUID] | None = None,
+        timezone: ZoneInfo = BUSINESS_TIMEZONE,
+    ) -> list[Notification]:
+        receiver_set = set(receiver_ids) if receiver_ids is not None else None
         return [
             notification
             for notification in self.notifications
             if self._notification_delivery_mode(notification)
             == NotificationDeliveryMode.daily_digest
             and notification.digest_sent_at is None
-            and notification.created_at.astimezone(BUSINESS_TIMEZONE).date() == business_date
+            and (receiver_set is None or notification.receiver_id in receiver_set)
+            and notification.created_at.astimezone(timezone).date() == business_date
         ]
 
     def mark_digest_notifications_sent(
@@ -832,10 +896,15 @@ class NotificationService:
         self,
         *,
         business_date: date | None = None,
+        receiver_ids: Sequence[UUID] | None = None,
+        timezone: str | ZoneInfo | None = None,
     ) -> NotificationDigestResult:
         target_date = business_date or (self._business_date_provider() - timedelta(days=1))
+        digest_timezone = resolve_timezone(timezone)
         pending_notifications = await self._repository.list_pending_digest_notifications(
             target_date,
+            receiver_ids=receiver_ids,
+            timezone=digest_timezone,
         )
         if not pending_notifications:
             return NotificationDigestResult(
@@ -890,6 +959,51 @@ class NotificationService:
             business_date=target_date,
             source_notification_count=len(pending_notifications),
             digest_notification_count=len(digest_notifications),
+        )
+
+    async def generate_daily_digest_for_due_timezones(
+        self,
+        *,
+        now: datetime | None = None,
+    ) -> NotificationDigestBatchResult:
+        current_time = now or self._now_provider()
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=UTC)
+
+        receiver_timezones = await self._repository.list_receiver_timezones()
+        receivers_by_timezone_and_date: dict[tuple[str, date], list[UUID]] = defaultdict(list)
+        for receiver_id, timezone_name in receiver_timezones.items():
+            timezone = resolve_timezone(timezone_name)
+            local_time = current_time.astimezone(timezone)
+            if local_time.hour != 9:
+                continue
+            receivers_by_timezone_and_date[
+                (timezone.key, local_time.date() - timedelta(days=1))
+            ].append(receiver_id)
+
+        processed_timezones = {
+            timezone_name for timezone_name, _business_date in receivers_by_timezone_and_date
+        }
+        processed_receiver_count = 0
+        source_notification_count = 0
+        digest_notification_count = 0
+        for (timezone_name, business_date), due_receiver_ids in (
+            receivers_by_timezone_and_date.items()
+        ):
+            result = await self.generate_daily_digest(
+                business_date=business_date,
+                receiver_ids=due_receiver_ids,
+                timezone=timezone_name,
+            )
+            processed_receiver_count += len(due_receiver_ids)
+            source_notification_count += result.source_notification_count
+            digest_notification_count += result.digest_notification_count
+
+        return NotificationDigestBatchResult(
+            processed_timezone_count=len(processed_timezones),
+            processed_receiver_count=processed_receiver_count,
+            source_notification_count=source_notification_count,
+            digest_notification_count=digest_notification_count,
         )
 
     async def mark_read(self, *, actor: User, notification_id: UUID) -> Notification:
@@ -1052,3 +1166,12 @@ class NotificationService:
             seen.add(receiver_id)
             unique_receivers.append(receiver_id)
         return unique_receivers
+
+
+def resolve_timezone(timezone: str | ZoneInfo | None) -> ZoneInfo:
+    if isinstance(timezone, ZoneInfo):
+        return timezone
+    try:
+        return ZoneInfo(timezone or DEFAULT_USER_TIMEZONE)
+    except ZoneInfoNotFoundError:
+        return BUSINESS_TIMEZONE

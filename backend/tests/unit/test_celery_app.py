@@ -40,13 +40,13 @@ def test_celery_app_registers_smoke_task_for_beat() -> None:
     }
 
 
-def test_celery_app_schedules_notification_digest_daily_0900() -> None:
+def test_celery_app_schedules_notification_digest_hourly_for_user_timezones() -> None:
     celery_module = load_celery_module()
     celery_app = celery_module.create_celery_app(Settings(redis_url="redis://redis:6379/0"))
 
     from app.tasks.task_names import NOTIFICATION_DIGEST_TASK_NAME
 
-    schedule = celery_app.conf.beat_schedule["notification-digest-daily-0900"]
+    schedule = celery_app.conf.beat_schedule["notification-digest-hourly-by-timezone"]
     assert celery_app.conf.timezone == "Asia/Shanghai"
     assert schedule["task"] == NOTIFICATION_DIGEST_TASK_NAME
-    assert "0 9 * * *" in str(schedule["schedule"])
+    assert "0 * * * *" in str(schedule["schedule"])
