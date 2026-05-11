@@ -49,6 +49,7 @@ export default {
     home: '工作台',
     imports: '导入',
     projectBenchmarks: '对标分析',
+    projectRisk: '风险评分',
     projectTemplates: '模板库',
     management: '管理',
     me: '我的',
