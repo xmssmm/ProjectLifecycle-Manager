@@ -11,6 +11,7 @@ export type ProjectStatus =
   | 'terminated';
 
 export interface MainProjectRead {
+  closed_at?: string | null;
   created_at: string;
   creator_id: string | null;
   dept_id: string;
