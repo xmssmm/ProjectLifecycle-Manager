@@ -104,6 +104,19 @@ CLAMAV_PORT=3310
 CLAMAV_TIMEOUT_SECONDS=10
 ```
 
+Phase 5 AI provider 变量默认保持关闭：
+
+```env
+AI_ENABLED=false
+AI_PROVIDER=disabled
+AI_BASE_URL=https://api.openai.com/v1
+AI_MODEL=
+AI_API_KEY=
+AI_TIMEOUT_SECONDS=30
+```
+
+启用 AI 时，`AI_PROVIDER` 可设为 `openai` 或企业内部 OpenAI-compatible 网关标识；后端只调用 `/chat/completions` 并要求 JSON object 响应。风险评分、文档类型建议和指标问答均有规则降级路径，生产试用建议先保持关闭，完成权限和审计验收后再逐步启用。
+
 ## 5. 首次部署步骤
 
 1. 拉取代码并确认提交：
@@ -195,6 +208,15 @@ CLAMAV_TIMEOUT_SECONDS=10
 
 迁移必须由后端容器执行，不要手工改生产表结构。
 
+## 7.1 Phase 5 迁移说明
+
+Phase 5 新增迁移覆盖项目类型/工作流模板、自定义报表、项目模板分类标签和 AI 审计日志。升级前必须备份数据库；升级后重点确认：
+
+- `workflow_templates`、`workflow_template_versions` 可写入并发布模板。
+- `custom_report_definitions`、`custom_report_runs` 可创建预览和定时任务。
+- `project_templates`、`project_categories`、`project_tags` 可用于模板库。
+- `ai_audit_logs` 存在，AI 关闭时不会产生外部调用。
+
 ## 8. 高可用部署
 
 ### 8.1 PostgreSQL 主从
@@ -249,10 +271,14 @@ docker compose -f docker-compose.prod.yml up -d --build
 8. 登记付款，验证预算和通知。
 9. 下载项目批量导入模板，试导入小样本。
 10. 发起数据库导出任务并下载。
-11. 查看归档候选，执行测试归档和恢复。
-12. 创建 API Key 调用 `/api/external/v1/projects`。
-13. 配置测试 Webhook，触发事件并验证签名。
-14. 打开 Grafana，确认 API、Celery、数据库、磁盘仪表盘有数据。
+11. 创建工作流模板新版本并绑定项目类型，确认旧项目不受影响。
+12. 创建自定义报表并预览，配置一次定时报表。
+13. 使用模板库实例化项目。
+14. 打开对标分析、风险评分、文档类型建议和指标问答，确认 AI 关闭时规则路径可用。
+15. 查看归档候选，执行测试归档和恢复。
+16. 创建 API Key 调用 `/api/external/v1/projects`。
+17. 配置测试 Webhook，触发事件并验证签名。
+18. 打开 Grafana，确认 API、Celery、数据库、磁盘仪表盘有数据。
 
 ## 10. 备份
 

@@ -361,7 +361,36 @@ bash scripts/restore.sh
 
 恢复前必须停止写入流量。每月至少做一次隔离环境恢复演练。
 
-## 20. 发布后验收
+## 20. Phase 5 运维要点
+
+### AI 配置与默认关闭
+
+AI 默认关闭。生产启用前必须确认 `.env` 中的 `AI_ENABLED=true`、`AI_PROVIDER`、`AI_BASE_URL`、`AI_MODEL`、`AI_API_KEY` 和 `AI_TIMEOUT_SECONDS`。建议先接入企业内网模型网关或受控 OpenAI-compatible 网关，再开放给业务试用。
+
+### AI 隐私审计
+
+所有 AI 调用都会写入 `ai_audit_logs`，记录 purpose、provider、model、schema、状态、token 估算和脱敏 prompt 摘要。排查时优先查看失败状态和 `error_code`，不要在日志中补写原始敏感内容。
+
+```powershell
+docker compose -f docker-compose.prod.yml exec postgres psql -U project_mgmt -d project_mgmt -c "select purpose, provider, model, schema_name, status, error_code, created_at from ai_audit_logs order by created_at desc limit 20;"
+```
+
+### 自定义报表与指标问答
+
+自定义报表和指标问答只允许使用注册 dataset。若业务反馈“问题无法回答”，先确认是否存在合适的 dataset、字段、聚合和筛选操作，再决定是否扩展 `report_datasets.py`。不要让 AI 返回 SQL 或绕过 `ReportQueryCompiler`。
+
+### 模板版本回滚
+
+工作流模板发布后不可原地修改。若新模板有问题，发布修正版新版本，并在后续新建项目中使用；已创建项目继续绑定原 `workflow_template_version_id`。需要批量切换时必须先评估已完成环节和必传文档差异。
+
+### 故障排查
+
+- 文档类型建议异常：检查模板必传文档配置、文件名关键词和 `document_classification.suggest` 审计。
+- 风险摘要为空：确认 AI 是否关闭；关闭时应返回规则摘要。
+- 指标问答拒绝执行：检查 dataset、字段和权限范围，未知 dataset 属于预期拒绝。
+- 定时报表不生成：检查 `custom_report_schedules` 配置、Celery beat 单实例和 worker 日志。
+
+## 21. 发布后验收
 
 运维侧确认：
 

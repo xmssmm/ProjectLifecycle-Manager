@@ -1,6 +1,6 @@
 # 企业项目过程管理与资料归档系统
 
-这是采购类项目过程管理与资料归档系统的全功能开发仓库。当前 `develop` 已完成 MVP（Phase 1）到 Phase 4“规模与合规”功能，覆盖项目流程、资料归档、任务协作、付款、撤销、审计、报表、仪表盘、移动端适配、Office 预览、通知增强、企业集成、归档恢复、全文检索、批量导入导出、多时区、国际化和生产高可用部署能力。Phase 5 将继续推进平台化与智能化，目标是支持工作流自定义、自定义报表、多项目类型、跨项目分析和可审计 AI 辅助。
+这是采购类项目过程管理与资料归档系统的全功能开发仓库。当前 `develop` 已完成 MVP（Phase 1）到 Phase 5“平台化与智能化”功能，覆盖项目流程、资料归档、任务协作、付款、撤销、审计、报表、仪表盘、移动端适配、Office 预览、通知增强、企业集成、归档恢复、全文检索、批量导入导出、多时区、国际化、生产高可用部署、工作流模板、自定义报表、多项目类型、跨项目分析和可审计 AI 辅助能力。
 
 ## 本地启动 5 步指南
 
@@ -61,9 +61,10 @@ npm.cmd run typecheck
 - 部署手册：`docs/deployment-manual.md`
 - 生产发布与试用部署：`docs/PRODUCTION_DEPLOYMENT_MANUAL.md`
 - 使用手册：`docs/user-manual.md`
-- Phase 4 使用手册：`docs/USER_MANUAL.md`
+- 用户使用手册：`docs/USER_MANUAL.md`
 - 管理员与运维手册：`docs/ADMIN_OPERATIONS_MANUAL.md`
 - Phase 4 发布说明：`docs/PHASE_4_RELEASE_NOTES.md`
+- Phase 5 发布说明：`docs/PHASE_5_RELEASE_NOTES.md`
 - Phase 5 实施计划：`docs/PHASE_5_PLAN.md`
 - Phase 5 默认决策：`docs/PHASE_5_OPEN_QUESTIONS.md`
 - Phase 2 发布说明：`docs/RELEASE_NOTES_PHASE_2.md`
@@ -82,4 +83,4 @@ npm.cmd run typecheck
 
 ## 当前状态
 
-Phase 4 功能已合并到 `develop`。Phase 5 计划已立项，后续按 `docs/PHASE_5_PLAN.md` 继续推进平台化与智能化。
+Phase 5 功能已合并到 `develop`，可按 `docs/PRODUCTION_DEPLOYMENT_MANUAL.md` 进行生产环境试用部署。AI provider 默认关闭，建议先完成基础流程、报表、模板、审计和权限验收，再按需启用受控 AI 网关。

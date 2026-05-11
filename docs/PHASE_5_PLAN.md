@@ -591,16 +591,18 @@
 
 ## 3. Phase 5 总体验收
 
-- [ ] Phase 5 全部计划任务完成并合并到 `develop`。
-- [ ] 工作流模板可支持非采购项目类型，且现有采购项目流程保持兼容。
-- [ ] 自定义报表只能基于白名单数据集生成，权限隔离和审计完整。
-- [ ] 项目模板、标签、分类和跨项目对标分析可用。
-- [ ] AI provider 默认关闭，启用后所有调用可审计、可降级、不会绕过业务规则。
-- [ ] 后端 ruff、mypy、pytest、compileall 全量通过。
-- [ ] 前端 lint、typecheck、unit test、build 全量通过。
-- [ ] 开发和生产 compose 配置均通过。
-- [ ] 中文部署手册、使用手册、运维手册和发布说明已更新。
+- [x] Phase 5 全部计划任务完成并合并到 `develop`。
+- [x] 工作流模板可支持非采购项目类型，且现有采购项目流程保持兼容。
+- [x] 自定义报表只能基于白名单数据集生成，权限隔离和审计完整。
+- [x] 项目模板、标签、分类和跨项目对标分析可用。
+- [x] AI provider 默认关闭，启用后所有调用可审计、可降级、不会绕过业务规则。
+- [x] 后端 ruff、mypy、pytest、compileall 全量通过。
+- [x] 前端 lint、typecheck、unit test、build 全量通过。
+- [x] 开发和生产 compose 配置均通过。
+- [x] 中文部署手册、使用手册、运维手册和发布说明已更新。
 
 ## 4. 发布前 review 记录
 
-- 待 Phase 5 功能完成后记录最终 review 结论、验证结果和已知风险。
+- 2026-05-11 最终 review：Phase 5 功能已按计划完成并合并到 `develop`，文档、环境变量模板、开发/生产 compose 配置均已更新。
+- 验证结果：`python -B -m pytest -q`、`python -B -m ruff check .`、`python -B -m mypy app tests`、`python -B -m compileall -q app tests alembic`、`npm.cmd run lint`、`npm.cmd run typecheck`、`npm.cmd run test:unit`、`npm.cmd run build`、`docker compose -f docker-compose.yml config`、`docker compose -f docker-compose.prod.yml config` 均通过。
+- 已知风险：Vite 生产构建仍提示主 chunk 超过 500 kB，属于既有体积优化项；AI provider 默认关闭，生产启用前必须完成网关、权限、审计和脱敏验收；生产 `.env`、TLS 证书和初始密码必须按部署手册替换。
