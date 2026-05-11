@@ -26,6 +26,7 @@ from app.api.v1.notifications import router as notifications_router
 from app.api.v1.oauth import router as oauth_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.phases import router as phases_router
+from app.api.v1.project_templates import router as project_templates_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.revoke_requests import router as revoke_requests_router
 from app.api.v1.search import router as search_router
@@ -229,6 +230,7 @@ def create_app(
     app.include_router(oauth_router, prefix="/api/v1")
     app.include_router(payments_router, prefix="/api/v1")
     app.include_router(phases_router, prefix="/api/v1")
+    app.include_router(project_templates_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(revoke_requests_router, prefix="/api/v1")
     app.include_router(search_router, prefix="/api/v1")

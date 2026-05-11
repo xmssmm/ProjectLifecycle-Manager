@@ -10,6 +10,7 @@ import DatabaseExportView from '@/views/admin/DatabaseExport.vue';
 import DepartmentListView from '@/views/admin/DepartmentList.vue';
 import HandoverHistoryView from '@/views/admin/HandoverHistory.vue';
 import ProjectImportView from '@/views/admin/ProjectImport.vue';
+import ProjectTemplateLibraryView from '@/views/admin/ProjectTemplateLibrary.vue';
 import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import WebhookManagementView from '@/views/admin/WebhookManagement.vue';
@@ -104,6 +105,12 @@ const router = createRouter({
       name: 'admin-project-imports',
       component: ProjectImportView,
       meta: { permission: 'project.import', requiresAuth: true },
+    },
+    {
+      path: '/admin/project-templates',
+      name: 'admin-project-templates',
+      component: ProjectTemplateLibraryView,
+      meta: { requireRole: ['admin'], requiresAuth: true },
     },
     {
       path: '/admin/exports/database',
