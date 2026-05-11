@@ -414,10 +414,10 @@
 
 **Implementation:**
 
-- 部署手册覆盖生产发布、环境变量、迁移、回滚、Docker、HA、备份恢复。
-- 使用手册覆盖业务角色、项目流程、文档、通知、搜索、导入导出。
-- 运维手册覆盖归档、恢复、审计、全文索引、任务队列、故障排查。
-- Phase 4 所有任务完成后勾选验收清单。
+- [x] 部署手册覆盖生产发布、环境变量、迁移、回滚、Docker、HA、备份恢复。
+- [x] 使用手册覆盖业务角色、项目流程、文档、通知、搜索、导入导出。
+- [x] 运维手册覆盖归档、恢复、审计、全文索引、任务队列、故障排查。
+- [x] Phase 4 所有任务完成后勾选验收清单。
 
 **Verification:**
 
@@ -432,10 +432,17 @@
 
 ## 3. Phase 4 总体验收
 
-- [ ] Phase 4 全部计划任务完成并合并到 `develop`。
-- [ ] 后端 ruff、mypy、pytest 全量通过。
-- [ ] 前端 lint、typecheck、unit test、build 全量通过。
-- [ ] 生产 compose 配置通过。
-- [ ] 中文部署手册、使用手册、运维手册可直接交付试用。
-- [ ] 归档、恢复、全文检索、批量导入导出均有审计或操作记录。
-- [ ] 发布前 review 完成，关键风险有记录。
+- [x] Phase 4 全部计划任务完成并合并到 `develop`。
+- [x] 后端 ruff、mypy、pytest 全量通过。
+- [x] 前端 lint、typecheck、unit test、build 全量通过。
+- [x] 生产 compose 配置通过。
+- [x] 中文部署手册、使用手册、运维手册可直接交付试用。
+- [x] 归档、恢复、全文检索、批量导入导出均有审计或操作记录。
+- [x] 发布前 review 完成，关键风险有记录。
+
+## 4. 发布前 review 记录
+
+- 代码与配置：`docker-compose.yml` 已同步为可选 `.env`，避免干净环境执行 `docker compose -f docker-compose.yml config` 失败。
+- 验证结果：后端 pytest/ruff/mypy/compileall、前端 lint/typecheck/unit/build、开发与生产 compose config 均已通过。
+- 已知风险：前端生产构建仍有第三方 pure comment 与大 chunk warning；当前不影响构建产物，后续可通过分包优化处理。
+- 已知范围：中英文国际化已覆盖核心导航、登录、通用按钮、状态和错误提示；用户自定义数据和部分页面专有文案仍可能显示中文。

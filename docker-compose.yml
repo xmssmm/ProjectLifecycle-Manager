@@ -36,7 +36,8 @@ services:
     build:
       context: ./backend
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -71,7 +72,8 @@ services:
     build:
       context: ./backend
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -101,7 +103,8 @@ services:
     build:
       context: ./backend
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://project_mgmt:change-me@postgres:5432/project_mgmt}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}

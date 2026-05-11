@@ -1,0 +1,374 @@
+# 管理员与运维手册
+
+本文面向 admin、实施人员和生产运维，覆盖日常巡检、账号、归档恢复、全文索引、导入导出、任务队列、监控、备份、故障切换和审计。
+
+## 1. 运维原则
+
+- 先观察，再操作：先看 `ps`、`/health`、日志和 Grafana。
+- 生产禁止直接改表绕过业务逻辑，除非已有备份、审批和回滚步骤。
+- 归档、恢复、导入、全库导出、API Key、Webhook 都属于敏感操作，必须保留审计。
+- `celery-beat` 保持单副本。
+- 不要删除 `storage/` 中仍被数据库引用的文件。
+
+## 2. 基础巡检
+
+```powershell
+cd C:\management
+docker compose -f docker-compose.prod.yml ps
+Invoke-WebRequest http://localhost:8000/health
+Invoke-WebRequest http://localhost:8000/metrics
+```
+
+每日关注：
+
+- API P99 是否超过 1.5s。
+- 错误率是否超过 1%。
+- Celery 队列是否堆积超过 100。
+- PostgreSQL 连接数是否接近上限。
+- 磁盘剩余空间是否低于 20%。
+- `storage/` 和备份目录是否异常增长。
+
+## 3. 日志
+
+查看全部服务：
+
+```powershell
+docker compose -f docker-compose.prod.yml logs --tail 200
+```
+
+常用服务：
+
+```powershell
+docker compose -f docker-compose.prod.yml logs --tail 200 backend
+docker compose -f docker-compose.prod.yml logs --tail 200 celery-worker
+docker compose -f docker-compose.prod.yml logs --tail 200 celery-beat
+docker compose -f docker-compose.prod.yml logs --tail 200 nginx
+docker compose -f docker-compose.prod.yml logs --tail 200 clamav
+```
+
+持续跟随：
+
+```powershell
+docker compose -f docker-compose.prod.yml logs -f backend
+```
+
+## 4. 账号与权限
+
+创建或修复默认 admin：
+
+```powershell
+docker compose -f docker-compose.prod.yml run --rm backend python -m app.seeds.default_admin
+```
+
+处理账号问题：
+
+- 用户离职：先停用账号，再执行负责人转交。
+- 密码遗忘：通过管理页面重置，要求用户首次登录修改。
+- 仅 SSO：切换前确认用户已完成企业账号绑定。
+- 权限异常：检查角色、部门、项目负责人和项目成员关系。
+
+## 5. Redis 缓存与限流
+
+Redis key 类型：
+
+- `rate_limit:*`：API 限流。
+- `auth:*`：登录失败、token 黑名单等。
+- `oauth:state:*`：SSO/OAuth state。
+- `external_api:*`：开放 API Key 限流。
+- Dashboard 缓存：仪表盘短期缓存。
+
+查看 key：
+
+```powershell
+docker compose -f docker-compose.prod.yml exec redis redis-cli --scan --pattern "rate_limit:*"
+docker compose -f docker-compose.prod.yml exec redis redis-cli --scan --pattern "external_api:*"
+```
+
+生产不要执行 `FLUSHALL`。确需清理单类 key 时，先确认影响范围并记录审计备注。
+
+## 6. Celery 队列
+
+当前后台任务包括：
+
+- 任务到期/逾期扫描。
+- 用户本地时区每日摘要。
+- 邮件、企业微信、钉钉通知投递重试。
+- Webhook 投递重试。
+- ClamAV 文档扫描。
+- 文档全文索引。
+- 报表生成和过期报表清理。
+- 项目批量导入。
+- 数据库全量导出。
+- 文件清理和审计分区维护。
+
+重启：
+
+```powershell
+docker compose -f docker-compose.prod.yml restart celery-worker
+docker compose -f docker-compose.prod.yml restart celery-beat
+```
+
+如果 worker 堆积：
+
+1. 确认 Redis 正常。
+2. 查看 `celery-worker` 日志。
+3. 暂停大导入、大导出和批量报表。
+4. 临时增加 `CELERY_WORKER_REPLICAS`。
+5. 确认任务是否幂等，再决定是否重试失败任务。
+
+## 7. 归档运维
+
+归档候选规则：
+
+- 主项目已结项。
+- `closed_at <= now() - 2 years`。
+- 所有子项目均已关闭或终止。
+
+操作流程：
+
+1. 在“归档”页面查看候选。
+2. 记录候选项目编号和影响范围。
+3. 执行归档批次。
+4. 查看批次详情，确认主项目、子项目及相关数据已写入 `archive_*`。
+5. 检查审计日志。
+
+数据库检查示例：
+
+```powershell
+docker compose -f docker-compose.prod.yml exec postgres psql -U project_mgmt -d project_mgmt -c "select batch_no, status, archived_main_project_count, archived_sub_project_count, finished_at from archive_batches order by created_at desc limit 10;"
+```
+
+归档失败时不要手工清半成品。归档服务使用事务，失败应整体回滚；保留日志后重新执行。
+
+## 8. 归档恢复
+
+恢复前确认：
+
+- 恢复的项目编号、子项目编号不与主表冲突。
+- 恢复原因已记录。
+- 当前业务确实需要恢复到热数据。
+
+流程：
+
+1. 在归档批次详情中选择主项目恢复。
+2. 系统检查唯一键冲突。
+3. 无冲突时恢复主项目及相关子数据。
+4. 查看审计日志。
+5. 通知业务方重新确认项目状态。
+
+冲突返回 409 时，应先由业务确认保留哪一份，不要直接改编号。
+
+## 9. 全文检索运维
+
+系统使用 PostgreSQL FTS，索引表为 `document_search_entries`。
+
+常见状态：
+
+- `pending`：等待抽取。
+- `indexed`：已索引。
+- `failed`：抽取失败。
+
+检查最近索引：
+
+```powershell
+docker compose -f docker-compose.prod.yml exec postgres psql -U project_mgmt -d project_mgmt -c "select document_id, extract_status, indexed_at, updated_at from document_search_entries order by updated_at desc limit 20;"
+```
+
+排查步骤：
+
+1. 确认文档扫描状态为 `clean`。
+2. 查看 `celery-worker` 日志中搜索任务。
+3. 检查 storage 文件是否存在。
+4. 对失败文件重新上传新版本，或在测试环境复现抽取问题。
+
+## 10. 项目批量导入
+
+导入前：
+
+- 先让业务用模板填 5-10 行样本。
+- 确认部门、预算、日期格式。
+- 避免重复项目编号。
+
+导入后：
+
+- 下载或复制错误清单。
+- 只重导失败行。
+- 查看审计日志和导入批次号。
+
+性能目标：1000 行本地导入不超过 60 秒。超过目标时先检查数据库和 worker 压力。
+
+## 11. 数据库全量导出
+
+适用场景：
+
+- 审计取证。
+- 试用数据移交。
+- 上线前后快照。
+- 跨系统核对。
+
+操作流程：
+
+1. 在“导出”页面发起任务。
+2. 等待任务完成。
+3. 下载导出包。
+4. 校验 manifest 中的表、行数、生成时间和操作者。
+5. 将导出包存入受控位置。
+
+导出包可能包含敏感数据，不应通过即时通讯随意转发。
+
+## 12. API Key 运维
+
+检查 key：
+
+```powershell
+docker compose -f docker-compose.prod.yml exec postgres psql -U project_mgmt -d project_mgmt -c "select name, key_prefix, permissions, expires_at, revoked_at, last_used_at from api_keys order by updated_at desc limit 20;"
+```
+
+处理原则：
+
+- token 只展示一次，遗失后吊销重建。
+- 权限最小化，只给需要的 read scope。
+- 对异常高频请求，先吊销或停用 key，再联系对接方。
+- Redis `external_api:*` 可帮助判断限流情况。
+
+## 13. Webhook 运维
+
+检查投递：
+
+```powershell
+docker compose -f docker-compose.prod.yml exec postgres psql -U project_mgmt -d project_mgmt -c "select event_type, status, attempt_count, response_status, last_error, next_retry_at from webhook_deliveries order by updated_at desc limit 20;"
+```
+
+处理顺序：
+
+1. 确认 endpoint 启用。
+2. 确认 URL 可从 backend 容器访问。
+3. 确认接收方返回 2xx。
+4. 确认签名算法为 HMAC-SHA256。
+5. 下游恢复后在页面重放 dead letter。
+
+大量失败时先停用异常 endpoint，避免队列被拖慢。
+
+## 14. 外部通知通道
+
+邮件、企业微信、钉钉失败不会阻断站内通知。
+
+检查：
+
+```powershell
+docker compose -f docker-compose.prod.yml exec postgres psql -U project_mgmt -d project_mgmt -c "select channel, scenario, status, attempt_count, last_error, next_retry_at from notification_deliveries order by updated_at desc limit 20;"
+```
+
+进入 dead letter 后，系统会通知 admin。修复 SMTP 或机器人配置后，按业务影响决定是否补发。
+
+## 15. ClamAV
+
+检查：
+
+```powershell
+docker compose -f docker-compose.prod.yml ps clamav
+docker compose -f docker-compose.prod.yml logs --tail 200 clamav
+docker compose -f docker-compose.prod.yml exec postgres psql -U project_mgmt -d project_mgmt -c "select doc_no, file_name, scan_status, scan_result, scanned_at from documents order by updated_at desc limit 20;"
+```
+
+处理：
+
+- `pending` 长时间不变：检查 worker。
+- `failed`：查看 ClamAV 和 worker 日志。
+- `infected`：不要手工改为 clean，要求用户上传安全版本。
+
+## 16. 监控与告警
+
+启动监控：
+
+```powershell
+docker compose -f docker-compose.prod.yml up -d prometheus grafana celery-exporter postgres-exporter node-exporter
+```
+
+入口：
+
+- Prometheus：`http://localhost:9090`
+- Grafana：`http://localhost:3000`
+- 后端指标：`http://localhost:8000/metrics`
+
+重点看：
+
+- API 性能。
+- Celery 队列。
+- DB 连接池。
+- 磁盘使用。
+
+告警阈值示例见 `monitoring/prometheus/alerts.yml`。
+
+## 17. PostgreSQL 主从切换
+
+常规模式：
+
+- `DATABASE_URL` 指向主库。
+- `DATABASE_REPLICA_URL` 指向只读副本。
+
+主库故障：
+
+1. 停止写入口或切只读维护页。
+2. 由 DBA/云平台提升副本。
+3. 更新 `DATABASE_URL`。
+4. 重启 backend、worker、beat。
+5. 执行 `/health` 和业务冒烟。
+6. 记录故障时间、RTO、数据差异。
+
+## 18. Redis Sentinel 切换
+
+启用 Sentinel 后，应用通过 master name 获取当前 Redis master。
+
+故障演练：
+
+1. 停止当前 Redis master。
+2. 观察 Sentinel 提升 replica。
+3. 检查 `/health`。
+4. 验证登录、Dashboard、Celery 任务。
+
+临时降级：
+
+```env
+REDIS_SENTINEL_ENABLED=false
+REDIS_URL=redis://<single-redis>:6379/0
+```
+
+降级后重启 backend、worker、beat。
+
+## 19. 备份与恢复
+
+备份：
+
+```powershell
+$env:BACKUP_DB_MODE="compose"
+$env:COMPOSE_FILE="docker-compose.prod.yml"
+$env:POSTGRES_USER="project_mgmt"
+$env:POSTGRES_DB="project_mgmt"
+$env:STORAGE_ROOT="./storage"
+bash scripts/backup.sh
+```
+
+恢复：
+
+```powershell
+$env:BACKUP_DB_MODE="compose"
+$env:COMPOSE_FILE="docker-compose.prod.yml"
+$env:BACKUP_DIR="./backups/backup-YYYYmmddTHHMMSSZ"
+$env:RESTORE_STORAGE_CLEAR="true"
+bash scripts/restore.sh
+```
+
+恢复前必须停止写入流量。每月至少做一次隔离环境恢复演练。
+
+## 20. 发布后验收
+
+运维侧确认：
+
+- `docker compose -f docker-compose.prod.yml config` 通过。
+- `/health`、`/metrics` 正常。
+- 后端测试、前端 lint/typecheck/unit/build 在发布候选上通过。
+- 备份完成并可读取 manifest。
+- 管理员可登录并查看审计。
+- 归档、恢复、搜索、导入、导出、API Key、Webhook 冒烟通过。
+
