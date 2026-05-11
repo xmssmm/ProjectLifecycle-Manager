@@ -208,16 +208,19 @@
 
 **Test plan:**
 
-- [ ] 未注册 dataset 被拒。
-- [ ] 未注册字段、非法聚合、非法筛选操作被拒。
-- [ ] proj_leader 查询被自动限制到自己负责项目。
-- [ ] 合法配置可生成结果行和字段元数据。
+- [x] 未注册 dataset 被拒。
+- [x] 未注册字段、非法聚合、非法筛选操作被拒。
+- [x] proj_leader 查询被自动限制到自己负责项目。
+- [x] 合法配置可生成查询语句和字段元数据。
+- [x] 自定义报表定义和运行记录表注册到 SQLAlchemy metadata。
 
 **Verification:**
 
 - `cd backend && python -B -m pytest -q tests/unit/test_report_datasets.py tests/unit/test_report_query_compiler.py --no-cov`
 - `cd backend && python -B -m ruff check .`
 - `cd backend && python -B -m mypy app tests`
+- `cd backend && python -B -m compileall -q app tests alembic`
+- `cd backend && python -B -m alembic heads`
 
 ### T-5-REPORT-02 自定义报表定义 API
 

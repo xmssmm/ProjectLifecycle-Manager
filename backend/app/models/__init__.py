@@ -4,6 +4,13 @@ from app.models.api_keys import ApiKey
 from app.models.archives import ArchiveBatch, ArchiveMainProject, ArchiveSubProject
 from app.models.audit_logs import AuditLog
 from app.models.base import Base
+from app.models.custom_reports import (
+    CustomReportDefinition,
+    CustomReportRun,
+    CustomReportRunStatus,
+    CustomReportScheduleFrequency,
+    CustomReportShareScope,
+)
 from app.models.departments import Department
 from app.models.documents import Document, DocumentScanStatus
 from app.models.exports import DatabaseExportJob, DatabaseExportJobStatus
@@ -64,6 +71,11 @@ __all__ = [
     "ArchiveMainProject",
     "ArchiveSubProject",
     "AuditLog",
+    "CustomReportDefinition",
+    "CustomReportRun",
+    "CustomReportRunStatus",
+    "CustomReportScheduleFrequency",
+    "CustomReportShareScope",
     "Department",
     "Document",
     "DocumentScanStatus",
