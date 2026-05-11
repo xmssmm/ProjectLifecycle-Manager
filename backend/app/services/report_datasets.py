@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import case, literal
+from sqlalchemy import case, func, literal
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.selectable import FromClause
 
@@ -217,6 +217,10 @@ def default_report_dataset_registry() -> ReportDatasetRegistry:
         (sub.c.spent_amount > sub.c.budget, literal("high")),
         else_=literal("low"),
     )
+    project_cycle_days = func.extract(
+        "epoch",
+        func.coalesce(main.c.closed_at, main.c.updated_at) - main.c.created_at,
+    ) / literal(86400.0)
 
     return ReportDatasetRegistry(
         [
@@ -285,6 +289,14 @@ def default_report_dataset_registry() -> ReportDatasetRegistry:
                         DatasetFieldType.datetime,
                         main.c.created_at,
                         filter_ops=DATE_FILTERS,
+                    ),
+                    "cycle_days": _field(
+                        "cycle_days",
+                        "椤圭洰鍛ㄦ湡澶╂暟",
+                        DatasetFieldType.number,
+                        project_cycle_days,
+                        filter_ops=NUMBER_FILTERS,
+                        aggregates=NUMBER_AGGREGATES,
                     ),
                     "project_type_id": _field(
                         "project_type_id",

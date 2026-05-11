@@ -46,6 +46,7 @@ const navItems: NavItem[] = [
   { icon: Folder, index: '/main-projects', labelKey: 'nav.projects' },
   { icon: List, index: '/tasks', labelKey: 'nav.tasks' },
   { icon: DataAnalysis, index: '/reports/custom', labelKey: 'nav.customReports' },
+  { icon: DataAnalysis, index: '/analytics/qa', labelKey: 'nav.analyticsQa' },
   { icon: DataAnalysis, index: '/analytics/project-benchmarks', labelKey: 'nav.projectBenchmarks' },
   { icon: DataAnalysis, index: '/analytics/project-risk', labelKey: 'nav.projectRisk' },
   { icon: Search, index: '/search', labelKey: 'nav.search' },

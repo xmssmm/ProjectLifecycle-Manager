@@ -37,6 +37,7 @@ export default {
   },
   nav: {
     admin: 'Administration',
+    analyticsQa: 'Analytics Q&A',
     apiKeys: 'API Keys',
     archives: 'Archive',
     audit: 'Audit',
