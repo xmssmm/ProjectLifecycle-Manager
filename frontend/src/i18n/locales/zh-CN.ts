@@ -41,6 +41,7 @@ export default {
     archives: '归档',
     audit: '审计',
     components: '组件',
+    customReports: '报表',
     dashboard: '驾驶舱',
     departments: '部门',
     exports: '导出',

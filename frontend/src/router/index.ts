@@ -25,6 +25,7 @@ import MainProjectListView from '@/views/main-project/MainProjectList.vue';
 import MainProjectReviewView from '@/views/main-project/MainProjectReview.vue';
 import PaymentListView from '@/views/payment/PaymentList.vue';
 import ProfileView from '@/views/Profile.vue';
+import CustomReportBuilderView from '@/views/reports/CustomReportBuilder.vue';
 import RevokeApplyView from '@/views/revoke/RevokeApply.vue';
 import RevokeReviewView from '@/views/revoke/RevokeReview.vue';
 import SearchView from '@/views/SearchView.vue';
@@ -231,6 +232,12 @@ const router = createRouter({
       name: 'search',
       component: SearchView,
       meta: { permission: 'document.download', requiresAuth: true },
+    },
+    {
+      path: '/reports/custom',
+      name: 'custom-reports',
+      component: CustomReportBuilderView,
+      meta: { requiresAuth: true },
     },
     {
       path: '/tasks/:id',
