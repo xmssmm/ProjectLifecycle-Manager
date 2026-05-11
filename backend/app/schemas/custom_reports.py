@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import enum
+from datetime import datetime, time
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from app.models.custom_reports import CustomReportShareScope
+from app.models.custom_reports import CustomReportScheduleFrequency, CustomReportShareScope
 
 
 class DatasetFieldType(enum.StrEnum):
@@ -97,6 +98,31 @@ class CustomReportDefinitionCreate(BaseModel):
     query_config: ReportQueryConfig
     chart_type: str = Field(default="table", max_length=32)
     share_scope: CustomReportShareScope = CustomReportShareScope.private
+    schedule_frequency: CustomReportScheduleFrequency | None = None
+    schedule_time: time | None = None
+    schedule_day_of_week: int | None = Field(default=None, ge=1, le=7)
+    schedule_day_of_month: int | None = Field(default=None, ge=1, le=31)
+    schedule_timezone: str | None = Field(default=None, min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> CustomReportDefinitionCreate:
+        if self.schedule_frequency is None:
+            return self
+        if self.schedule_time is None:
+            raise ValueError("schedule_time is required when schedule is enabled")
+        if self.schedule_timezone is None:
+            raise ValueError("schedule_timezone is required when schedule is enabled")
+        if (
+            self.schedule_frequency == CustomReportScheduleFrequency.weekly
+            and self.schedule_day_of_week is None
+        ):
+            raise ValueError("schedule_day_of_week is required for weekly schedule")
+        if (
+            self.schedule_frequency == CustomReportScheduleFrequency.monthly
+            and self.schedule_day_of_month is None
+        ):
+            raise ValueError("schedule_day_of_month is required for monthly schedule")
+        return self
 
 
 class CustomReportPreviewRead(BaseModel):
@@ -117,3 +143,22 @@ class CustomReportDefinitionRead(BaseModel):
     owner_id: UUID
     owner_dept_id: UUID | None
     is_active: bool
+    schedule_frequency: CustomReportScheduleFrequency | None
+    schedule_time: time | None
+    schedule_day_of_week: int | None
+    schedule_day_of_month: int | None
+    schedule_timezone: str | None
+    last_run_at: datetime | None
+    next_run_at: datetime | None
+
+
+class CustomReportRunRead(BaseModel):
+    id: UUID
+    report_id: UUID
+    status: str
+    row_count: int
+    file_format: str | None
+    error_message: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    download_url: str | None

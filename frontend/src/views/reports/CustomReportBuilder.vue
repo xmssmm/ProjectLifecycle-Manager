@@ -10,6 +10,7 @@ import { useCustomReportStore } from '@/stores/useCustomReportStore';
 import type {
   CustomReportChartType,
   CustomReportDefinitionRead,
+  CustomReportScheduleFrequency,
   CustomReportShareScope,
   DatasetAggregate,
   DatasetFilterOperator,
@@ -36,6 +37,11 @@ const metricAggregate = ref<DatasetAggregate>('sum');
 const chartType = ref<CustomReportChartType>('table');
 const shareScope = ref<CustomReportShareScope>('private');
 const limit = ref(100);
+const scheduleFrequency = ref<CustomReportScheduleFrequency | ''>('');
+const scheduleTime = ref('09:00');
+const scheduleDayOfWeek = ref(1);
+const scheduleDayOfMonth = ref(1);
+const scheduleTimezone = ref(authStore.user?.timezone ?? 'Asia/Hong_Kong');
 const filters = reactive<FilterDraft[]>([]);
 
 const reportRows = computed(() => store.reports as unknown as Record<string, unknown>[]);
@@ -56,8 +62,16 @@ const hasInvalidFilter = computed(() =>
     return !['is_null', 'is_not_null'].includes(filter.op) && !filter.value.trim();
   }),
 );
+const hasInvalidSchedule = computed(
+  () =>
+    Boolean(scheduleFrequency.value) &&
+    (!scheduleTime.value.trim() || !scheduleTimezone.value.trim()),
+);
 const canSave = computed(
-  () => Boolean(reportName.value.trim() && selectedDataset.value) && !hasInvalidFilter.value,
+  () =>
+    Boolean(reportName.value.trim() && selectedDataset.value) &&
+    !hasInvalidFilter.value &&
+    !hasInvalidSchedule.value,
 );
 const previewRows = computed(() => store.preview?.rows ?? []);
 const previewColumns = computed(() => store.preview?.columns ?? []);
@@ -70,6 +84,7 @@ const reportColumns = [
   { key: 'name', label: '报表', minWidth: 180 },
   { key: 'dataset', label: '数据集', width: 160 },
   { key: 'share_scope', label: '共享', width: 120 },
+  { key: 'next_run_at', label: '下次生成', width: 180 },
   { key: 'actions', label: '操作', width: 210 },
 ];
 
@@ -136,6 +151,7 @@ async function saveReport(): Promise<void> {
     description: reportDescription.value.trim() || null,
     name: reportName.value.trim(),
     query_config: buildQueryConfig(),
+    ...buildSchedulePayload(),
     share_scope: shareScope.value,
   });
   ElMessage.success('报表已保存');
@@ -169,6 +185,12 @@ async function applyReport(report: CustomReportDefinitionRead, mode: 'copy' | 'o
   chartType.value = report.chart_type;
   shareScope.value = mode === 'copy' ? 'private' : report.share_scope;
   limit.value = report.query_config.limit;
+  scheduleFrequency.value = report.schedule_frequency ?? '';
+  scheduleTime.value = normalizeScheduleTime(report.schedule_time);
+  scheduleDayOfWeek.value = report.schedule_day_of_week ?? 1;
+  scheduleDayOfMonth.value = report.schedule_day_of_month ?? 1;
+  scheduleTimezone.value =
+    report.schedule_timezone ?? authStore.user?.timezone ?? 'Asia/Hong_Kong';
   filters.splice(
     0,
     filters.length,
@@ -178,6 +200,36 @@ async function applyReport(report: CustomReportDefinitionRead, mode: 'copy' | 'o
       value: filter.value == null ? '' : String(filter.value),
     })),
   );
+}
+
+function buildSchedulePayload(): {
+  schedule_day_of_month: number | null;
+  schedule_day_of_week: number | null;
+  schedule_frequency: CustomReportScheduleFrequency | null;
+  schedule_time: string | null;
+  schedule_timezone: string | null;
+} {
+  if (!scheduleFrequency.value) {
+    return {
+      schedule_day_of_month: null,
+      schedule_day_of_week: null,
+      schedule_frequency: null,
+      schedule_time: null,
+      schedule_timezone: null,
+    };
+  }
+  return {
+    schedule_day_of_month:
+      scheduleFrequency.value === 'monthly' ? scheduleDayOfMonth.value : null,
+    schedule_day_of_week: scheduleFrequency.value === 'weekly' ? scheduleDayOfWeek.value : null,
+    schedule_frequency: scheduleFrequency.value,
+    schedule_time: scheduleTime.value,
+    schedule_timezone: scheduleTimezone.value,
+  };
+}
+
+function normalizeScheduleTime(value: string | null | undefined): string {
+  return value ? value.slice(0, 5) : '09:00';
 }
 
 function addFilter(): void {
@@ -284,6 +336,47 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
           <span>说明</span>
           <el-input v-model="reportDescription" />
         </label>
+
+        <section class="report-builder__field-section">
+          <h4>定时生成</h4>
+          <div class="report-builder__schedule-grid">
+            <label>
+              <span>频率</span>
+              <el-select v-model="scheduleFrequency" data-test="schedule-frequency">
+                <el-option label="不启用" value="" />
+                <el-option label="每日" value="daily" />
+                <el-option label="每周" value="weekly" />
+                <el-option label="每月" value="monthly" />
+              </el-select>
+            </label>
+            <label v-if="scheduleFrequency">
+              <span>时间</span>
+              <el-input v-model="scheduleTime" data-test="schedule-time" />
+            </label>
+            <label v-if="scheduleFrequency === 'weekly'">
+              <span>星期</span>
+              <el-input-number
+                v-model="scheduleDayOfWeek"
+                data-test="schedule-day-of-week"
+                :max="7"
+                :min="1"
+              />
+            </label>
+            <label v-if="scheduleFrequency === 'monthly'">
+              <span>日期</span>
+              <el-input-number
+                v-model="scheduleDayOfMonth"
+                data-test="schedule-day-of-month"
+                :max="31"
+                :min="1"
+              />
+            </label>
+            <label v-if="scheduleFrequency">
+              <span>时区</span>
+              <el-input v-model="scheduleTimezone" data-test="schedule-timezone" />
+            </label>
+          </div>
+        </section>
 
         <section class="report-builder__field-section">
           <h4>维度</h4>
@@ -528,8 +621,16 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
   margin-top: 16px;
 }
 
+.report-builder__schedule-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  margin-top: 10px;
+}
+
 .report-builder__description,
-.report-builder__form-grid label {
+.report-builder__form-grid label,
+.report-builder__schedule-grid label {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -563,7 +664,8 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
 
 @media (width <= 1100px) {
   .report-builder__workspace,
-  .report-builder__form-grid {
+  .report-builder__form-grid,
+  .report-builder__schedule-grid {
     grid-template-columns: 1fr;
   }
 }
