@@ -6,6 +6,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { completeOAuthCallback, listOAuthProviders, startOAuthLogin } from '@/api/oauth';
+import { t } from '@/i18n';
 import { useAuthStore } from '@/stores/useAuthStore';
 import type { OAuthProviderRead } from '@/types/oauth';
 
@@ -35,9 +36,9 @@ async function submitLogin() {
     await router.replace(redirect);
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 423) {
-      ElMessage.error('账号已锁定，请稍后再试');
+      ElMessage.error(t('auth.errors.locked'));
     } else {
-      ElMessage.error('用户名或密码不正确');
+      ElMessage.error(t('auth.errors.passwordInvalid'));
     }
   } finally {
     submitting.value = false;
@@ -67,7 +68,7 @@ async function completeOAuthCallbackIfPresent(): Promise<void> {
     const redirect = routeQueryString('redirect') ?? '/';
     await router.replace(redirect);
   } catch {
-    ElMessage.error('企业账号登录失败，请重新尝试');
+    ElMessage.error(t('auth.errors.oauthFailed'));
   } finally {
     oauthCallbackLoading.value = false;
   }
@@ -79,7 +80,7 @@ async function startProviderLogin(provider: string): Promise<void> {
     const started = await startOAuthLogin(provider);
     globalThis.location.assign(started.authorization_url);
   } catch {
-    ElMessage.error('企业账号登录暂不可用');
+    ElMessage.error(t('auth.errors.oauthUnavailable'));
   } finally {
     oauthSubmittingProvider.value = null;
   }
@@ -100,13 +101,13 @@ function routeQueryString(key: string): string | null {
       <div class="login-brand">
         <span class="brand-mark">PM</span>
         <div>
-          <h1>项目归档</h1>
-          <p>企业项目过程管理与资料归档系统</p>
+          <h1>{{ t('app.brand') }}</h1>
+          <p>{{ t('app.title') }}</p>
         </div>
       </div>
 
       <el-form class="login-form" label-position="top" @submit.prevent="submitLogin">
-        <el-form-item label="用户名">
+        <el-form-item :label="t('auth.username')">
           <el-input
             v-model="form.username"
             autocomplete="username"
@@ -114,7 +115,7 @@ function routeQueryString(key: string): string | null {
             :prefix-icon="User"
           />
         </el-form-item>
-        <el-form-item label="密码">
+        <el-form-item :label="t('auth.password')">
           <el-input
             v-model="form.password"
             autocomplete="current-password"
@@ -124,7 +125,7 @@ function routeQueryString(key: string): string | null {
             :prefix-icon="Lock"
           />
         </el-form-item>
-        <el-checkbox v-model="form.rememberMe">记住我</el-checkbox>
+        <el-checkbox v-model="form.rememberMe">{{ t('auth.rememberMe') }}</el-checkbox>
         <el-button
           class="login-button"
           native-type="submit"
@@ -133,12 +134,12 @@ function routeQueryString(key: string): string | null {
           :disabled="!form.username || !form.password"
           :loading="submitting"
         >
-          登录
+          {{ t('auth.login') }}
         </el-button>
       </el-form>
 
       <template v-if="oauthProviders.length > 0">
-        <el-divider>企业账号登录</el-divider>
+        <el-divider>{{ t('auth.enterpriseLogin') }}</el-divider>
         <div class="oauth-login-list">
           <el-button
             v-for="provider in oauthProviders"
@@ -155,7 +156,9 @@ function routeQueryString(key: string): string | null {
         </div>
       </template>
 
-      <p v-if="oauthCallbackLoading" class="oauth-callback-status">正在完成企业账号登录</p>
+      <p v-if="oauthCallbackLoading" class="oauth-callback-status">
+        {{ t('auth.oauthCallbackLoading') }}
+      </p>
     </section>
   </main>
 </template>

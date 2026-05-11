@@ -19,6 +19,10 @@ const layoutStubs = {
     props: ['index'],
     template: '<a :href="index"><slot /></a>',
   },
+  ElSegmented: {
+    props: ['modelValue', 'options'],
+    template: '<div><button v-for="option in options" :key="option.value">{{ option.label }}</button></div>',
+  },
   ElTooltip: { template: '<span><slot /></span>' },
   NotificationCenter: { template: '<button>通知</button>' },
   RouterView: { template: '<div />' },

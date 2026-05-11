@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import { t } from '@/i18n';
+
 const props = withDefaults(
   defineProps<{
     cancelDataTest?: string;
@@ -14,9 +16,9 @@ const props = withDefaults(
   }>(),
   {
     cancelDataTest: undefined,
-    cancelText: '取消',
+    cancelText: undefined,
     confirmDataTest: undefined,
-    confirmText: '确认',
+    confirmText: undefined,
     type: 'primary',
   },
 );
@@ -31,6 +33,8 @@ const visible = computed({
   get: () => props.modelValue,
   set: (value: boolean) => emit('update:modelValue', value),
 });
+const cancelLabel = computed(() => props.cancelText ?? t('common.cancel'));
+const confirmLabel = computed(() => props.confirmText ?? t('common.confirm'));
 
 function closeDialog(): void {
   emit('cancel');
@@ -48,9 +52,9 @@ function confirmAction(): void {
     <p class="confirm-dialog__message">{{ message }}</p>
     <slot />
     <template #footer>
-      <el-button :data-test="cancelDataTest" @click="closeDialog">{{ cancelText }}</el-button>
+      <el-button :data-test="cancelDataTest" @click="closeDialog">{{ cancelLabel }}</el-button>
       <el-button :data-test="confirmDataTest" :type="type" @click="confirmAction">
-        {{ confirmText }}
+        {{ confirmLabel }}
       </el-button>
     </template>
   </el-dialog>

@@ -107,6 +107,10 @@ body {
   text-decoration: none;
 }
 
+.locale-switch {
+  flex: 0 0 auto;
+}
+
 .notification-center {
   position: relative;
 }

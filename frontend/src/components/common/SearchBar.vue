@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue';
 
+import { t } from '@/i18n';
+
 interface SearchOption {
   label: string;
   value: string | number;
@@ -79,8 +81,8 @@ function resetSearch(): void {
     </el-form-item>
 
     <el-form-item>
-      <el-button type="primary" @click="submitSearch"> 查询 </el-button>
-      <el-button @click="resetSearch">重置</el-button>
+      <el-button type="primary" @click="submitSearch">{{ t('common.query') }}</el-button>
+      <el-button @click="resetSearch">{{ t('common.reset') }}</el-button>
     </el-form-item>
   </el-form>
 </template>

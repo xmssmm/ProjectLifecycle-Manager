@@ -7,6 +7,7 @@ import axios, {
 import { ElMessage } from 'element-plus';
 import type { Router } from 'vue-router';
 
+import { t } from '@/i18n';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1';
@@ -79,7 +80,7 @@ export function installApiInterceptors(
         } catch {
           const authStore = useAuthStore();
           authStore.clearSession();
-          message.error('登录状态已过期，请重新登录');
+          message.error(t('auth.errors.sessionExpired'));
 
           try {
             await options.router?.push({ name: 'login' });
@@ -90,7 +91,7 @@ export function installApiInterceptors(
       } else if (status === 401) {
         const authStore = useAuthStore();
         authStore.clearSession();
-        message.error('登录状态已过期，请重新登录');
+        message.error(t('auth.errors.sessionExpired'));
 
         try {
           await options.router?.push({ name: 'login' });
@@ -98,9 +99,9 @@ export function installApiInterceptors(
           // The login route may not be registered in focused unit tests.
         }
       } else if (status === 429) {
-        message.warning('请求过于频繁，请稍后再试');
+        message.warning(t('auth.errors.rateLimited'));
       } else if (status && status >= 500) {
-        message.error('系统暂时不可用，请稍后再试');
+        message.error(t('auth.errors.serverUnavailable'));
       }
 
       return Promise.reject(error);
