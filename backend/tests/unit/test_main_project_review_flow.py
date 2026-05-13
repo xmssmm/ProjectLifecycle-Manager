@@ -119,10 +119,11 @@ async def test_submit_project_requires_creator_and_allowed_status() -> None:
 @pytest.mark.asyncio
 async def test_review_rejects_self_review_and_admin_records_override_diff() -> None:
     creator = make_user(UserRole.dept_manager, username="creator")
+    peer_reviewer = make_user(UserRole.dept_manager, username="peer-reviewer")
     admin = make_user(UserRole.admin, username="admin")
     project = make_project(creator, status=MainProjectStatus.pending_review)
     service, repository, notification_repository = make_service(
-        users=[creator, admin],
+        users=[creator, peer_reviewer, admin],
         projects=[project],
     )
     audit_writer = InMemoryAuditLogWriter()

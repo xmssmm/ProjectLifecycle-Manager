@@ -68,6 +68,10 @@ function selectedDocument(group: DocumentGroup): DocumentRead {
   );
 }
 
+function titleOf(document: DocumentRead): string {
+  return document.display_name || document.file_name;
+}
+
 function toggleHistory(docType: string): void {
   const nextExpanded = new Set(expandedTypes.value);
   if (nextExpanded.has(docType)) {
@@ -185,10 +189,14 @@ function canAccessFile(document: DocumentRead): boolean {
 
       <div class="document-list__selected">
         <div class="document-list__file">
-          <strong>{{ selectedDocument(group).file_name }}</strong>
+          <strong>{{ titleOf(selectedDocument(group)) }}</strong>
           <span>v{{ selectedDocument(group).version }}</span>
         </div>
         <dl class="document-list__meta">
+          <div>
+            <dt>系统文件名</dt>
+            <dd>{{ selectedDocument(group).file_name }}</dd>
+          </div>
           <div>
             <dt>大小</dt>
             <dd>{{ formatFileSize(selectedDocument(group).file_size) }}</dd>

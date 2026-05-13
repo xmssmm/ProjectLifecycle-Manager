@@ -46,7 +46,7 @@ def test_phase_doc_template_seed_data_matches_requirements_section_3_2() -> None
 
     assert rows[(1, "meeting_material", None)].requirement == PhaseDocRequirement.required
     assert rows[(2, "oa_screenshot", None)].qty_rule == "=1"
-    assert rows[(2, "inquiry_report", ProcurementType.inquiry)].qty_rule == ">=1"
+    assert rows[(2, "supplier_quote", ProcurementType.inquiry)].qty_rule == ">=3"
     assert rows[(2, "bid_document", ProcurementType.bidding)].requirement == (
         PhaseDocRequirement.conditional
     )

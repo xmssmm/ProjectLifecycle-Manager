@@ -79,6 +79,8 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
         kwargs.setdefault("scan_status", DocumentScanStatus.clean)
         kwargs.setdefault("scan_result", None)
         kwargs.setdefault("scanned_at", None)
+        if "display_name" not in kwargs and "file_name" in kwargs:
+            kwargs["display_name"] = kwargs["file_name"]
         for key, value in kwargs.items():
             if not hasattr(type(self), key):
                 raise TypeError(f"{key!r} is an invalid keyword argument for Document")
@@ -109,6 +111,7 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
     )
     doc_type: Mapped[str] = mapped_column(String(64), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)

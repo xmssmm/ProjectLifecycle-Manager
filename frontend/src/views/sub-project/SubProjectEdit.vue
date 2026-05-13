@@ -3,6 +3,8 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { ConfirmDialog } from '@/components/common';
+import DepartmentSelect from '@/components/form/DepartmentSelect.vue';
+import MainProjectSelect from '@/components/form/MainProjectSelect.vue';
 import { useSubProjectStore } from '@/stores/useSubProjectStore';
 import type {
   SubProjectCreatePayload,
@@ -194,19 +196,25 @@ function readErrorMessage(error: unknown, fallback: string): string {
     <el-skeleton v-if="loading" animated />
 
     <section v-else class="project-form-band">
+      <el-alert
+        show-icon
+        title="子项目审核通过后会自动生成立项、采购、合同、验收、财务付款、后评价 6 个环节。预算会纳入所选主项目额度校验。"
+        type="info"
+      />
+
       <el-form label-width="120px">
         <el-form-item label="子项目名称" :error="errors.name">
           <el-input v-model="form.name" data-test="sub-name" maxlength="200" />
         </el-form-item>
-        <el-form-item label="主项目 ID" :error="errors.main_project_id">
-          <el-input
+        <el-form-item label="关联主项目" :error="errors.main_project_id">
+          <MainProjectSelect
             v-model="form.main_project_id"
             data-test="sub-main-project"
             :disabled="isEditMode"
           />
         </el-form-item>
-        <el-form-item label="部门 ID" :error="errors.dept_id">
-          <el-input v-model="form.dept_id" data-test="sub-dept" />
+        <el-form-item label="责任部门" :error="errors.dept_id">
+          <DepartmentSelect v-model="form.dept_id" data-test="sub-dept" />
         </el-form-item>
         <el-form-item label="预算" :error="errors.budget">
           <el-input-number

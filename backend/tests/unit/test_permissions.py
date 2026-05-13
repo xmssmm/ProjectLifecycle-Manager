@@ -65,6 +65,7 @@ def test_permission_matrix_rejects_key_denied_paths(role: UserRole, permission: 
         (UserRole.dept_manager, "main_project.create"),
         (UserRole.finance_manager, "payment.create"),
         (UserRole.proj_leader, "phase.promote"),
+        (UserRole.proj_member, "phase.promote"),
         (UserRole.proj_member, "document.upload"),
     ],
 )

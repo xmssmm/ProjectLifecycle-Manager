@@ -27,8 +27,14 @@ from app.models.sub_projects import (
 )
 from app.models.users import User, UserRole, UserStatus
 from app.models.workflows import WorkflowTemplate, WorkflowTemplateStatus, WorkflowTemplateVersion
-from app.schemas.sub_projects import SubProjectCreate, SubProjectMemberCreate, SubProjectUpdate
+from app.schemas.sub_projects import (
+    SubProjectCreate,
+    SubProjectMemberCreate,
+    SubProjectRead,
+    SubProjectUpdate,
+)
 from app.services.sub_projects import InMemorySubProjectRepository, SubProjectService
+from tests.factories import DepartmentFactory, MainProjectFactory, SubProjectFactory, UserFactory
 
 
 def make_user(role: UserRole, *, username: str) -> User:
@@ -186,6 +192,26 @@ def test_sub_project_member_model_matches_required_fields() -> None:
         if isinstance(constraint, UniqueConstraint)
     }
     assert ("sub_project_id", "user_id") in unique_constraints
+
+
+def test_sub_project_read_serializes_names_and_remaining_amount() -> None:
+    sub_project = SubProjectFactory(
+        budget=Decimal("200000.00"),
+        spent_amount=Decimal("54000.00"),
+    )
+    sub_project.department = DepartmentFactory(id=sub_project.dept_id, name="行政部", code="XZ")
+    sub_project.main_project = MainProjectFactory(
+        id=sub_project.main_project_id,
+        name="2026办公设备升级",
+    )
+    sub_project.manager = UserFactory(id=sub_project.manager_id, username="张三")
+
+    payload = SubProjectRead.model_validate(sub_project).model_dump()
+
+    assert payload["dept_name"] == "行政部"
+    assert payload["main_project_name"] == "2026办公设备升级"
+    assert payload["manager_name"] == "张三"
+    assert payload["remaining_amount"] == Decimal("146000.00")
 
 
 @pytest.mark.asyncio

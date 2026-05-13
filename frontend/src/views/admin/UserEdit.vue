@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
 
+import DepartmentSelect from '@/components/form/DepartmentSelect.vue';
 import type { UserCreatePayload, UserRead, UserUpdatePayload } from '@/types/users';
 import { ROLE_LABELS } from '@/types/users';
 import type { UserRole } from '@/stores/useAuthStore';
@@ -105,12 +106,11 @@ function submitForm(): void {
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="部门 ID">
-        <el-input
+      <el-form-item label="部门">
+        <DepartmentSelect
           v-model="form.deptId"
-          autocomplete="off"
           data-test="user-dept-input"
-          placeholder="可留空"
+          placeholder="可留空，选择用户所属部门"
         />
       </el-form-item>
       <el-form-item label="登录策略">

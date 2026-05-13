@@ -62,6 +62,9 @@ const visible = computed({
 const downloadFileName = computed(
   () => props.downloadFileName || props.document?.file_name || 'preview.pdf',
 );
+const visibleTitle = computed(
+  () => props.document?.display_name || props.document?.file_name || 'PDF 预览',
+);
 const zoomLabel = computed(() => `${Math.round(zoom.value * 100)}%`);
 
 watch(
@@ -191,7 +194,7 @@ function createBlobUrl(blob: Blob, fallbackId: string): string {
   >
     <template #header>
       <div class="pdf-preview__title">
-        <span>{{ document?.file_name ?? 'PDF 预览' }}</span>
+        <span>{{ visibleTitle }}</span>
         <small v-if="pageCount">{{ currentPage }} / {{ pageCount }}</small>
       </div>
     </template>

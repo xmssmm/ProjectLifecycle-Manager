@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 
 import {
+  closeMainProject as closeMainProjectRequest,
   createMainProject as createMainProjectRequest,
   getMainProject,
   getProjectProgressFunnel,
@@ -101,6 +102,11 @@ export const useMainProjectStore = defineStore('main-projects', {
     },
     async reviewMainProject(projectId: string, payload: MainProjectReviewPayload) {
       const project = await reviewMainProjectRequest(projectId, payload);
+      this.currentProject = project;
+      return project;
+    },
+    async closeMainProject(projectId: string) {
+      const project = await closeMainProjectRequest(projectId);
       this.currentProject = project;
       return project;
     },

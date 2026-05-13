@@ -9,7 +9,12 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { usePhaseStore } from '@/stores/usePhaseStore';
 import { ACCEPTANCE_STEP_STATUS_LABELS, type AcceptanceStepRead } from '@/types/acceptanceSteps';
 import type { DocumentRead } from '@/types/documents';
-import type { PhaseDetailRead, PhaseRead, PhaseRequiredDocumentRead } from '@/types/phases';
+import type {
+  PhaseDetailRead,
+  PhaseRead,
+  PhaseRequiredDocumentRead,
+  ProcurementType,
+} from '@/types/phases';
 
 const props = defineProps<{
   subProjectId: string;
@@ -30,6 +35,11 @@ const stepForm = reactive({
   stepName: '',
   stepNo: 1,
 });
+const procurementTypeOptions: Array<{ label: string; value: ProcurementType }> = [
+  { label: '询价类', value: 'inquiry' },
+  { label: '招标类', value: 'bidding' },
+  { label: '单一来源', value: 'single_source' },
+];
 
 const phaseOptions = computed(() =>
   phaseStore.phases
@@ -43,6 +53,24 @@ const completionText = computed(() => {
     return '0 / 0';
   }
   return `${completion.uploaded_total} / ${completion.required_total}`;
+});
+const canPromoteSelectedPhase = computed(
+  () =>
+    Boolean(detail.value) &&
+    detail.value?.status === 'in_progress' &&
+    missingDocTypes.value.size === 0,
+);
+const promoteBlockerText = computed(() => {
+  if (!detail.value) {
+    return '';
+  }
+  if (detail.value.status !== 'in_progress') {
+    return '当前环节不在进行中，暂不能推进';
+  }
+  if (missingDocTypes.value.size > 0) {
+    return `缺少材料：${[...missingDocTypes.value].join('、')}`;
+  }
+  return '';
 });
 const isAcceptancePhase = computed(() => detail.value?.phase_no === 4);
 const acceptanceSteps = computed(() =>
@@ -117,6 +145,25 @@ async function loadSelectedPhase(): Promise<void> {
 
 async function handleUploaded(): Promise<void> {
   await loadSelectedPhase();
+}
+
+async function updateProcurementType(value: ProcurementType): Promise<void> {
+  if (!detail.value) {
+    return;
+  }
+  await phaseStore.updateProcurementType(detail.value.id, value);
+  await loadSelectedPhase();
+}
+
+async function promoteSelectedPhase(): Promise<void> {
+  if (!detail.value || !canPromoteSelectedPhase.value) {
+    return;
+  }
+  await phaseStore.promotePhase(detail.value.id);
+  detail.value = null;
+  documents.value = [];
+  await phaseStore.fetchPhases(props.subProjectId);
+  selectDefaultPhase();
 }
 
 async function handleDownload(documentItem: DocumentRead): Promise<void> {
@@ -208,6 +255,43 @@ function formatOptionalDate(value: string | null): string {
     <el-skeleton v-if="phaseStore.detailLoading && !detail" animated />
 
     <template v-else-if="detail">
+      <div class="phase-document-panel__promote">
+        <el-alert
+          v-if="promoteBlockerText"
+          show-icon
+          :title="promoteBlockerText"
+          type="warning"
+        />
+        <el-button
+          data-test="promote-selected-phase"
+          :disabled="!canPromoteSelectedPhase"
+          :loading="phaseStore.promotingId === detail.id"
+          type="primary"
+          @click="promoteSelectedPhase"
+        >
+          {{ canPromoteSelectedPhase ? '推进环节' : '暂不能推进' }}
+        </el-button>
+      </div>
+
+      <el-form v-if="detail.phase_no === 2" class="phase-document-panel__procurement">
+        <el-form-item label="采购类型">
+          <el-select
+            :model-value="detail.procurement_type"
+            data-test="procurement-type-select"
+            :disabled="detail.status === 'completed'"
+            placeholder="请选择采购类型"
+            @update:model-value="updateProcurementType"
+          >
+            <el-option
+              v-for="option in procurementTypeOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
       <div class="phase-document-panel__required">
         <article
           v-for="document in detail.required_documents"
@@ -356,6 +440,16 @@ function formatOptionalDate(value: string | null): string {
   border-radius: 8px;
   margin-bottom: 20px;
   padding: 16px;
+}
+
+.phase-document-panel__procurement {
+  margin-bottom: 16px;
+}
+
+.phase-document-panel__promote {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .phase-document-panel__acceptance-header,

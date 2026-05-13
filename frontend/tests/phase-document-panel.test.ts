@@ -8,7 +8,7 @@ import {
   updateAcceptanceStep,
 } from '@/api/acceptanceSteps';
 import { listDocuments } from '@/api/documents';
-import { getPhase, listPhases } from '@/api/phases';
+import { getPhase, listPhases, promotePhase } from '@/api/phases';
 import type { AcceptanceStepRead } from '@/types/acceptanceSteps';
 import type { DocumentRead } from '@/types/documents';
 import type { PhaseDetailRead, PhaseRead } from '@/types/phases';
@@ -30,6 +30,7 @@ vi.mock('@/api/phases', () => ({
   getPhase: vi.fn(),
   listPhases: vi.fn(),
   promotePhase: vi.fn(),
+  updateProcurementType: vi.fn(),
 }));
 
 vi.mock('pdfjs-dist', () => ({
@@ -66,6 +67,8 @@ describe('PhaseDocumentPanel', () => {
     });
     expect(wrapper.find('[data-test="missing-doc-contract"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('contract');
+    expect(wrapper.text()).toContain('缺少材料：contract');
+    expect(wrapper.find('[data-test="promote-selected-phase"]').text()).toContain('暂不能推进');
     expect(wrapper.find('[data-test="document-list"]').text()).toContain('1');
 
     await wrapper.find('[data-test="upload-contract"]').trigger('click');
@@ -73,6 +76,32 @@ describe('PhaseDocumentPanel', () => {
 
     expect(getPhase).toHaveBeenCalledTimes(2);
     expect(listDocuments).toHaveBeenCalledTimes(2);
+  });
+
+  it('promotes the selected phase when there are no missing documents', async () => {
+    vi.mocked(getPhase).mockResolvedValue({
+      ...phaseTwoDetail,
+      completion: {
+        missing_doc_types: [],
+        required_total: 1,
+        uploaded_total: 1,
+      },
+    });
+    vi.mocked(promotePhase).mockResolvedValue({
+      activated_phase: null,
+      phase: { ...phaseTwo, status: 'completed' },
+    });
+
+    const wrapper = mount(PhaseDocumentPanel, {
+      global: { stubs },
+      props: { subProjectId: 'sub-1' },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="promote-selected-phase"]').trigger('click');
+    await flushPromises();
+
+    expect(promotePhase).toHaveBeenCalledWith('phase-2');
   });
 
   it('manages acceptance steps on phase 4 and links uploads to each step', async () => {
@@ -234,6 +263,7 @@ const completedAcceptanceStep: AcceptanceStepRead = {
 const uploadedDocument: DocumentRead = {
   acceptance_step_id: null,
   created_at: '2026-05-10T02:00:00Z',
+  display_name: 'proof.pdf',
   doc_no: 'DOC-1',
   doc_type: 'acceptance_proof',
   file_name: 'proof.pdf',
@@ -263,10 +293,16 @@ const stubs = {
   },
   ElButton: {
     emits: ['click'],
-    props: ['type'],
-    template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
+    props: ['disabled', 'loading', 'type'],
+    template:
+      '<button type="button" :disabled="disabled || loading" @click="$emit(\'click\')"><slot /></button>',
   },
+  ElAlert: { props: ['title'], template: '<section>{{ title }}</section>' },
   ElEmpty: { props: ['description'], template: '<section>{{ description }}</section>' },
+  ElForm: { template: '<form><slot /></form>' },
+  ElFormItem: { props: ['label'], template: '<label>{{ label }}<slot /></label>' },
+  ElOption: { props: ['label'], template: '<span>{{ label }}</span>' },
+  ElSelect: { template: '<div><slot /></div>' },
   ElSkeleton: { template: '<section />' },
   ElTag: { props: ['type'], template: '<span><slot /></span>' },
 };

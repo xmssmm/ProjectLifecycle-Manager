@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import (
     BusinessException,
@@ -201,6 +202,11 @@ class SqlAlchemySubProjectRepository:
         )
         statement = (
             select(SubProject)
+            .options(
+                selectinload(SubProject.department),
+                selectinload(SubProject.main_project),
+                selectinload(SubProject.manager),
+            )
             .where(*conditions)
             .order_by(SubProject.created_at.desc())
             .offset((page - 1) * page_size)
@@ -210,7 +216,15 @@ class SqlAlchemySubProjectRepository:
         return sub_projects, int(total or 0)
 
     async def get_by_id(self, sub_project_id: UUID) -> SubProject | None:
-        sub_project = await self._session.get(SubProject, sub_project_id)
+        sub_project = await self._session.scalar(
+            select(SubProject)
+            .options(
+                selectinload(SubProject.department),
+                selectinload(SubProject.main_project),
+                selectinload(SubProject.manager),
+            )
+            .where(SubProject.id == sub_project_id),
+        )
         return sub_project if isinstance(sub_project, SubProject) else None
 
     async def get_main_project(self, main_project_id: UUID) -> MainProject | None:
@@ -232,6 +246,11 @@ class SqlAlchemySubProjectRepository:
     async def list_active_sub_projects_for_leader(self, user_id: UUID) -> list[SubProject]:
         result = await self._session.scalars(
             select(SubProject)
+            .options(
+                selectinload(SubProject.department),
+                selectinload(SubProject.main_project),
+                selectinload(SubProject.manager),
+            )
             .where(
                 SubProject.manager_id == user_id,
                 SubProject.status.in_(list(ACTIVE_HANDOVER_STATUSES)),

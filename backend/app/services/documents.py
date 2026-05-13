@@ -399,6 +399,7 @@ class DocumentService:
         phase_id: UUID,
         doc_type: str,
         file_name: str,
+        display_name: str | None = None,
         content_type: str | None = None,
         content: bytes,
         acceptance_step_id: UUID | None = None,
@@ -407,6 +408,7 @@ class DocumentService:
     ) -> Document:
         cleaned_doc_type = self._clean_doc_type(doc_type)
         cleaned_file_name = self._clean_file_name(file_name)
+        cleaned_display_name = self._clean_display_name(display_name, cleaned_file_name)
         self._ensure_file_size_allowed(content)
         sub_project, phase = await self._get_existing_scope(
             sub_project_id=sub_project_id,
@@ -453,6 +455,7 @@ class DocumentService:
             acceptance_step_id=acceptance_step_id,
             doc_type=cleaned_doc_type,
             file_name=cleaned_file_name,
+            display_name=cleaned_display_name,
             file_path=storage_key,
             file_size=len(content),
             version=next_version,
@@ -762,6 +765,11 @@ class DocumentService:
         if doc_type is None:
             return None
         return cls._clean_doc_type(doc_type)
+
+    @staticmethod
+    def _clean_display_name(display_name: str | None, file_name: str) -> str:
+        cleaned = (display_name or "").strip()
+        return cleaned[:255] if cleaned else file_name[:255]
 
     @staticmethod
     def _clean_file_name(file_name: str) -> str:

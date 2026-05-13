@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  closeMainProject,
   createMainProject,
   getMainProject,
   getProjectProgressFunnel,
@@ -20,6 +21,7 @@ import MainProjectList from '@/views/main-project/MainProjectList.vue';
 import MainProjectReview from '@/views/main-project/MainProjectReview.vue';
 
 vi.mock('@/api/mainProjects', () => ({
+  closeMainProject: vi.fn(),
   createMainProject: vi.fn(),
   getMainProject: vi.fn(),
   getProjectProgressFunnel: vi.fn(),
@@ -55,6 +57,7 @@ describe('main project pages', () => {
     });
     vi.mocked(getMainProject).mockResolvedValue(sampleMainProject);
     vi.mocked(getProjectProgressFunnel).mockResolvedValue(sampleFunnel);
+    vi.mocked(closeMainProject).mockResolvedValue({ ...sampleMainProject, status: 'closed' });
     vi.mocked(createMainProject).mockResolvedValue(sampleMainProject);
     vi.mocked(updateMainProject).mockResolvedValue(rejectedProject);
     vi.mocked(submitMainProject).mockResolvedValue({
@@ -98,6 +101,26 @@ describe('main project pages', () => {
     expect(wrapper.text()).toContain('状态时间线');
     expect(wrapper.text()).toContain('采购实施');
     expect(wrapper.text()).not.toContain('其他子项目');
+  });
+
+  it('lets department manager close a main project when child projects are finished', async () => {
+    vi.mocked(listSubProjects).mockResolvedValue({
+      items: [{ ...sampleSubProject, status: 'completed' }],
+      page: 1,
+      page_size: 100,
+      total: 1,
+    });
+    const wrapper = mount(MainProjectDetail, {
+      global: { stubs },
+      props: { projectId: 'main-1' },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="open-close-main-project"]').trigger('click');
+    await wrapper.find('[data-test="confirm-close-main-project"]').trigger('click');
+    await flushPromises();
+
+    expect(closeMainProject).toHaveBeenCalledWith('main-1');
   });
 
   it('validates and submits a new main project after confirmation', async () => {
@@ -158,7 +181,7 @@ describe('main project pages', () => {
     expect(submitMainProject).toHaveBeenCalledWith('main-1');
   });
 
-  it('blocks a department manager from reviewing their own main project', async () => {
+  it('lets a single department manager review their own main project', async () => {
     vi.mocked(getMainProject).mockResolvedValue(pendingProject);
 
     const wrapper = mount(MainProjectReview, {
@@ -167,9 +190,15 @@ describe('main project pages', () => {
     });
     await flushPromises();
 
-    expect(wrapper.text()).toContain('不能审核自己创建的主项目');
-    expect(wrapper.find('[data-test="approve-review"]').exists()).toBe(false);
-    expect(reviewMainProject).not.toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain('不能审核自己创建的主项目');
+    await wrapper.find('[data-test="approve-review"]').trigger('click');
+    await flushPromises();
+
+    expect(reviewMainProject).toHaveBeenCalledWith('main-1', {
+      decision: 'approve',
+      review_comment: null,
+      updates: null,
+    });
   });
 
   it('shows modified fields and lets admin approve a main project', async () => {
@@ -324,6 +353,12 @@ const stubs = {
     template:
       '<section><article v-for="row in rows" :key="row.id"><span>{{ row.project_no }}</span><span>{{ row.name }}</span><slot name="status" :row="row" :value="row.status" /><slot name="actions" :row="row" /></article></section>',
   },
+  DepartmentSelect: {
+    inheritAttrs: false,
+    props: ['modelValue'],
+    template:
+      '<input v-bind="$attrs" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+  },
   ElButton: { template: '<button type="button" @click="$emit(\'click\')"><slot /></button>' },
   ElDatePicker: {
     props: ['modelValue'],
@@ -361,7 +396,7 @@ const stubs = {
   ConfirmDialog: {
     props: ['modelValue', 'message', 'title'],
     template:
-      '<section v-if="modelValue" data-test="submit-confirm-dialog">{{ title }}{{ message }}<button data-test="confirm-submit" @click="$emit(\'confirm\')">确认</button></section>',
+      '<section v-if="modelValue" data-test="submit-confirm-dialog">{{ title }}{{ message }}<button data-test="confirm-submit" @click="$emit(\'confirm\')">确认</button><button data-test="confirm-close-main-project" @click="$emit(\'confirm\')">结项</button></section>',
   },
   ProjectProgressFunnel: {
     props: ['funnel', 'loading'],

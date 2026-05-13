@@ -33,6 +33,7 @@ const emit = defineEmits<{
   uploaded: [document: DocumentRead];
 }>();
 
+const displayName = ref('');
 const errorMessage = ref('');
 const isDragging = ref(false);
 const lastFile = ref<File | null>(null);
@@ -138,6 +139,7 @@ async function uploadFile(file: File, docType: string, auditConfirmation = false
   try {
     const payload: DocumentUploadPayload = {
       acceptanceStepId: props.acceptanceStepId,
+      displayName: displayName.value.trim() || file.name,
       docType,
       file,
       phaseId: props.phaseId,
@@ -150,6 +152,7 @@ async function uploadFile(file: File, docType: string, auditConfirmation = false
     const confirmedDocument = auditConfirmation
       ? await confirmDocumentType(document.id, docType).catch(() => document)
       : document;
+    displayName.value = '';
     emit('uploaded', confirmedDocument);
   } catch (error) {
     const message = extractUploadError(error);
@@ -190,6 +193,12 @@ function formatFileSize(bytes: number): string {
 
 <template>
   <div class="document-uploader">
+    <el-input
+      v-model="displayName"
+      data-test="document-display-name"
+      placeholder="文件标题，例如：主合同扫描件"
+    />
+
     <label
       class="document-uploader__drop-zone"
       :class="{ 'document-uploader__drop-zone--active': isDragging }"

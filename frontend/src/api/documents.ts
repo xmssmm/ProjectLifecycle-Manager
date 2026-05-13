@@ -40,6 +40,9 @@ export async function uploadDocument(
   form.append('sub_project_id', payload.subProjectId);
   form.append('phase_id', payload.phaseId);
   form.append('doc_type', payload.docType);
+  if (payload.displayName?.trim()) {
+    form.append('display_name', payload.displayName.trim());
+  }
   if (payload.acceptanceStepId) {
     form.append('acceptance_step_id', payload.acceptanceStepId);
   }

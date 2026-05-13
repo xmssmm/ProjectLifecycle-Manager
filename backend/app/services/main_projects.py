@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import (
     BusinessException,
@@ -120,6 +121,10 @@ class SqlAlchemyMainProjectRepository:
         total = await self._session.scalar(select(func.count()).select_from(MainProject))
         statement = (
             select(MainProject)
+            .options(
+                selectinload(MainProject.department),
+                selectinload(MainProject.creator),
+            )
             .order_by(MainProject.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
@@ -128,7 +133,14 @@ class SqlAlchemyMainProjectRepository:
         return projects, int(total or 0)
 
     async def get_by_id(self, project_id: UUID) -> MainProject | None:
-        project = await self._session.get(MainProject, project_id)
+        project = await self._session.scalar(
+            select(MainProject)
+            .options(
+                selectinload(MainProject.department),
+                selectinload(MainProject.creator),
+            )
+            .where(MainProject.id == project_id),
+        )
         return project if isinstance(project, MainProject) else None
 
     async def next_project_sequence(self) -> int:
@@ -140,6 +152,7 @@ class SqlAlchemyMainProjectRepository:
             select(func.count()).select_from(SubProject).where(
                 SubProject.main_project_id == main_project_id,
                 SubProject.status.notin_([SubProjectStatus.closed, SubProjectStatus.terminated]),
+                SubProject.status != SubProjectStatus.completed,
             ),
         )
         return int(value or 0)
@@ -147,6 +160,11 @@ class SqlAlchemyMainProjectRepository:
     async def list_sub_projects_by_main_project(self, main_project_id: UUID) -> list[SubProject]:
         result = await self._session.scalars(
             select(SubProject)
+            .options(
+                selectinload(SubProject.department),
+                selectinload(SubProject.main_project),
+                selectinload(SubProject.manager),
+            )
             .where(SubProject.main_project_id == main_project_id)
             .order_by(SubProject.project_no),
         )
@@ -222,7 +240,12 @@ class InMemoryMainProjectRepository:
             1
             for sub_project in self.sub_projects
             if sub_project.main_project_id == main_project_id
-            and sub_project.status not in {SubProjectStatus.closed, SubProjectStatus.terminated}
+            and sub_project.status
+            not in {
+                SubProjectStatus.completed,
+                SubProjectStatus.closed,
+                SubProjectStatus.terminated,
+            }
         )
 
     async def list_sub_projects_by_main_project(self, main_project_id: UUID) -> list[SubProject]:
@@ -439,7 +462,12 @@ class MainProjectService:
 
         project = await self._get_existing_project(project_id)
         if project.creator_id == actor.id and actor.role != UserRole.admin:
-            raise SelfReviewDeniedError()
+            peer_reviewers = await self._repository.list_active_user_ids_by_role(
+                UserRole.dept_manager,
+                excluding_user_id=actor.id,
+            )
+            if peer_reviewers:
+                raise SelfReviewDeniedError()
         if project.status != MainProjectStatus.pending_review:
             raise self._invalid_status(project.status, "当前状态不允许审核主项目")
 

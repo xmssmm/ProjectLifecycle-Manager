@@ -5,6 +5,7 @@ export type DocumentScanStatus = 'pending' | 'clean' | 'infected' | 'failed';
 export interface DocumentRead {
   acceptance_step_id: string | null;
   created_at: string;
+  display_name: string;
   doc_no: string;
   doc_type: string;
   file_name: string;
@@ -36,6 +37,7 @@ export interface DocumentListQuery {
 
 export interface DocumentUploadPayload {
   acceptanceStepId?: string | null;
+  displayName?: string | null;
   docType: string;
   file: File;
   phaseId: string;

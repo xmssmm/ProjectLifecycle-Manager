@@ -1,12 +1,22 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy import inspect
+from sqlalchemy.orm import LoaderCallableStatus
 
-from app.models.main_projects import MainProjectStatus, ProjectReviewDecision
+from app.models.main_projects import MainProject, MainProjectStatus, ProjectReviewDecision
 from app.models.phases import PhaseStatus
 from app.models.sub_projects import SubProjectStatus
+
+
+def _loaded_relationship(instance: object, name: str) -> object | None:
+    inspected = inspect(instance)
+    assert inspected is not None
+    value = inspected.attrs[name].loaded_value
+    return None if value is LoaderCallableStatus.NO_VALUE else value
 
 
 class MainProjectCreate(BaseModel):
@@ -70,8 +80,36 @@ class MainProjectRead(BaseModel):
     creator_id: UUID | None
     created_at: datetime
     updated_at: datetime
+    dept_name: str | None = None
+    creator_name: str | None = None
+    remaining_amount: Decimal | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_business_summary(cls, data: Any) -> Any:
+        if not isinstance(data, MainProject):
+            return data
+        department = _loaded_relationship(data, "department")
+        creator = _loaded_relationship(data, "creator")
+        return {
+            "id": data.id,
+            "project_no": data.project_no,
+            "name": data.name,
+            "dept_id": data.dept_id,
+            "status": data.status,
+            "total_budget": data.total_budget,
+            "expected_finish_date": data.expected_finish_date,
+            "spent_amount": data.spent_amount,
+            "remark": data.remark,
+            "creator_id": data.creator_id,
+            "created_at": data.created_at,
+            "updated_at": data.updated_at,
+            "dept_name": getattr(department, "name", None),
+            "creator_name": getattr(creator, "username", None),
+            "remaining_amount": data.total_budget - data.spent_amount,
+        }
 
 
 class MainProjectListRead(BaseModel):

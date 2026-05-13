@@ -89,3 +89,13 @@ export async function reviewMainProject(
   );
   return response.data.data;
 }
+
+export async function closeMainProject(
+  projectId: string,
+  client: AxiosInstance = apiClient,
+): Promise<MainProjectRead> {
+  const response = await client.post<ApiResponse<MainProjectRead>>(
+    `/main-projects/${projectId}/close`,
+  );
+  return response.data.data;
+}

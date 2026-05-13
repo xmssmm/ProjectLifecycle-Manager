@@ -14,15 +14,21 @@ from sqlalchemy import Numeric, Table
 from app.api.v1.main_projects import get_main_project_service
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
-from app.core.exceptions import BusinessException, PermissionDeniedError
+from app.core.exceptions import BusinessException, PermissionDeniedError, SelfReviewDeniedError
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.base import Base
-from app.models.main_projects import MainProject, MainProjectStatus
+from app.models.main_projects import MainProject, MainProjectStatus, ProjectReviewDecision
 from app.models.sub_projects import SubProject, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
-from app.schemas.main_projects import MainProjectCreate, MainProjectUpdate
+from app.schemas.main_projects import (
+    MainProjectCreate,
+    MainProjectRead,
+    MainProjectReviewRequest,
+    MainProjectUpdate,
+)
 from app.services.main_projects import InMemoryMainProjectRepository, MainProjectService
+from tests.factories import DepartmentFactory, MainProjectFactory, UserFactory
 
 
 def make_user(role: UserRole, *, username: str = "user") -> User:
@@ -56,11 +62,13 @@ def make_service(
     *,
     projects: list[MainProject] | None = None,
     sub_projects: list[SubProject] | None = None,
+    users: list[User] | None = None,
     next_sequence: int = 1,
 ) -> tuple[MainProjectService, InMemoryMainProjectRepository]:
     repository = InMemoryMainProjectRepository(
         projects or [],
         sub_projects=sub_projects or [],
+        users=users or [],
         next_sequence=next_sequence,
     )
     return (
@@ -102,6 +110,21 @@ def test_main_project_model_matches_required_fields() -> None:
     assert isinstance(table.c.total_budget.type, Numeric)
     assert table.c.total_budget.type.precision == 15
     assert table.c.total_budget.type.scale == 2
+
+
+def test_main_project_read_serializes_names_and_remaining_amount() -> None:
+    project = MainProjectFactory(
+        total_budget=Decimal("500000.00"),
+        spent_amount=Decimal("125000.00"),
+    )
+    project.department = DepartmentFactory(id=project.dept_id, name="行政部", code="XZ")
+    project.creator = UserFactory(id=project.creator_id, username="综合部负责人")
+
+    payload = MainProjectRead.model_validate(project).model_dump()
+
+    assert payload["dept_name"] == "行政部"
+    assert payload["creator_name"] == "综合部负责人"
+    assert payload["remaining_amount"] == Decimal("375000.00")
 
 
 @pytest.mark.asyncio
@@ -291,7 +314,7 @@ def make_sub_project(
 
 
 @pytest.mark.asyncio
-async def test_close_main_project_requires_all_sub_projects_closed_or_terminated() -> None:
+async def test_close_main_project_requires_all_sub_projects_finished_or_closed() -> None:
     actor = make_user(UserRole.dept_manager, username="dept")
     project = await make_service()[0].create_project(actor=actor, payload=make_payload())
     project.status = MainProjectStatus.in_progress
@@ -305,11 +328,49 @@ async def test_close_main_project_requires_all_sub_projects_closed_or_terminated
     assert blocked.value.data == {"open_sub_project_count": 1}
     assert project.status == MainProjectStatus.in_progress
 
-    open_sub_project.status = SubProjectStatus.closed
-    closed = await service.close_project(actor=actor, project_id=project.id)
+    open_sub_project.status = SubProjectStatus.completed
+    completed_children_closed = await service.close_project(actor=actor, project_id=project.id)
 
-    assert closed.status == MainProjectStatus.closed
-    assert closed.closed_at is not None
+    assert completed_children_closed.status == MainProjectStatus.closed
+    assert completed_children_closed.closed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_single_department_manager_can_review_own_main_project() -> None:
+    actor = make_user(UserRole.dept_manager, username="solo-manager")
+    service, _repository = make_service(users=[actor])
+    project = await service.create_project(actor=actor, payload=make_payload())
+
+    reviewed = await service.review_project(
+        actor=actor,
+        project_id=project.id,
+        payload=MainProjectReviewRequest(
+            decision=ProjectReviewDecision.approve,
+            review_comment="单人部门负责人确认",
+            updates=None,
+        ),
+    )
+
+    assert reviewed.status == MainProjectStatus.not_started
+
+
+@pytest.mark.asyncio
+async def test_department_manager_self_review_still_blocks_when_peer_reviewer_exists() -> None:
+    actor = make_user(UserRole.dept_manager, username="creator")
+    peer = make_user(UserRole.dept_manager, username="peer")
+    service, _repository = make_service(users=[actor, peer])
+    project = await service.create_project(actor=actor, payload=make_payload())
+
+    with pytest.raises(SelfReviewDeniedError):
+        await service.review_project(
+            actor=actor,
+            project_id=project.id,
+            payload=MainProjectReviewRequest(
+                decision=ProjectReviewDecision.approve,
+                review_comment=None,
+                updates=None,
+            ),
+        )
 
 
 @pytest.mark.asyncio

@@ -21,8 +21,12 @@ const columns = [
   { key: 'project_no', label: '项目编号', minWidth: 160 },
   { key: 'name', label: '项目名称', minWidth: 220 },
   { key: 'status', label: '状态', width: 110 },
-  { key: 'dept_id', label: '部门', minWidth: 180 },
+  { key: 'dept_name', label: '责任部门', minWidth: 140 },
   { key: 'total_budget', label: '总预算', width: 140 },
+  { key: 'spent_amount', label: '已用金额', width: 140 },
+  { key: 'remaining_amount', label: '剩余额度', width: 140 },
+  { key: 'creator_name', label: '创建人', width: 140 },
+  { key: 'created_at', label: '创建时间', width: 140 },
   { key: 'expected_finish_date', label: '预计完成', width: 140 },
   { key: 'actions', label: '操作', width: 120 },
 ];
@@ -38,7 +42,7 @@ const searchFields = [
   {
     key: 'dept_id',
     label: '部门',
-    placeholder: '输入部门 ID',
+    placeholder: '输入部门名称 / ID',
     type: 'text' as const,
   },
 ];
@@ -46,7 +50,9 @@ const searchFields = [
 const filteredProjects = computed(() =>
   mainProjectStore.projects.filter((project) => {
     const statusMatched = !filters.value.status || project.status === filters.value.status;
-    const deptMatched = !filters.value.deptId || project.dept_id.includes(filters.value.deptId);
+    const deptText = `${project.dept_name ?? ''} ${project.dept_id}`.toLowerCase();
+    const deptMatched =
+      !filters.value.deptId || deptText.includes(filters.value.deptId.toLowerCase());
     return statusMatched && deptMatched;
   }),
 );
@@ -117,8 +123,23 @@ function statusLabel(status: ProjectStatus): string {
       <template #status="{ value }">
         <StatusTag :status="String(value)" />
       </template>
+      <template #dept_name="{ row }">
+        {{ (row as MainProjectRead).dept_name || (row as MainProjectRead).dept_id }}
+      </template>
       <template #total_budget="{ value }">
         {{ formatMoney(value) }}
+      </template>
+      <template #spent_amount="{ value }">
+        {{ formatMoney(value) }}
+      </template>
+      <template #remaining_amount="{ value }">
+        {{ formatMoney(value) }}
+      </template>
+      <template #creator_name="{ row }">
+        {{ (row as MainProjectRead).creator_name || (row as MainProjectRead).creator_id || '-' }}
+      </template>
+      <template #created_at="{ value }">
+        {{ formatDate(value) }}
       </template>
       <template #expected_finish_date="{ value }">
         {{ formatDate(value) }}

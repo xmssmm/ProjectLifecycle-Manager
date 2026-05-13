@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApiClient } from '../src/api/client';
 import {
+  closeMainProject,
   createMainProject,
   getMainProject,
   getProjectProgressFunnel,
@@ -85,7 +86,7 @@ describe('project api', () => {
     expect(result.items[0].main_project_id).toBe('main-1');
   });
 
-  it('creates, updates, and submits main projects', async () => {
+  it('creates, updates, submits, reviews, and closes main projects', async () => {
     const calls: AxiosRequestConfig[] = [];
     const client = createApiClient('http://api.local');
     client.defaults.adapter = recordingAdapter(calls, {
@@ -124,6 +125,7 @@ describe('project api', () => {
       },
       client,
     );
+    await closeMainProject('main-1', client);
 
     expect(calls[0]).toMatchObject({
       data: JSON.stringify({
@@ -158,6 +160,10 @@ describe('project api', () => {
       }),
       method: 'post',
       url: '/main-projects/main-1/review',
+    });
+    expect(calls[4]).toMatchObject({
+      method: 'post',
+      url: '/main-projects/main-1/close',
     });
   });
 });

@@ -21,8 +21,12 @@ const columns = [
   { key: 'project_no', label: '子项目编号', minWidth: 180 },
   { key: 'name', label: '子项目名称', minWidth: 220 },
   { key: 'status', label: '状态', width: 110 },
-  { key: 'main_project_id', label: '主项目', minWidth: 180 },
+  { key: 'main_project_name', label: '主项目', minWidth: 180 },
+  { key: 'dept_name', label: '责任部门', minWidth: 140 },
+  { key: 'manager_name', label: '负责人', width: 120 },
   { key: 'budget', label: '预算', width: 140 },
+  { key: 'spent_amount', label: '已用金额', width: 140 },
+  { key: 'remaining_amount', label: '剩余额度', width: 140 },
   { key: 'plan_end_date', label: '计划完成', width: 140 },
   { key: 'actions', label: '操作', width: 120 },
 ];
@@ -38,7 +42,7 @@ const searchFields = [
   {
     key: 'main_project_id',
     label: '主项目',
-    placeholder: '输入主项目 ID',
+    placeholder: '输入主项目名称 / ID',
     type: 'text' as const,
   },
 ];
@@ -46,9 +50,11 @@ const searchFields = [
 const filteredSubProjects = computed(() =>
   subProjectStore.subProjects.filter((subProject) => {
     const statusMatched = !filters.value.status || subProject.status === filters.value.status;
+    const mainProjectText =
+      `${subProject.main_project_name ?? ''} ${subProject.main_project_id}`.toLowerCase();
     const mainProjectMatched =
       !filters.value.mainProjectId ||
-      subProject.main_project_id.includes(filters.value.mainProjectId);
+      mainProjectText.includes(filters.value.mainProjectId.toLowerCase());
     return statusMatched && mainProjectMatched;
   }),
 );
@@ -119,7 +125,22 @@ function statusLabel(status: ProjectStatus): string {
       <template #status="{ value }">
         <StatusTag :status="String(value)" />
       </template>
+      <template #main_project_name="{ row }">
+        {{ (row as SubProjectRead).main_project_name || (row as SubProjectRead).main_project_id }}
+      </template>
+      <template #dept_name="{ row }">
+        {{ (row as SubProjectRead).dept_name || (row as SubProjectRead).dept_id }}
+      </template>
+      <template #manager_name="{ row }">
+        {{ (row as SubProjectRead).manager_name || (row as SubProjectRead).manager_id }}
+      </template>
       <template #budget="{ value }">
+        {{ formatMoney(value) }}
+      </template>
+      <template #spent_amount="{ value }">
+        {{ formatMoney(value) }}
+      </template>
+      <template #remaining_amount="{ value }">
         {{ formatMoney(value) }}
       </template>
       <template #plan_end_date="{ value }">

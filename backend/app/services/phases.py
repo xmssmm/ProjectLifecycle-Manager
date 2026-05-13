@@ -384,10 +384,40 @@ class PhaseService:
             uploaded_documents=uploaded_documents,
         )
 
+    async def update_procurement_type(
+        self,
+        *,
+        actor: User,
+        phase_id: UUID,
+        procurement_type: ProcurementType,
+    ) -> Phase:
+        phase = await self._get_existing_phase(phase_id)
+        sub_project = await self._get_existing_sub_project(phase.sub_project_id)
+        await self._ensure_can_operate_phase(actor, sub_project)
+        if phase.phase_no != 2:
+            raise BusinessException(
+                code=3003,
+                message="Procurement type can only be set on procurement phase",
+                status_code=409,
+                data={"phase_no": phase.phase_no},
+            )
+        if phase.status == PhaseStatus.completed:
+            raise BusinessException(
+                code=3003,
+                message="Completed procurement phase cannot change procurement type",
+                status_code=409,
+                data={"status": phase.status.value},
+            )
+        phase.procurement_type = procurement_type
+        phase.updated_at = datetime.now(UTC)
+        await self._repository.commit()
+        await self._repository.refresh_phase(phase)
+        return phase
+
     async def promote_phase(self, *, actor: User, phase_id: UUID) -> PhasePromotionResult:
         phase = await self._get_existing_phase(phase_id)
         sub_project = await self._get_existing_sub_project(phase.sub_project_id)
-        self._ensure_can_promote(actor, sub_project)
+        await self._ensure_can_operate_phase(actor, sub_project)
         if phase.status != PhaseStatus.in_progress:
             raise self._invalid_status(
                 phase.status.value,
@@ -532,11 +562,16 @@ class PhaseService:
             return
         raise PermissionDeniedError()
 
-    @staticmethod
-    def _ensure_can_promote(actor: User, sub_project: SubProject) -> None:
+    async def _ensure_can_operate_phase(self, actor: User, sub_project: SubProject) -> None:
         if actor.role == UserRole.admin:
             return
         if actor.role == UserRole.proj_leader and sub_project.manager_id == actor.id:
+            return
+        member = await self._repository.get_member(
+            sub_project_id=sub_project.id,
+            user_id=actor.id,
+        )
+        if member is not None:
             return
         raise PermissionDeniedError()
 
@@ -557,18 +592,6 @@ class PhaseService:
                 raise self._invalid_status(
                     phase.status.value,
                     "Previous phases must be completed first",
-                    data={"incomplete_phase_nos": incomplete},
-                )
-        if phase.phase_no == 5:
-            incomplete = [
-                item.phase_no
-                for item in phases
-                if item.phase_no != 5 and item.status != PhaseStatus.completed
-            ]
-            if incomplete:
-                raise self._invalid_status(
-                    phase.status.value,
-                    "All other phases must be completed before completing payment phase",
                     data={"incomplete_phase_nos": incomplete},
                 )
         if phase.phase_no == 6:

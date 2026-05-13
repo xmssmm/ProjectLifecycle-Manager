@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getPhase, listPhases, promotePhase } from '@/api/phases';
+import { getPhase, listPhases, promotePhase, updateProcurementType } from '@/api/phases';
 import { usePhaseStore } from '@/stores/usePhaseStore';
 import type { PhaseRead } from '@/types/phases';
 
@@ -9,6 +9,7 @@ vi.mock('@/api/phases', () => ({
   getPhase: vi.fn(),
   listPhases: vi.fn(),
   promotePhase: vi.fn(),
+  updateProcurementType: vi.fn(),
 }));
 
 describe('phase store', () => {
@@ -38,6 +39,22 @@ describe('phase store', () => {
       'in_progress',
     ]);
     expect(store.promotingId).toBeNull();
+  });
+
+  it('updates procurement type and preserves current phase detail fields', async () => {
+    vi.mocked(updateProcurementType).mockResolvedValue({
+      ...phaseTwo,
+      procurement_type: 'inquiry',
+    });
+    const store = usePhaseStore();
+    store.currentPhase = phaseTwoDetail;
+    store.phases = [phaseTwo];
+
+    await store.updateProcurementType('phase-2', 'inquiry');
+
+    expect(updateProcurementType).toHaveBeenCalledWith('phase-2', 'inquiry');
+    expect(store.currentPhase?.procurement_type).toBe('inquiry');
+    expect(store.phases[0].procurement_type).toBe('inquiry');
   });
 });
 

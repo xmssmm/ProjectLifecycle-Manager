@@ -1,11 +1,17 @@
 import { defineStore } from 'pinia';
 
-import { getPhase, listPhases, promotePhase as promotePhaseRequest } from '@/api/phases';
+import {
+  getPhase,
+  listPhases,
+  promotePhase as promotePhaseRequest,
+  updateProcurementType as updateProcurementTypeRequest,
+} from '@/api/phases';
 import type {
   PhaseDetailRead,
   PhaseListQuery,
   PhasePromotionRead,
   PhaseRead,
+  ProcurementType,
 } from '@/types/phases';
 
 interface PhaseState {
@@ -52,6 +58,14 @@ export const usePhaseStore = defineStore('phases', {
       } finally {
         this.detailLoading = false;
       }
+    },
+    async updateProcurementType(phaseId: string, procurementType: ProcurementType) {
+      const phase = await updateProcurementTypeRequest(phaseId, procurementType);
+      this.upsertPhase(phase);
+      if (this.currentPhase?.id === phase.id) {
+        this.currentPhase = { ...this.currentPhase, ...phase };
+      }
+      return phase;
     },
     async promotePhase(phaseId: string): Promise<PhasePromotionRead> {
       this.promotingId = phaseId;

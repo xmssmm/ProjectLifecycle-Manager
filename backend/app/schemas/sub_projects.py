@@ -1,12 +1,21 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from sqlalchemy import inspect
+from sqlalchemy.orm import LoaderCallableStatus
 
 from app.models.main_projects import ProjectReviewDecision
-from app.models.sub_projects import SubProjectMemberRole, SubProjectStatus
+from app.models.sub_projects import SubProject, SubProjectMemberRole, SubProjectStatus
+
+
+def _loaded_relationship(instance: object, name: str) -> object | None:
+    inspected = inspect(instance)
+    assert inspected is not None
+    value = inspected.attrs[name].loaded_value
+    return None if value is LoaderCallableStatus.NO_VALUE else value
 
 
 class SubProjectCreate(BaseModel):
@@ -107,8 +116,43 @@ class SubProjectRead(BaseModel):
     remark: str | None
     created_at: datetime
     updated_at: datetime
+    dept_name: str | None = None
+    main_project_name: str | None = None
+    manager_name: str | None = None
+    remaining_amount: Decimal | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_business_summary(cls, data: Any) -> Any:
+        if not isinstance(data, SubProject):
+            return data
+        department = _loaded_relationship(data, "department")
+        main_project = _loaded_relationship(data, "main_project")
+        manager = _loaded_relationship(data, "manager")
+        return {
+            "id": data.id,
+            "project_no": data.project_no,
+            "name": data.name,
+            "main_project_id": data.main_project_id,
+            "dept_id": data.dept_id,
+            "budget": data.budget,
+            "manager_id": data.manager_id,
+            "creator_id": data.creator_id,
+            "status": data.status,
+            "plan_end_date": data.plan_end_date,
+            "workflow_template_version_id": data.workflow_template_version_id,
+            "actual_end_date": data.actual_end_date,
+            "spent_amount": data.spent_amount,
+            "remark": data.remark,
+            "created_at": data.created_at,
+            "updated_at": data.updated_at,
+            "dept_name": getattr(department, "name", None),
+            "main_project_name": getattr(main_project, "name", None),
+            "manager_name": getattr(manager, "username", None),
+            "remaining_amount": data.budget - data.spent_amount,
+        }
 
 
 class SubProjectListRead(BaseModel):

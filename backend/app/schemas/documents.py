@@ -14,6 +14,7 @@ class DocumentRead(BaseModel):
     acceptance_step_id: UUID | None
     doc_type: str
     file_name: str
+    display_name: str
     file_size: int
     version: int
     is_latest: bool

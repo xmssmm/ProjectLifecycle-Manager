@@ -292,6 +292,7 @@ const sampleDocuments: DocumentRead[] = [
   {
     acceptance_step_id: null,
     created_at: '2026-05-10T02:00:00Z',
+    display_name: 'contract-v2.pdf',
     doc_no: 'DOC-2',
     doc_type: 'contract',
     file_name: 'contract-v2.pdf',
@@ -311,6 +312,7 @@ const sampleDocuments: DocumentRead[] = [
   {
     acceptance_step_id: null,
     created_at: '2026-05-10T01:00:00Z',
+    display_name: 'contract-v1.pdf',
     doc_no: 'DOC-1',
     doc_type: 'contract',
     file_name: 'contract-v1.pdf',
@@ -330,6 +332,7 @@ const sampleDocuments: DocumentRead[] = [
   {
     acceptance_step_id: null,
     created_at: '2026-05-10T03:00:00Z',
+    display_name: 'meeting-v1.pdf',
     doc_no: 'DOC-3',
     doc_type: 'meeting_minutes',
     file_name: 'meeting-v1.pdf',
@@ -352,6 +355,7 @@ const previewDocuments: DocumentRead[] = [
   sampleDocuments[0],
   {
     ...sampleDocuments[2],
+    display_name: 'meeting-v1.docx',
     doc_type: 'meeting_minutes',
     file_name: 'meeting-v1.docx',
   },
@@ -362,6 +366,7 @@ const officePreviewDocuments: DocumentRead[] = (
 ).map((extension) => ({
   acceptance_step_id: null,
   created_at: '2026-05-10T04:00:00Z',
+  display_name: `sample.${extension}`,
   doc_no: `OFFICE-${extension}`,
   doc_type: `office_${extension}`,
   file_name: `sample.${extension}`,
@@ -390,6 +395,10 @@ const stubs = {
       '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
   },
   ElEmpty: { props: ['description'], template: '<section>{{ description }}</section>' },
+  ElInput: {
+    props: ['modelValue', 'placeholder'],
+    template: '<input :value="modelValue" :placeholder="placeholder" />',
+  },
   ElDialog: {
     props: ['modelValue'],
     template:

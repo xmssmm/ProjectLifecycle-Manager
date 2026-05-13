@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.api.v1.phases import get_phase_service
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
-from app.core.exceptions import BusinessException, PermissionDeniedError
+from app.core.exceptions import BusinessException
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.documents import Document
@@ -219,6 +219,94 @@ def make_service(
         today_provider=lambda: date(2026, 5, 10),
     )
     return service, repository, notification_repository
+
+
+@pytest.mark.asyncio
+async def test_update_procurement_type_only_allows_procurement_phase() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    member = make_user(UserRole.proj_member, username="member")
+    sub_project = make_sub_project(leader)
+    initiation = make_phase(sub_project, 1, PhaseStatus.in_progress)
+    procurement = make_phase(sub_project, 2, PhaseStatus.in_progress, procurement_type=None)
+    service, _repository, _notifications = make_service(
+        sub_projects=[sub_project],
+        phases=[initiation, procurement],
+        templates=[],
+        members=[make_member(sub_project, member)],
+    )
+
+    updated = await service.update_procurement_type(
+        actor=member,
+        phase_id=procurement.id,
+        procurement_type=ProcurementType.inquiry,
+    )
+
+    assert updated.procurement_type == ProcurementType.inquiry
+
+    with pytest.raises(BusinessException) as exc:
+        await service.update_procurement_type(
+            actor=leader,
+            phase_id=initiation.id,
+            procurement_type=ProcurementType.bidding,
+        )
+
+    assert exc.value.code == 3003
+    assert exc.value.data["phase_no"] == 1
+
+
+@pytest.mark.asyncio
+async def test_promote_inquiry_procurement_requires_three_supplier_quotes() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase1 = make_phase(sub_project, 1, PhaseStatus.completed)
+    phase2 = make_phase(
+        sub_project,
+        2,
+        PhaseStatus.in_progress,
+        procurement_type=ProcurementType.inquiry,
+    )
+    service, _repository, _notifications = make_service(
+        sub_projects=[sub_project],
+        phases=[phase1, phase2],
+        templates=[
+            make_template(2, "oa_screenshot", PhaseDocRequirement.required, "=1"),
+            make_template(
+                2,
+                "supplier_quote",
+                PhaseDocRequirement.conditional,
+                ">=3",
+                ProcurementType.inquiry,
+            ),
+        ],
+        documents=[
+            make_document(
+                sub_project=sub_project,
+                phase=phase2,
+                uploader=leader,
+                doc_type="oa_screenshot",
+            ),
+            make_document(
+                sub_project=sub_project,
+                phase=phase2,
+                uploader=leader,
+                doc_type="supplier_quote",
+            ),
+            make_document(
+                sub_project=sub_project,
+                phase=phase2,
+                uploader=leader,
+                doc_type="supplier_quote",
+            ),
+        ],
+    )
+
+    with pytest.raises(BusinessException) as exc:
+        await service.promote_phase(actor=leader, phase_id=phase2.id)
+
+    assert exc.value.code == 3002
+    assert exc.value.data["missing_documents"] == [
+        {"doc_type": "supplier_quote", "required": ">=3", "actual": 2},
+    ]
 
 
 @pytest.mark.asyncio
@@ -445,7 +533,7 @@ async def test_promote_post_review_requires_acceptance_completed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_promote_phase_denies_non_leader_project_member() -> None:
+async def test_project_member_can_promote_assigned_phase() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
     member = make_user(UserRole.proj_member, username="member")
     sub_project = make_sub_project(leader)
@@ -453,12 +541,62 @@ async def test_promote_phase_denies_non_leader_project_member() -> None:
     service, _repository, _notifications = make_service(
         sub_projects=[sub_project],
         phases=[phase1],
-        templates=[],
+        templates=[
+            make_template(1, "meeting_material", PhaseDocRequirement.required, "=1"),
+            make_template(1, "meeting_minutes", PhaseDocRequirement.required, "=1"),
+        ],
+        documents=[
+            make_document(
+                sub_project=sub_project,
+                phase=phase1,
+                uploader=member,
+                doc_type="meeting_material",
+            ),
+            make_document(
+                sub_project=sub_project,
+                phase=phase1,
+                uploader=member,
+                doc_type="meeting_minutes",
+            ),
+        ],
         members=[make_member(sub_project, member)],
     )
 
-    with pytest.raises(PermissionDeniedError):
-        await service.promote_phase(actor=member, phase_id=phase1.id)
+    result = await service.promote_phase(actor=member, phase_id=phase1.id)
+
+    assert result.phase.status == PhaseStatus.completed
+
+
+@pytest.mark.asyncio
+async def test_payment_phase_can_complete_before_post_review_when_voucher_uploaded() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase1 = make_phase(sub_project, 1, PhaseStatus.completed)
+    phase2 = make_phase(sub_project, 2, PhaseStatus.completed)
+    phase3 = make_phase(sub_project, 3, PhaseStatus.completed)
+    phase4 = make_phase(sub_project, 4, PhaseStatus.completed)
+    phase5 = make_phase(sub_project, 5, PhaseStatus.in_progress)
+    phase6 = make_phase(sub_project, 6, PhaseStatus.waiting)
+    service, _repository, _notifications = make_service(
+        sub_projects=[sub_project],
+        phases=[phase1, phase2, phase3, phase4, phase5, phase6],
+        templates=[
+            make_template(5, "payment_voucher", PhaseDocRequirement.required, "per_payment>=1"),
+        ],
+        documents=[
+            make_document(
+                sub_project=sub_project,
+                phase=phase5,
+                uploader=leader,
+                doc_type="payment_voucher",
+            ),
+        ],
+    )
+
+    result = await service.promote_phase(actor=leader, phase_id=phase5.id)
+
+    assert result.phase.status == PhaseStatus.completed
+    assert sub_project.status != SubProjectStatus.completed
 
 
 def test_phase_promote_endpoint_returns_current_and_activated_phase() -> None:

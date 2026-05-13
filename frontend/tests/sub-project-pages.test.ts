@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createSubProject,
   addSubProjectMember,
+  closeSubProject,
   getSubProject,
   listSubProjectMembers,
   listSubProjects,
@@ -21,6 +22,7 @@ import SubProjectReview from '@/views/sub-project/SubProjectReview.vue';
 
 vi.mock('@/api/subProjects', () => ({
   addSubProjectMember: vi.fn(),
+  closeSubProject: vi.fn(),
   createSubProject: vi.fn(),
   getSubProject: vi.fn(),
   listSubProjectMembers: vi.fn(),
@@ -64,6 +66,7 @@ describe('sub project pages', () => {
       total: 1,
     });
     vi.mocked(createSubProject).mockResolvedValue(sampleSubProject);
+    vi.mocked(closeSubProject).mockResolvedValue({ ...sampleSubProject, status: 'closed' });
     vi.mocked(addSubProjectMember).mockResolvedValue(sampleMember);
     vi.mocked(removeSubProjectMember).mockResolvedValue(sampleMember);
     vi.mocked(submitSubProject).mockResolvedValue(sampleSubProject);
@@ -113,6 +116,30 @@ describe('sub project pages', () => {
     await flushPromises();
 
     expect(terminateSubProject).toHaveBeenCalledWith('sub-1', { reason: '需求取消' });
+  });
+
+  it('lets a department manager close a completed sub project', async () => {
+    const authStore = useAuthStore();
+    authStore.setUser({
+      deptId: 'dept-b',
+      email: null,
+      id: 'manager-1',
+      role: 'dept_manager',
+      status: 'active',
+      username: 'manager',
+    });
+    vi.mocked(getSubProject).mockResolvedValue({ ...sampleSubProject, status: 'completed' });
+    const wrapper = mount(SubProjectDetail, {
+      global: { stubs },
+      props: { subProjectId: 'sub-1' },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="open-close-sub-project"]').trigger('click');
+    await wrapper.find('[data-test="confirm-close-sub-project"]').trigger('click');
+    await flushPromises();
+
+    expect(closeSubProject).toHaveBeenCalledWith('sub-1');
   });
 
   it('lets project leader add and remove sub project members', async () => {
@@ -252,12 +279,18 @@ const stubs = {
   ConfirmDialog: {
     props: ['modelValue', 'message', 'title'],
     template:
-      '<section v-if="modelValue" data-test="confirm-dialog">{{ title }}{{ message }}<slot /><button data-test="confirm-submit" @click="$emit(\'confirm\')">确认</button><button data-test="confirm-terminate" @click="$emit(\'confirm\')">中止</button></section>',
+      '<section v-if="modelValue" data-test="confirm-dialog">{{ title }}{{ message }}<slot /><button data-test="confirm-submit" @click="$emit(\'confirm\')">确认</button><button data-test="confirm-terminate" @click="$emit(\'confirm\')">中止</button><button data-test="confirm-close-sub-project" @click="$emit(\'confirm\')">结项</button></section>',
   },
   DataTable: {
     props: ['columns', 'loading', 'page', 'pageSize', 'rows', 'total'],
     template:
       '<section><article v-for="row in rows" :key="row.id"><span>{{ row.project_no }}</span><span>{{ row.name }}</span><slot name="status" :row="row" :value="row.status" /><slot name="actions" :row="row" /></article></section>',
+  },
+  DepartmentSelect: {
+    inheritAttrs: false,
+    props: ['modelValue'],
+    template:
+      '<input v-bind="$attrs" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
   ElAlert: { props: ['title'], template: '<section>{{ title }}</section>' },
   ElButton: { template: '<button type="button" @click="$emit(\'click\')"><slot /></button>' },
@@ -294,6 +327,12 @@ const stubs = {
       '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
   },
   ElSkeleton: { template: '<section><slot /></section>' },
+  MainProjectSelect: {
+    inheritAttrs: false,
+    props: ['modelValue'],
+    template:
+      '<input v-bind="$attrs" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+  },
   PhaseDocumentPanel: { template: '<section />' },
   PhaseProgress: { template: '<section />' },
   RouterLink: { props: ['to'], template: '<a><slot /></a>' },

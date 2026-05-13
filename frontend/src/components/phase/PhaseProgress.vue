@@ -95,6 +95,9 @@ function extractErrorMessage(error: unknown): string {
     </div>
 
     <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
+    <p class="phase-progress__hint">
+      需要查看缺失材料时，请在下方环节材料区处理并推进。
+    </p>
     <MobileReadOnlyNotice
       data-test="mobile-read-only-phase"
       message="移动端仅支持查看环节进度，请切换到 PC 端推进环节。"

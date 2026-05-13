@@ -24,6 +24,7 @@ from app.models.sub_projects import (
     SubProjectStatus,
 )
 from app.models.users import User, UserRole, UserStatus
+from app.schemas.documents import DocumentRead
 from app.services.documents import DocumentService, InMemoryDocumentRepository
 from app.storage.base import StorageBackend, StorageSecurityError
 
@@ -160,6 +161,7 @@ def test_document_model_has_group_version_unique_constraint_and_latest_index() -
         "acceptance_step_id",
         "doc_type",
         "file_name",
+        "display_name",
         "file_path",
         "file_size",
         "version",
@@ -176,6 +178,18 @@ def test_document_model_has_group_version_unique_constraint_and_latest_index() -
         index.name == "uq_documents_latest_per_group" and index.unique
         for index in table.indexes
     )
+
+
+def test_document_read_exposes_display_name() -> None:
+    uploader = make_user(UserRole.proj_member, username="member")
+    sub_project = make_sub_project(uploader)
+    phase = make_phase(sub_project)
+    document = make_document(sub_project=sub_project, phase=phase, uploader=uploader)
+    document.display_name = "Main Contract Scan"
+
+    payload = DocumentRead.model_validate(document).model_dump()
+
+    assert payload["display_name"] == "Main Contract Scan"
 
 
 @pytest.mark.asyncio
@@ -237,6 +251,33 @@ async def test_document_service_uploads_versions_and_flips_latest_atomically() -
 
     assert [document.version for document in latest] == [2]
     assert [document.version for document in history] == [2, 1]
+
+
+@pytest.mark.asyncio
+async def test_upload_document_persists_display_name() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase = make_phase(sub_project)
+    storage = RecordingStorage()
+    repository = InMemoryDocumentRepository(sub_projects=[sub_project], phases=[phase])
+    service = DocumentService(
+        repository=repository,
+        storage=storage,
+        max_file_size_bytes=1024,
+    )
+
+    document = await service.upload_document(
+        actor=leader,
+        sub_project_id=sub_project.id,
+        phase_id=phase.id,
+        doc_type="contract",
+        file_name="uuid-contract.pdf",
+        content_type="application/pdf",
+        content=b"%PDF-1.7\ncontract",
+        display_name="Main Contract Scan",
+    )
+
+    assert document.display_name == "Main Contract Scan"
 
 
 @pytest.mark.asyncio
@@ -330,6 +371,7 @@ def test_document_upload_and_list_endpoints_return_doc_id_and_version() -> None:
             phase_id: UUID,
             doc_type: str,
             file_name: str,
+            display_name: str | None = None,
             content_type: str | None,
             content: bytes,
             acceptance_step_id: UUID | None = None,
@@ -341,6 +383,7 @@ def test_document_upload_and_list_endpoints_return_doc_id_and_version() -> None:
             assert phase_id == phase.id
             assert doc_type == document.doc_type
             assert file_name == "meeting.pdf"
+            assert display_name is None
             assert content_type == "application/pdf"
             assert content == b"file-bytes"
             assert acceptance_step_id is None

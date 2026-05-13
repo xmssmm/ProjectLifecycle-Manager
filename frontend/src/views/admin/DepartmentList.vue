@@ -32,6 +32,7 @@ const selectedDepartment = ref<DepartmentRead | null>(null);
 const submitting = ref(false);
 
 const columns = [
+  { key: 'id', label: '部门 ID', minWidth: 260 },
   { key: 'code', label: '部门编码', minWidth: 160 },
   { key: 'name', label: '部门名称', minWidth: 200 },
   { key: 'updated_at', label: '更新时间', width: 180 },

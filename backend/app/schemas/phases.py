@@ -27,6 +27,12 @@ class PhaseListRead(BaseModel):
     total: int
 
 
+class PhaseProcurementTypeUpdate(BaseModel):
+    procurement_type: ProcurementType
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class PhaseDocTemplateRead(BaseModel):
     id: UUID
     phase_no: int

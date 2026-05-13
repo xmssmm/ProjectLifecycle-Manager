@@ -96,7 +96,7 @@ def test_procurement_phase_definitions_cover_existing_phase_doc_templates() -> N
 
     assert len(documents) == len(PHASE_DOC_TEMPLATES)
     assert ("meeting_material", "required", None) in documents
-    assert ("inquiry_report", "conditional", "inquiry") in documents
+    assert ("supplier_quote", "conditional", "inquiry") in documents
     assert ("bid_document", "conditional", "bidding") in documents
     assert ("single_source_report", "conditional", "single_source") in documents
     assert ("post_review_report", "required", None) in documents

@@ -68,6 +68,7 @@ async def upload_document(
     phase_id: Annotated[UUID, Form()],
     doc_type: Annotated[str, Form()],
     acceptance_step_id: Annotated[UUID | None, Form()] = None,
+    display_name: Annotated[str | None, Form()] = None,
 ) -> dict[str, object]:
     content = await file.read()
     document = await service.upload_document(
@@ -76,6 +77,7 @@ async def upload_document(
         phase_id=phase_id,
         doc_type=doc_type,
         file_name=file.filename or "",
+        display_name=display_name,
         content_type=file.content_type,
         content=content,
         acceptance_step_id=acceptance_step_id,

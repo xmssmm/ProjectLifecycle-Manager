@@ -74,6 +74,17 @@ describe('frontend permissions', () => {
     expect(denied.text()).toBe('fallback');
   });
 
+  it('lets project members see phase operation permissions for assigned work', () => {
+    setUser('proj_member');
+
+    const allowed = mount(PermissionGate, {
+      props: { permission: 'phase.promote' },
+      slots: { default: 'allowed', fallback: 'fallback' },
+    });
+
+    expect(allowed.text()).toBe('allowed');
+  });
+
   it('sidebar hides admin-only entries for project members', () => {
     setUser('proj_member');
 

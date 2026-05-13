@@ -6,6 +6,8 @@ import type {
   PhaseListQuery,
   PhaseListRead,
   PhasePromotionRead,
+  PhaseRead,
+  ProcurementType,
 } from '@/types/phases';
 
 interface ApiResponse<T> {
@@ -37,5 +39,17 @@ export async function promotePhase(
   client: AxiosInstance = apiClient,
 ): Promise<PhasePromotionRead> {
   const response = await client.post<ApiResponse<PhasePromotionRead>>(`/phases/${phaseId}/promote`);
+  return response.data.data;
+}
+
+export async function updateProcurementType(
+  phaseId: string,
+  procurementType: ProcurementType,
+  client: AxiosInstance = apiClient,
+): Promise<PhaseRead> {
+  const response = await client.put<ApiResponse<PhaseRead>>(
+    `/phases/${phaseId}/procurement-type`,
+    { procurement_type: procurementType },
+  );
   return response.data.data;
 }

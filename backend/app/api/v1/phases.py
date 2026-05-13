@@ -16,6 +16,7 @@ from app.schemas.phases import (
     PhaseCompletionRead,
     PhaseDetailRead,
     PhaseListRead,
+    PhaseProcurementTypeUpdate,
     PhasePromotionRead,
     PhaseRead,
     PhaseRequiredDocumentRead,
@@ -110,6 +111,21 @@ async def get_phase(
 ) -> dict[str, object]:
     detail = await service.get_phase(actor=current_user, phase_id=phase_id)
     return success_response(serialize_phase_detail(detail))
+
+
+@router.put("/{phase_id}/procurement-type")
+async def update_procurement_type(
+    phase_id: UUID,
+    payload: PhaseProcurementTypeUpdate,
+    service: Annotated[PhaseService, Depends(get_phase_service)],
+    current_user: Annotated[User, Depends(require_permission("phase.promote"))],
+) -> dict[str, object]:
+    phase = await service.update_procurement_type(
+        actor=current_user,
+        phase_id=phase_id,
+        procurement_type=payload.procurement_type,
+    )
+    return success_response(serialize_phase(phase))
 
 
 @router.post("/{phase_id}/promote")

@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { MobileReadOnlyNotice, StatusTag } from '@/components/common';
+import DepartmentSelect from '@/components/form/DepartmentSelect.vue';
 import { usePermission } from '@/composables/usePermission';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
@@ -53,7 +54,9 @@ const form = reactive<FormState>({
 
 const project = computed(() => mainProjectStore.currentProject);
 const selfReviewBlocked = computed(
-  () => project.value?.creator_id === authStore.user?.id && authStore.user?.role !== 'admin',
+  () =>
+    project.value?.creator_id === authStore.user?.id &&
+    !['admin', 'dept_manager'].includes(authStore.user?.role ?? ''),
 );
 const canSubmitReview = computed(
   () =>
@@ -94,7 +97,7 @@ const diffRows = computed<DiffRow[]>(() => {
 
 const diffFields: Array<{ field: keyof MainProjectUpdatePayload; label: string }> = [
   { field: 'name', label: '项目名称' },
-  { field: 'dept_id', label: '部门 ID' },
+  { field: 'dept_id', label: '责任部门' },
   { field: 'total_budget', label: '总预算' },
   { field: 'expected_finish_date', label: '预计完成' },
   { field: 'remark', label: '备注' },
@@ -216,8 +219,8 @@ function readErrorMessage(error: unknown, fallback: string): string {
           <el-form-item label="项目名称">
             <el-input v-model="form.name" data-test="review-name" maxlength="200" />
           </el-form-item>
-          <el-form-item label="部门 ID">
-            <el-input v-model="form.dept_id" data-test="review-dept" />
+          <el-form-item label="责任部门">
+            <DepartmentSelect v-model="form.dept_id" data-test="review-dept" />
           </el-form-item>
           <el-form-item label="总预算">
             <el-input-number

@@ -46,7 +46,18 @@ const canReviewProject = computed(
     can('main_project.review') &&
     (project.value.creator_id !== authStore.user?.id || authStore.user?.role === 'admin'),
 );
+const finishedSubProjectStatuses = new Set(['completed', 'closed', 'terminated']);
+const canCloseProject = computed(
+  () =>
+    Boolean(project.value) &&
+    can('main_project.close') &&
+    project.value?.status !== 'closed' &&
+    mainProjectStore.currentSubProjects.every((subProject) =>
+      finishedSubProjectStatuses.has(subProject.status),
+    ),
+);
 const submitConfirmVisible = ref(false);
+const closeConfirmVisible = ref(false);
 
 const subProjectColumns = [
   { key: 'project_no', label: '子项目编号', minWidth: 180 },
@@ -76,6 +87,14 @@ async function submitProject(): Promise<void> {
   }
   await mainProjectStore.submitMainProject(project.value.id);
   ElMessage.success('主项目已提交审核');
+}
+
+async function closeProject(): Promise<void> {
+  if (!project.value || !canCloseProject.value) {
+    return;
+  }
+  await mainProjectStore.closeMainProject(project.value.id);
+  ElMessage.success('主项目已结项');
 }
 
 function formatMoney(value: unknown): string {
@@ -132,6 +151,14 @@ function timelineTitle(status: ProjectStatus): string {
       >
         <el-button type="primary">审核</el-button>
       </router-link>
+      <el-button
+        v-if="project && canCloseProject"
+        data-test="open-close-main-project"
+        type="success"
+        @click="closeConfirmVisible = true"
+      >
+        结项
+      </el-button>
     </div>
 
     <el-skeleton v-if="mainProjectStore.detailLoading && !project" animated />
@@ -143,12 +170,23 @@ function timelineTitle(status: ProjectStatus): string {
           <el-descriptions-item label="状态">
             <StatusTag :status="project.status" />
           </el-descriptions-item>
-          <el-descriptions-item label="部门">{{ project.dept_id }}</el-descriptions-item>
+          <el-descriptions-item label="责任部门">
+            {{ project.dept_name || project.dept_id }}
+          </el-descriptions-item>
+          <el-descriptions-item label="创建人">
+            {{ project.creator_name || project.creator_id || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="创建时间">
+            {{ formatDate(project.created_at) }}
+          </el-descriptions-item>
           <el-descriptions-item label="总预算">
             {{ formatMoney(project.total_budget) }}
           </el-descriptions-item>
           <el-descriptions-item label="已付款">
             {{ formatMoney(project.spent_amount) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="剩余额度">
+            {{ formatMoney(project.remaining_amount) }}
           </el-descriptions-item>
           <el-descriptions-item label="预计完成">
             {{ formatDate(project.expected_finish_date) }}
@@ -214,6 +252,13 @@ function timelineTitle(status: ProjectStatus): string {
       message="提交后将通知审核人处理，审核前请确认项目信息无误。"
       title="提交主项目审核"
       @confirm="submitProject"
+    />
+    <ConfirmDialog
+      v-model="closeConfirmVisible"
+      confirm-text="确认结项"
+      message="所有子项目已完成或结项，确认后主项目将进入已结项状态。"
+      title="主项目结项"
+      @confirm="closeProject"
     />
   </section>
 </template>

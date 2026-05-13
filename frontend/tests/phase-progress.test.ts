@@ -11,6 +11,7 @@ vi.mock('@/api/phases', () => ({
   getPhase: vi.fn(),
   listPhases: vi.fn(),
   promotePhase: vi.fn(),
+  updateProcurementType: vi.fn(),
 }));
 
 describe('PhaseProgress', () => {

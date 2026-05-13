@@ -117,6 +117,7 @@ function classificationResult(
 const sampleDocument: DocumentRead = {
   acceptance_step_id: null,
   created_at: '2026-05-10T02:00:00Z',
+  display_name: '采购合同.pdf',
   doc_no: 'DOC-1',
   doc_type: 'meeting_material',
   file_name: '采购合同.pdf',
@@ -138,6 +139,10 @@ const stubs = {
   ElAlert: {
     props: ['description', 'title'],
     template: '<section>{{ title }}{{ description }}</section>',
+  },
+  ElInput: {
+    props: ['modelValue', 'placeholder'],
+    template: '<input :value="modelValue" :placeholder="placeholder" />',
   },
   ElProgress: { props: ['percentage'], template: '<span>{{ percentage }}%</span>' },
 };

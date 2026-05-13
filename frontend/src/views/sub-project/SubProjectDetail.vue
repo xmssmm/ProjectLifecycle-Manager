@@ -16,6 +16,7 @@ const props = defineProps<{
 const authStore = useAuthStore();
 const subProjectStore = useSubProjectStore();
 const { can, hasRole } = usePermission();
+const closeDialogVisible = ref(false);
 const terminateDialogVisible = ref(false);
 const terminateReason = ref('');
 const memberUserId = ref('');
@@ -43,7 +44,15 @@ const canTerminate = computed(() => {
   return (
     Boolean(currentSubProject) &&
     hasRole(['admin', 'dept_manager']) &&
-    !['closed', 'terminated'].includes(currentSubProject?.status ?? '')
+    !['completed', 'closed', 'terminated'].includes(currentSubProject?.status ?? '')
+  );
+});
+const canCloseSubProject = computed(() => {
+  const currentSubProject = subProject.value;
+  return Boolean(
+    currentSubProject &&
+      hasRole(['dept_manager']) &&
+      currentSubProject.status === 'completed',
   );
 });
 const canRequestRevoke = computed(() => {
@@ -98,6 +107,19 @@ async function terminateSubProject(): Promise<void> {
     });
     ElMessage.success('子项目已中止');
     terminateReason.value = '';
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function closeSubProject(): Promise<void> {
+  if (!subProject.value || !canCloseSubProject.value) {
+    return;
+  }
+  submitting.value = true;
+  try {
+    await subProjectStore.closeSubProject(subProject.value.id);
+    ElMessage.success('子项目已结项');
   } finally {
     submitting.value = false;
   }
@@ -204,6 +226,14 @@ function formatDate(value: unknown): string {
       >
         中止
       </el-button>
+      <el-button
+        v-if="subProject && canCloseSubProject"
+        data-test="open-close-sub-project"
+        type="success"
+        @click="closeDialogVisible = true"
+      >
+        结项
+      </el-button>
     </div>
 
     <el-skeleton v-if="subProjectStore.detailLoading && !subProject" animated />
@@ -218,19 +248,22 @@ function formatDate(value: unknown): string {
             <StatusTag :status="subProject.status" />
           </el-descriptions-item>
           <el-descriptions-item label="主项目">
-            {{ subProject.main_project_id }}
+            {{ subProject.main_project_name || subProject.main_project_id }}
           </el-descriptions-item>
-          <el-descriptions-item label="部门">
-            {{ subProject.dept_id }}
+          <el-descriptions-item label="责任部门">
+            {{ subProject.dept_name || subProject.dept_id }}
           </el-descriptions-item>
           <el-descriptions-item label="负责人">
-            {{ subProject.manager_id }}
+            {{ subProject.manager_name || subProject.manager_id }}
           </el-descriptions-item>
           <el-descriptions-item label="预算">
             {{ formatMoney(subProject.budget) }}
           </el-descriptions-item>
           <el-descriptions-item label="已付款">
             {{ formatMoney(subProject.spent_amount) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="剩余额度">
+            {{ formatMoney(subProject.remaining_amount) }}
           </el-descriptions-item>
           <el-descriptions-item label="计划完成">
             {{ formatDate(subProject.plan_end_date) }}
@@ -318,5 +351,12 @@ function formatDate(value: unknown): string {
     >
       <el-input v-model="terminateReason" data-test="terminate-reason" />
     </ConfirmDialog>
+    <ConfirmDialog
+      v-model="closeDialogVisible"
+      confirm-text="确认结项"
+      message="6 个环节已完成，确认后子项目将进入已结项状态。"
+      title="子项目结项"
+      @confirm="closeSubProject"
+    />
   </section>
 </template>

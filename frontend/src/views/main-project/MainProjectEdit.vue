@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { ConfirmDialog } from '@/components/common';
+import DepartmentSelect from '@/components/form/DepartmentSelect.vue';
 import { useMainProjectStore } from '@/stores/useMainProjectStore';
 import type {
   MainProjectCreatePayload,
@@ -191,8 +192,8 @@ function readErrorMessage(error: unknown, fallback: string): string {
         <el-form-item label="项目名称" :error="errors.name">
           <el-input v-model="form.name" data-test="project-name" maxlength="200" />
         </el-form-item>
-        <el-form-item label="部门 ID" :error="errors.dept_id">
-          <el-input v-model="form.dept_id" data-test="project-dept" />
+        <el-form-item label="责任部门" :error="errors.dept_id">
+          <DepartmentSelect v-model="form.dept_id" data-test="project-dept" />
         </el-form-item>
         <el-form-item label="总预算" :error="errors.total_budget">
           <el-input-number

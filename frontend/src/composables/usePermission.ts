@@ -92,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionCode[]> = {
     'project.view_own',
   ],
   proj_member: [
+    'phase.promote',
     'acceptance_step.complete',
     'document.upload',
     'document.download',

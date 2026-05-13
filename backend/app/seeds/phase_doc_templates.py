@@ -23,9 +23,9 @@ PHASE_DOC_TEMPLATES = (
     PhaseDocTemplateSeed(2, "oa_screenshot", PhaseDocRequirement.required, "=1"),
     PhaseDocTemplateSeed(
         2,
-        "inquiry_report",
+        "supplier_quote",
         PhaseDocRequirement.conditional,
-        ">=1",
+        ">=3",
         ProcurementType.inquiry,
     ),
     PhaseDocTemplateSeed(
