@@ -13,6 +13,7 @@ import {
   type DocumentRead,
   type DocumentUploadPayload,
 } from '@/types/documents';
+import { documentLabel } from '@/utils/documentLabels';
 
 const props = withDefaults(
   defineProps<{
@@ -42,6 +43,23 @@ const progress = ref(0);
 const suggestedType = ref<DocumentTypeSuggestion | null>(null);
 const suggesting = ref(false);
 const uploading = ref(false);
+const allowedFileExtensions = new Set([
+  '.jpg',
+  '.png',
+  '.bmp',
+  '.jpeg',
+  '.doc',
+  '.docx',
+  '.pdf',
+  '.xls',
+  '.xlsx',
+  '.zip',
+  '.rar',
+  '.7z',
+]);
+const acceptedFileTypes = [...allowedFileExtensions].join(',');
+const uploadFormatError =
+  '文件上传格式不对，请上传 .jpg .png .bmp .jpeg .doc .docx .pdf .xls .xlsx .zip .rar .7z 格式文件！';
 
 const hasRetry = computed(() => Boolean(errorMessage.value && lastFile.value && !uploading.value));
 const hasSuggestion = computed(() =>
@@ -153,6 +171,8 @@ async function uploadFile(file: File, docType: string, auditConfirmation = false
       ? await confirmDocumentType(document.id, docType).catch(() => document)
       : document;
     displayName.value = '';
+    lastFile.value = null;
+    progress.value = 0;
     emit('uploaded', confirmedDocument);
   } catch (error) {
     const message = extractUploadError(error);
@@ -167,12 +187,19 @@ function validateFile(file: File): string {
   if (file.size > props.maxFileSizeBytes) {
     return `文件大小超过 ${formatFileSize(props.maxFileSizeBytes)} 上限`;
   }
+  if (!allowedFileExtensions.has(fileExtension(file.name))) {
+    return uploadFormatError;
+  }
   return '';
 }
 
 function extractUploadError(error: unknown): string {
   const response = (error as { response?: { data?: unknown } }).response;
   const data = response?.data as { data?: Record<string, unknown>; message?: string } | undefined;
+  const rejectionMessage = data?.data?.rejection_message;
+  if (typeof rejectionMessage === 'string' && rejectionMessage) {
+    return rejectionMessage;
+  }
   const reason = data?.data?.rejection_reason;
   if (typeof reason === 'string' && reason) {
     return reason;
@@ -188,6 +215,11 @@ function formatFileSize(bytes: number): string {
     return `${Math.round(bytes / 1024)}KB`;
   }
   return `${Math.round(bytes / 1024 / 1024)}MB`;
+}
+
+function fileExtension(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf('.');
+  return dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : '';
 }
 </script>
 
@@ -209,9 +241,9 @@ function formatFileSize(bytes: number): string {
       @drop.prevent="handleDrop"
     >
       <!-- prettier-ignore -->
-      <input class="sr-only" data-test="document-file-input" type="file" @change="handleFileChange">
+      <input class="sr-only" :accept="acceptedFileTypes" data-test="document-file-input" type="file" @change="handleFileChange">
       <UploadFilled class="document-uploader__icon" />
-      <span class="document-uploader__title">{{ docType }}</span>
+      <span class="document-uploader__title">{{ documentLabel(docType) }}</span>
       <span v-if="suggesting" class="document-uploader__meta">正在识别文档类型...</span>
       <span class="document-uploader__meta">{{ lastFile?.name ?? '选择或拖入文件' }}</span>
     </label>
@@ -232,7 +264,7 @@ function formatFileSize(bytes: number): string {
         </button>
         <button data-test="ignore-document-type" type="button" @click="ignoreSuggestedType">
           <Close class="document-uploader__action-icon" />
-          仍按 {{ docType }}
+          仍按 {{ documentLabel(docType) }}
         </button>
       </div>
     </section>
@@ -273,8 +305,8 @@ function formatFileSize(bytes: number): string {
 .document-uploader__drop-zone {
   display: grid;
   place-items: center;
-  min-height: 148px;
-  padding: 18px;
+  min-height: 96px;
+  padding: 12px;
   border: 1px dashed #b8c3d3;
   border-radius: 8px;
   color: #475467;

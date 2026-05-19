@@ -20,6 +20,7 @@ export interface DocumentRead {
   sub_project_id: string;
   updated_at: string;
   uploader_id: string;
+  uploader_name?: string | null;
   version: number;
 }
 

@@ -21,6 +21,7 @@ const terminateDialogVisible = ref(false);
 const terminateReason = ref('');
 const memberUserId = ref('');
 const memberSubmitting = ref(false);
+const phasePanelRefreshKey = ref(0);
 const submitting = ref(false);
 
 const subProject = computed(() => subProjectStore.currentSubProject);
@@ -50,9 +51,7 @@ const canTerminate = computed(() => {
 const canCloseSubProject = computed(() => {
   const currentSubProject = subProject.value;
   return Boolean(
-    currentSubProject &&
-      hasRole(['dept_manager']) &&
-      currentSubProject.status === 'completed',
+    currentSubProject && hasRole(['dept_manager']) && currentSubProject.status === 'completed',
   );
 });
 const canRequestRevoke = computed(() => {
@@ -61,7 +60,7 @@ const canRequestRevoke = computed(() => {
     currentSubProject &&
     authStore.user?.role === 'proj_leader' &&
     currentSubProject.manager_id === authStore.user.id &&
-    !['closed', 'terminated'].includes(currentSubProject.status),
+    !['completed', 'closed', 'terminated'].includes(currentSubProject.status),
   );
 });
 const canManageMembers = computed(() => {
@@ -163,6 +162,11 @@ function canRemoveMember(member: SubProjectMemberRead): boolean {
     member.role_in_project !== 'proj_leader' &&
     member.user_id !== authStore.user?.id
   );
+}
+
+async function handlePhasePromoted(): Promise<void> {
+  phasePanelRefreshKey.value += 1;
+  await loadSubProject();
 }
 
 function memberRoleLabel(member: SubProjectMemberRead): string {
@@ -274,9 +278,9 @@ function formatDate(value: unknown): string {
         </el-descriptions>
       </section>
 
-      <PhaseProgress :sub-project-id="subProject.id" />
+      <PhaseProgress :sub-project-id="subProject.id" @promoted="handlePhasePromoted" />
 
-      <PhaseDocumentPanel :sub-project-id="subProject.id" />
+      <PhaseDocumentPanel :key="phasePanelRefreshKey" :sub-project-id="subProject.id" />
 
       <section class="project-detail-band">
         <div class="project-detail-band__header">

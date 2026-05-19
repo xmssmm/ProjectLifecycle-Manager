@@ -117,6 +117,24 @@ def test_file_validator_allows_valid_pdf() -> None:
 
 
 @pytest.mark.parametrize(
+    ("filename", "content_type", "content"),
+    [
+        ("photo.bmp", "image/bmp", b"BM\x00\x00"),
+        ("archive.rar", "application/vnd.rar", b"Rar!\x1a\x07\x00payload"),
+        ("archive.7z", "application/x-7z-compressed", b"7z\xbc\xaf\x27\x1cpayload"),
+    ],
+)
+def test_file_validator_allows_v3_whitelist_extensions(
+    filename: str,
+    content_type: str,
+    content: bytes,
+) -> None:
+    validator = DefaultFileValidator()
+
+    validator.validate(filename=filename, content_type=content_type, content=content)
+
+
+@pytest.mark.parametrize(
     ("filename", "content_type", "content", "reason"),
     [
         ("notes.txt", "text/plain", b"hello", "extension_not_allowed"),
@@ -136,7 +154,11 @@ def test_file_validator_rejects_extension_mime_and_magic_failures(
         validator.validate(filename=filename, content_type=content_type, content=content)
 
     assert exc.value.reason == reason
-    assert exc.value.data == {"rejection_reason": reason}
+    assert exc.value.message == (
+        "文件上传格式不对，请上传 "
+        ".jpg .png .bmp .jpeg .doc .docx .pdf .xls .xlsx .zip .rar .7z 格式文件！"
+    )
+    assert exc.value.data["rejection_reason"] == reason
 
 
 def test_file_validator_rejects_zip_containing_blocked_extension() -> None:

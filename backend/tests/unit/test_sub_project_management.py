@@ -399,6 +399,26 @@ async def test_project_leader_adds_lists_and_removes_members() -> None:
 
 
 @pytest.mark.asyncio
+async def test_completed_sub_project_locks_member_changes() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    member = make_user(UserRole.proj_member, username="member")
+    main_project = make_main_project()
+    service, repository = make_service(main_projects=[main_project], users=[leader, member])
+    sub_project = await service.create_sub_project(actor=leader, payload=make_payload(main_project))
+    sub_project.status = SubProjectStatus.completed
+
+    with pytest.raises(BusinessException) as add_blocked:
+        await service.add_sub_project_member(
+            actor=leader,
+            sub_project_id=sub_project.id,
+            payload=SubProjectMemberCreate(user_id=member.id),
+        )
+
+    assert add_blocked.value.message == "已完成或已结项子项目不允许变更成员"
+    assert [item.user_id for item in repository.members] == [leader.id]
+
+
+@pytest.mark.asyncio
 async def test_member_management_prevents_duplicates_and_leader_self_removal() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
     other_leader = make_user(UserRole.proj_leader, username="other-leader")

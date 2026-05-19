@@ -61,6 +61,9 @@ APPROVED_SUB_PROJECT_STATUSES = frozenset(
 ACTIVE_HANDOVER_STATUSES = frozenset(
     {SubProjectStatus.not_started, SubProjectStatus.in_progress, SubProjectStatus.completed},
 )
+LOCKED_MEMBER_CHANGE_STATUSES = frozenset(
+    {SubProjectStatus.completed, SubProjectStatus.closed, SubProjectStatus.terminated},
+)
 DEFAULT_PHASES = (
     (1, "initiation", "立项"),
     (2, "procurement", "采购"),
@@ -78,23 +81,17 @@ class SubProjectRepository(Protocol):
         actor: User,
         page: int,
         page_size: int,
-    ) -> tuple[list[SubProject], int]:
-        ...
+    ) -> tuple[list[SubProject], int]: ...
 
-    async def get_by_id(self, sub_project_id: UUID) -> SubProject | None:
-        ...
+    async def get_by_id(self, sub_project_id: UUID) -> SubProject | None: ...
 
-    async def get_main_project(self, main_project_id: UUID) -> MainProject | None:
-        ...
+    async def get_main_project(self, main_project_id: UUID) -> MainProject | None: ...
 
-    async def get_user(self, user_id: UUID) -> User | None:
-        ...
+    async def get_user(self, user_id: UUID) -> User | None: ...
 
-    async def list_members(self, sub_project_id: UUID) -> list[SubProjectMember]:
-        ...
+    async def list_members(self, sub_project_id: UUID) -> list[SubProjectMember]: ...
 
-    async def list_active_sub_projects_for_leader(self, user_id: UUID) -> list[SubProject]:
-        ...
+    async def list_active_sub_projects_for_leader(self, user_id: UUID) -> list[SubProject]: ...
 
     async def list_sub_project_handovers(
         self,
@@ -104,74 +101,58 @@ class SubProjectRepository(Protocol):
         sub_project_id: UUID | None = None,
         from_user_id: UUID | None = None,
         to_user_id: UUID | None = None,
-    ) -> tuple[list[SubProjectHandover], int]:
-        ...
+    ) -> tuple[list[SubProjectHandover], int]: ...
 
     async def get_member(
         self,
         *,
         sub_project_id: UUID,
         user_id: UUID,
-    ) -> SubProjectMember | None:
-        ...
+    ) -> SubProjectMember | None: ...
 
-    async def next_sub_project_sequence(self, main_project_id: UUID) -> int:
-        ...
+    async def next_sub_project_sequence(self, main_project_id: UUID) -> int: ...
 
     async def sum_approved_budget(
         self,
         *,
         main_project_id: UUID,
         excluding_sub_project_id: UUID,
-    ) -> Decimal:
-        ...
+    ) -> Decimal: ...
 
     async def list_active_user_ids_by_role(
         self,
         role: UserRole,
         *,
         excluding_user_id: UUID | None = None,
-    ) -> list[UUID]:
-        ...
+    ) -> list[UUID]: ...
 
-    async def phase_completion_counts(self, sub_project_id: UUID) -> tuple[int, int]:
-        ...
+    async def phase_completion_counts(self, sub_project_id: UUID) -> tuple[int, int]: ...
 
     async def get_workflow_template_version(
         self,
         version_id: UUID,
-    ) -> WorkflowTemplateVersion | None:
-        ...
+    ) -> WorkflowTemplateVersion | None: ...
 
     async def get_default_workflow_template_version(
         self,
         project_type_id: UUID,
-    ) -> WorkflowTemplateVersion | None:
-        ...
+    ) -> WorkflowTemplateVersion | None: ...
 
-    def add(self, sub_project: SubProject) -> None:
-        ...
+    def add(self, sub_project: SubProject) -> None: ...
 
-    def add_review(self, review: ProjectReview) -> None:
-        ...
+    def add_review(self, review: ProjectReview) -> None: ...
 
-    def add_phase(self, phase: Phase) -> None:
-        ...
+    def add_phase(self, phase: Phase) -> None: ...
 
-    def add_member(self, member: SubProjectMember) -> None:
-        ...
+    def add_member(self, member: SubProjectMember) -> None: ...
 
-    def add_handover(self, handover: SubProjectHandover) -> None:
-        ...
+    def add_handover(self, handover: SubProjectHandover) -> None: ...
 
-    async def delete_member(self, member: SubProjectMember) -> None:
-        ...
+    async def delete_member(self, member: SubProjectMember) -> None: ...
 
-    async def commit(self) -> None:
-        ...
+    async def commit(self) -> None: ...
 
-    async def refresh(self, sub_project: SubProject) -> None:
-        ...
+    async def refresh(self, sub_project: SubProject) -> None: ...
 
 
 class SqlAlchemySubProjectRepository:
@@ -356,7 +337,9 @@ class SqlAlchemySubProjectRepository:
             select(func.count()).select_from(Phase).where(Phase.sub_project_id == sub_project_id),
         )
         incomplete = await self._session.scalar(
-            select(func.count()).select_from(Phase).where(
+            select(func.count())
+            .select_from(Phase)
+            .where(
                 Phase.sub_project_id == sub_project_id,
                 Phase.status != PhaseStatus.completed,
             ),
@@ -683,6 +666,7 @@ class SubProjectService:
     ) -> SubProjectMember:
         sub_project = await self._get_existing_sub_project(sub_project_id)
         self._ensure_project_leader(actor, sub_project)
+        self._ensure_member_changes_allowed(sub_project)
 
         user = await self._repository.get_user(payload.user_id)
         if user is None:
@@ -735,6 +719,7 @@ class SubProjectService:
     ) -> SubProjectMember:
         sub_project = await self._get_existing_sub_project(sub_project_id)
         self._ensure_project_leader(actor, sub_project)
+        self._ensure_member_changes_allowed(sub_project)
         member = await self._repository.get_member(
             sub_project_id=sub_project.id,
             user_id=user_id,
@@ -762,6 +747,16 @@ class SubProjectService:
             audit_context=audit_context,
         )
         return member
+
+    @staticmethod
+    def _ensure_member_changes_allowed(sub_project: SubProject) -> None:
+        if sub_project.status in LOCKED_MEMBER_CHANGE_STATUSES:
+            raise BusinessException(
+                code=3003,
+                message="已完成或已结项子项目不允许变更成员",
+                status_code=409,
+                data={"status": sub_project.status.value},
+            )
 
     async def list_active_sub_projects_for_leader(
         self,
@@ -1079,13 +1074,16 @@ class SubProjectService:
             payload=payload,
         )
         from_status = sub_project.status
+        now = datetime.now(UTC)
         if payload.decision == ProjectReviewDecision.approve:
             sub_project.status = SubProjectStatus.in_progress
+            if main_project.status == MainProjectStatus.not_started:
+                main_project.status = MainProjectStatus.in_progress
+                main_project.updated_at = now
             await self._create_phases_for_sub_project(sub_project=sub_project, actor_id=actor.id)
         else:
             sub_project.status = SubProjectStatus.rejected
 
-        now = datetime.now(UTC)
         review = ProjectReview(
             id=uuid4(),
             main_project_id=None,
@@ -1339,9 +1337,7 @@ class SubProjectService:
                     phase_no=phase_no,
                     code=code,
                     name=name,
-                    status=PhaseStatus.in_progress
-                    if phase_no in {1, 5}
-                    else PhaseStatus.waiting,
+                    status=PhaseStatus.in_progress if phase_no in {1, 5} else PhaseStatus.waiting,
                     enter_at=now if phase_no in {1, 5} else None,
                     finish_at=None,
                     procurement_type=None,

@@ -195,6 +195,7 @@ async def test_review_sub_project_approves_and_creates_six_phases() -> None:
     )
 
     assert reviewed.status == SubProjectStatus.in_progress
+    assert main_project.status == MainProjectStatus.in_progress
     assert len(repository.phases) == 6
     assert [phase.phase_no for phase in repository.phases] == [1, 2, 3, 4, 5, 6]
     assert repository.phases[0].status == PhaseStatus.in_progress

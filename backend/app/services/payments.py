@@ -21,7 +21,7 @@ from app.models.documents import Document
 from app.models.main_projects import MainProject
 from app.models.payments import Payment, PaymentType, PaymentVoucher
 from app.models.phases import Phase
-from app.models.sub_projects import SubProject, SubProjectMember
+from app.models.sub_projects import SubProject, SubProjectMember, SubProjectStatus
 from app.models.users import User, UserRole, UserStatus
 from app.services.notifications import NotificationService
 from app.storage.base import StorageBackend, StorageSecurityError
@@ -32,6 +32,9 @@ PAYMENT_VOUCHER_DOC_TYPE = "payment_voucher"
 TWO_PLACES = Decimal("0.01")
 VIEW_ALL_PAYMENT_ROLES = frozenset(
     {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+)
+LOCKED_PAYMENT_SUB_PROJECT_STATUSES = frozenset(
+    {SubProjectStatus.completed, SubProjectStatus.closed, SubProjectStatus.terminated},
 )
 
 
@@ -51,29 +54,23 @@ class PaymentPage:
 
 
 class PaymentRepository(Protocol):
-    async def get_sub_project(self, sub_project_id: UUID) -> SubProject | None:
-        ...
+    async def get_sub_project(self, sub_project_id: UUID) -> SubProject | None: ...
 
-    async def get_sub_project_for_update(self, sub_project_id: UUID) -> SubProject | None:
-        ...
+    async def get_sub_project_for_update(self, sub_project_id: UUID) -> SubProject | None: ...
 
-    async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
-        ...
+    async def get_member(
+        self, *, sub_project_id: UUID, user_id: UUID
+    ) -> SubProjectMember | None: ...
 
-    async def get_main_project_for_update(self, main_project_id: UUID) -> MainProject | None:
-        ...
+    async def get_main_project_for_update(self, main_project_id: UUID) -> MainProject | None: ...
 
-    async def get_payment_phase(self, sub_project_id: UUID) -> Phase | None:
-        ...
+    async def get_payment_phase(self, sub_project_id: UUID) -> Phase | None: ...
 
-    async def get_payment_for_update(self, payment_id: UUID) -> Payment | None:
-        ...
+    async def get_payment_for_update(self, payment_id: UUID) -> Payment | None: ...
 
-    async def get_payment(self, payment_id: UUID) -> Payment | None:
-        ...
+    async def get_payment(self, payment_id: UUID) -> Payment | None: ...
 
-    async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None:
-        ...
+    async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None: ...
 
     async def list_payments(
         self,
@@ -82,8 +79,7 @@ class PaymentRepository(Protocol):
         payment_type: PaymentType | None,
         page: int,
         page_size: int,
-    ) -> PaymentPage:
-        ...
+    ) -> PaymentPage: ...
 
     async def list_group_documents_for_update(
         self,
@@ -91,46 +87,34 @@ class PaymentRepository(Protocol):
         sub_project_id: UUID,
         phase_id: UUID,
         doc_type: str,
-    ) -> list[Document]:
-        ...
+    ) -> list[Document]: ...
 
-    async def next_payment_sequence(self, sub_project_id: UUID) -> int:
-        ...
+    async def next_payment_sequence(self, sub_project_id: UUID) -> int: ...
 
-    async def sum_payments(self, sub_project_id: UUID) -> Decimal:
-        ...
+    async def sum_payments(self, sub_project_id: UUID) -> Decimal: ...
 
-    async def sum_sub_project_spent(self, main_project_id: UUID) -> Decimal:
-        ...
+    async def sum_sub_project_spent(self, main_project_id: UUID) -> Decimal: ...
 
     async def list_active_user_ids_by_role(
         self,
         *,
         role: UserRole,
         dept_id: UUID | None = None,
-    ) -> list[UUID]:
-        ...
+    ) -> list[UUID]: ...
 
-    def add_payment(self, payment: Payment) -> None:
-        ...
+    def add_payment(self, payment: Payment) -> None: ...
 
-    def add_document(self, document: Document) -> None:
-        ...
+    def add_document(self, document: Document) -> None: ...
 
-    def add_payment_voucher(self, payment_voucher: PaymentVoucher) -> None:
-        ...
+    def add_payment_voucher(self, payment_voucher: PaymentVoucher) -> None: ...
 
-    async def flush(self) -> None:
-        ...
+    async def flush(self) -> None: ...
 
-    async def commit(self) -> None:
-        ...
+    async def commit(self) -> None: ...
 
-    async def rollback(self) -> None:
-        ...
+    async def rollback(self) -> None: ...
 
-    async def refresh_payment(self, payment: Payment) -> None:
-        ...
+    async def refresh_payment(self, payment: Payment) -> None: ...
 
 
 class SqlAlchemyPaymentRepository:
@@ -407,9 +391,7 @@ class InMemoryPaymentRepository:
             payment for payment in self.payments if payment.sub_project_id == sub_project_id
         ]
         if payment_type is not None:
-            payments = [
-                payment for payment in payments if payment.payment_type == payment_type
-            ]
+            payments = [payment for payment in payments if payment.payment_type == payment_type]
         payments = sorted(
             payments,
             key=lambda payment: (payment.payment_date, payment.created_at, payment.payment_no),
@@ -554,6 +536,7 @@ class PaymentService:
 
         try:
             sub_project = await self._get_sub_project_for_update(sub_project_id)
+            self._ensure_sub_project_allows_payment(sub_project)
             main_project = await self._get_main_project_for_update(sub_project.main_project_id)
             phase = await self._get_payment_phase(sub_project.id)
             over_budget = self._ensure_budget_confirmation(
@@ -621,6 +604,16 @@ class PaymentService:
             over_budget=over_budget,
         )
         return payment
+
+    @staticmethod
+    def _ensure_sub_project_allows_payment(sub_project: SubProject) -> None:
+        if sub_project.status in LOCKED_PAYMENT_SUB_PROJECT_STATUSES:
+            raise BusinessException(
+                code=3003,
+                message="已完成或已结项子项目禁止新增付款",
+                status_code=409,
+                data={"status": sub_project.status.value},
+            )
 
     async def reverse_payment(
         self,

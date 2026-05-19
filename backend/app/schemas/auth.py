@@ -29,3 +29,4 @@ class CurrentUserRead(BaseModel):
     dept_id: UUID | None
     status: UserStatus
     timezone: str
+    permissions: list[str]

@@ -6,10 +6,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useHandoverRequestStore } from '@/stores/useHandoverRequestStore';
 import { useSubProjectStore } from '@/stores/useSubProjectStore';
 import { useUserStore } from '@/stores/useUserStore';
-import {
-  HANDOVER_REQUEST_STATUS_LABELS,
-  type HandoverRequestRead,
-} from '@/types/handoverRequests';
+import { HANDOVER_REQUEST_STATUS_LABELS, type HandoverRequestRead } from '@/types/handoverRequests';
 import { PROJECT_STATUS_LABELS, type SubProjectRead } from '@/types/projects';
 
 const ACTIVE_HANDOVER_STATUSES = new Set(['not_started', 'in_progress', 'completed']);
@@ -41,9 +38,7 @@ const activeProjects = computed(() =>
 const candidateOptions = computed(() =>
   userStore.users.filter(
     (user) =>
-      user.role === 'proj_leader' &&
-      user.status === 'active' &&
-      user.id !== currentUserId.value,
+      user.role === 'proj_leader' && user.status === 'active' && user.id !== currentUserId.value,
   ),
 );
 const candidateRequests = computed(() =>
@@ -233,7 +228,11 @@ function formatProjectStatus(project: SubProjectRead): string {
           <p>{{ request.reason }}</p>
           <small>{{ request.sub_project_ids.map(projectLabel).join('、') }}</small>
           <div class="handover-card__actions">
-            <el-button data-test="confirm-candidate" size="small" @click="candidateReview(request, 'confirm')">
+            <el-button
+              data-test="confirm-candidate"
+              size="small"
+              @click="candidateReview(request, 'confirm')"
+            >
               确认接收
             </el-button>
             <el-button size="small" type="danger" @click="candidateReview(request, 'reject')">
@@ -299,7 +298,7 @@ function formatProjectStatus(project: SubProjectRead): string {
             <td>
               <el-button
                 v-if="forceableRequests.some((item) => item.id === request.id)"
-                data-test="force-handover-request"
+                :data-test="`force-handover-request-${request.id}`"
                 size="small"
                 type="warning"
                 @click="forceRequest(request)"

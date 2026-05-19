@@ -69,6 +69,30 @@ describe('NotificationCenter', () => {
 
     expect(markAllNotificationsRead).toHaveBeenCalled();
   });
+
+  it('filters notifications by read state without mixing the list', async () => {
+    const wrapper = mount(NotificationCenter, { global: { stubs } });
+    await flushPromises();
+
+    await wrapper.find('[data-test="notification-trigger"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-test="notification-filter-unread"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[data-test="notification-filter-read"]').trigger('click');
+    await flushPromises();
+
+    expect(listNotifications).toHaveBeenNthCalledWith(1, { page: 1, pageSize: 10 });
+    expect(listNotifications).toHaveBeenNthCalledWith(2, {
+      page: 1,
+      pageSize: 10,
+      unread: true,
+    });
+    expect(listNotifications).toHaveBeenNthCalledWith(3, {
+      page: 1,
+      pageSize: 10,
+      unread: false,
+    });
+  });
 });
 
 const taskNotification: NotificationRead = {

@@ -12,7 +12,7 @@ from sqlalchemy import Table, UniqueConstraint
 from app.api.v1.documents import get_document_service
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
-from app.core.exceptions import PermissionDeniedError, ValidationFailedError
+from app.core.exceptions import BusinessException, PermissionDeniedError, ValidationFailedError
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.documents import Document
@@ -175,21 +175,22 @@ def test_document_model_has_group_version_unique_constraint_and_latest_index() -
         for constraint in table.constraints
     )
     assert any(
-        index.name == "uq_documents_latest_per_group" and index.unique
-        for index in table.indexes
+        index.name == "uq_documents_latest_per_group" and index.unique for index in table.indexes
     )
 
 
-def test_document_read_exposes_display_name() -> None:
+def test_document_read_exposes_display_name_and_uploader_name() -> None:
     uploader = make_user(UserRole.proj_member, username="member")
     sub_project = make_sub_project(uploader)
     phase = make_phase(sub_project)
     document = make_document(sub_project=sub_project, phase=phase, uploader=uploader)
     document.display_name = "Main Contract Scan"
+    document.uploader = uploader
 
     payload = DocumentRead.model_validate(document).model_dump()
 
     assert payload["display_name"] == "Main Contract Scan"
+    assert payload["uploader_name"] == "member"
 
 
 @pytest.mark.asyncio
@@ -278,6 +279,47 @@ async def test_upload_document_persists_display_name() -> None:
     )
 
     assert document.display_name == "Main Contract Scan"
+
+
+@pytest.mark.asyncio
+async def test_upload_document_rejects_completed_sub_project_and_completed_phase() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    sub_project.status = SubProjectStatus.completed
+    phase = make_phase(sub_project)
+    service = DocumentService(
+        repository=InMemoryDocumentRepository(sub_projects=[sub_project], phases=[phase]),
+        storage=RecordingStorage(),
+        max_file_size_bytes=1024,
+    )
+
+    with pytest.raises(BusinessException) as completed_sub_project:
+        await service.upload_document(
+            actor=leader,
+            sub_project_id=sub_project.id,
+            phase_id=phase.id,
+            doc_type="meeting_material",
+            file_name="meeting.pdf",
+            content_type="application/pdf",
+            content=b"%PDF-1.7\nbody",
+        )
+
+    assert completed_sub_project.value.message == "已完成或已结项子项目禁止上传文件"
+
+    sub_project.status = SubProjectStatus.in_progress
+    phase.status = PhaseStatus.completed
+    with pytest.raises(BusinessException) as completed_phase:
+        await service.upload_document(
+            actor=leader,
+            sub_project_id=sub_project.id,
+            phase_id=phase.id,
+            doc_type="meeting_material",
+            file_name="meeting.pdf",
+            content_type="application/pdf",
+            content=b"%PDF-1.7\nbody",
+        )
+
+    assert completed_phase.value.message == "已完成环节禁止上传文件"
 
 
 @pytest.mark.asyncio

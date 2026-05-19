@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import get_db_session
 from app.core.deps import get_current_user
 from app.core.exceptions import PermissionDeniedError
 from app.models.users import User, UserRole
 
 PermissionDependency = Callable[[User], Awaitable[User]]
 
-PERMISSION_MATRIX: dict[str, frozenset[UserRole]] = {
+DEFAULT_PERMISSION_MATRIX: dict[str, frozenset[UserRole]] = {
     "user.manage": frozenset({UserRole.admin}),
     "system.config": frozenset({UserRole.admin}),
     "audit_log.read": frozenset({UserRole.admin}),
     "database.export": frozenset({UserRole.admin}),
+    "role_permission.manage": frozenset({UserRole.admin}),
     "main_project.create": frozenset({UserRole.admin, UserRole.dept_manager}),
     "main_project.edit": frozenset({UserRole.admin, UserRole.dept_manager}),
     "main_project.review": frozenset({UserRole.admin, UserRole.dept_manager}),
@@ -75,6 +78,7 @@ PERMISSION_MATRIX: dict[str, frozenset[UserRole]] = {
     ),
     "project.view_own": frozenset({UserRole.proj_leader, UserRole.proj_member}),
 }
+PERMISSION_MATRIX = DEFAULT_PERMISSION_MATRIX
 
 
 def normalize_role(role: UserRole | str) -> UserRole:
@@ -82,8 +86,25 @@ def normalize_role(role: UserRole | str) -> UserRole:
 
 
 def user_has_permission(user: User, permission: str) -> bool:
-    allowed_roles = PERMISSION_MATRIX.get(permission)
+    allowed_roles = DEFAULT_PERMISSION_MATRIX.get(permission)
     return allowed_roles is not None and user.role in allowed_roles
+
+
+def get_role_permission_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Any:
+    from app.services.role_permissions import (  # noqa: PLC0415
+        InMemoryRolePermissionRepository,
+        RolePermissionService,
+        SqlAlchemyRolePermissionRepository,
+    )
+
+    if not hasattr(session, "scalars"):
+        return RolePermissionService(repository=InMemoryRolePermissionRepository())
+    return RolePermissionService(repository=SqlAlchemyRolePermissionRepository(session))
+
+
+ROLE_PERMISSION_SERVICE_DEPENDENCY = Depends(get_role_permission_service)
 
 
 def require_role(*roles: UserRole | str) -> PermissionDependency:
@@ -93,7 +114,7 @@ def require_role(*roles: UserRole | str) -> PermissionDependency:
         current_user: Annotated[User, Depends(get_current_user)],
     ) -> User:
         if current_user.role not in allowed_roles:
-            raise PermissionDeniedError("Permission denied")
+            raise PermissionDeniedError()
         return current_user
 
     return dependency
@@ -105,10 +126,16 @@ def require_permission(
 ) -> PermissionDependency:
     async def dependency(
         current_user: Annotated[User, Depends(get_current_user)],
+        role_permission_service: Any = ROLE_PERMISSION_SERVICE_DEPENDENCY,
     ) -> User:
         _ = resource_id_param
-        if not user_has_permission(current_user, permission):
-            raise PermissionDeniedError("Permission denied")
+        has_permission = (
+            await role_permission_service.has_permission(current_user.role, permission)
+            if hasattr(role_permission_service, "has_permission")
+            else user_has_permission(current_user, permission)
+        )
+        if not has_permission:
+            raise PermissionDeniedError()
         return current_user
 
     return dependency

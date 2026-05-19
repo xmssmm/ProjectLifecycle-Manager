@@ -7,6 +7,7 @@ export const PERMISSION_CODES = [
   'system.config',
   'audit_log.read',
   'database.export',
+  'role_permission.manage',
   'main_project.create',
   'main_project.edit',
   'main_project.review',
@@ -26,6 +27,7 @@ export const PERMISSION_CODES = [
   'task.complete',
   'revoke_request.submit',
   'revoke_request.review',
+  'report.generate',
   'project.view_all',
   'project.view_own',
 ] as const;
@@ -38,6 +40,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionCode[]> = {
     'system.config',
     'audit_log.read',
     'database.export',
+    'role_permission.manage',
     'main_project.create',
     'main_project.edit',
     'main_project.review',
@@ -54,6 +57,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionCode[]> = {
     'task.assign',
     'task.complete',
     'revoke_request.review',
+    'report.generate',
     'project.view_all',
   ],
   dept_manager: [
@@ -68,6 +72,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionCode[]> = {
     'document.download',
     'task.complete',
     'revoke_request.review',
+    'report.generate',
     'project.view_all',
   ],
   finance_manager: [
@@ -77,6 +82,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionCode[]> = {
     'document.upload',
     'document.download',
     'task.complete',
+    'report.generate',
     'project.view_all',
   ],
   proj_leader: [
@@ -108,12 +114,15 @@ interface PermissionOptions {
 
 const resourceScopedPermissions = new Set<PermissionCode>(['project.view_own']);
 
-function roleHasPermission(role: UserRole, permission: PermissionCode): boolean {
-  return ROLE_PERMISSIONS[role].includes(permission);
-}
-
 export function usePermission() {
   const authStore = useAuthStore();
+
+  function roleHasPermission(role: UserRole, permission: PermissionCode): boolean {
+    return (
+      authStore.user?.permissions?.includes(permission) ??
+      ROLE_PERMISSIONS[role].includes(permission)
+    );
+  }
 
   function hasRole(roles?: readonly UserRole[]): boolean {
     if (!roles?.length) {

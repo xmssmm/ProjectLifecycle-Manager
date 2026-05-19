@@ -33,6 +33,7 @@ describe('DocumentList', () => {
             sub_project_id: 'sub-1',
             updated_at: '',
             uploader_id: 'user-1',
+            uploader_name: '张三',
             version: 1,
           },
         ],
@@ -48,6 +49,8 @@ describe('DocumentList', () => {
     });
 
     expect(wrapper.text()).toContain('Main Contract Scan');
+    expect(wrapper.text()).toContain('张三');
+    expect(wrapper.text()).not.toContain('安全扫描');
     expect(wrapper.text()).not.toContain('uuid-contract.pdfv1');
   });
 });

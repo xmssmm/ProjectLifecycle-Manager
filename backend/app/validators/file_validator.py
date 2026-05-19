@@ -8,19 +8,24 @@ from zipfile import BadZipFile, ZipFile
 
 from app.core.exceptions import ValidationFailedError
 
+UPLOAD_FORMAT_ERROR_MESSAGE = (
+    "文件上传格式不对，请上传 "
+    ".jpg .png .bmp .jpeg .doc .docx .pdf .xls .xlsx .zip .rar .7z 格式文件！"
+)
 ALLOWED_EXTENSIONS = frozenset(
     {
-        ".pdf",
+        ".jpg",
+        ".png",
+        ".bmp",
+        ".jpeg",
         ".doc",
         ".docx",
+        ".pdf",
         ".xls",
         ".xlsx",
-        ".ppt",
-        ".pptx",
-        ".jpg",
-        ".jpeg",
-        ".png",
         ".zip",
+        ".rar",
+        ".7z",
     },
 )
 
@@ -61,14 +66,15 @@ MIME_TYPES_BY_EXTENSION: Mapping[str, frozenset[str]] = {
     ".xlsx": frozenset(
         {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
     ),
-    ".ppt": frozenset({"application/vnd.ms-powerpoint"}),
-    ".pptx": frozenset(
-        {"application/vnd.openxmlformats-officedocument.presentationml.presentation"},
-    ),
     ".jpg": frozenset({"image/jpeg"}),
     ".jpeg": frozenset({"image/jpeg"}),
     ".png": frozenset({"image/png"}),
+    ".bmp": frozenset({"image/bmp", "image/x-ms-bmp"}),
     ".zip": frozenset({"application/zip", "application/x-zip-compressed"}),
+    ".rar": frozenset(
+        {"application/vnd.rar", "application/x-rar-compressed", "application/octet-stream"},
+    ),
+    ".7z": frozenset({"application/x-7z-compressed", "application/octet-stream"}),
 }
 
 OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
@@ -79,26 +85,32 @@ MAGIC_SIGNATURES_BY_EXTENSION: Mapping[str, tuple[bytes, ...]] = {
     ".docx": ZIP_SIGNATURES,
     ".xls": (OLE_SIGNATURE,),
     ".xlsx": ZIP_SIGNATURES,
-    ".ppt": (OLE_SIGNATURE,),
-    ".pptx": ZIP_SIGNATURES,
     ".jpg": (b"\xff\xd8\xff",),
     ".jpeg": (b"\xff\xd8\xff",),
     ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".bmp": (b"BM",),
     ".zip": ZIP_SIGNATURES,
+    ".rar": (b"Rar!\x1a\x07\x00", b"Rar!\x1a\x07\x01\x00"),
+    ".7z": (b"7z\xbc\xaf\x27\x1c",),
 }
-ZIP_SCANNED_EXTENSIONS = frozenset({".zip", ".docx", ".xlsx", ".pptx"})
+ZIP_SCANNED_EXTENSIONS = frozenset({".zip", ".docx", ".xlsx"})
 MAX_ZIP_SCAN_DEPTH = 3
 
 
 class FileValidationError(ValidationFailedError):
     def __init__(self, reason: str) -> None:
         self.reason = reason
-        super().__init__("File validation failed", data={"rejection_reason": reason})
+        super().__init__(
+            UPLOAD_FORMAT_ERROR_MESSAGE,
+            data={
+                "rejection_reason": reason,
+                "rejection_message": UPLOAD_FORMAT_ERROR_MESSAGE,
+            },
+        )
 
 
 class FileValidator(Protocol):
-    def validate(self, *, filename: str, content_type: str | None, content: bytes) -> None:
-        ...
+    def validate(self, *, filename: str, content_type: str | None, content: bytes) -> None: ...
 
 
 class DefaultFileValidator:

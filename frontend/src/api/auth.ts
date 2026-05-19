@@ -29,6 +29,7 @@ export interface CurrentUserPayload {
   dept_id: string | null;
   email: string | null;
   id: string;
+  permissions?: string[];
   role: UserRole;
   status: UserStatus;
   timezone: string;

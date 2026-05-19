@@ -196,7 +196,7 @@ describe('DocumentList', () => {
     expect(previewOfficeDocument).toHaveBeenCalledWith('office-docx');
   });
 
-  it('shows scan status and disables access before a clean result', async () => {
+  it('keeps pending files accessible and blocks quarantined files without scan noise', async () => {
     const wrapper = mount(DocumentList, {
       global: { stubs },
       props: {
@@ -216,10 +216,15 @@ describe('DocumentList', () => {
       },
     });
 
-    expect(wrapper.find('[data-test="scan-status-pending_contract"]').text()).toContain('扫描中');
-    expect(wrapper.find('[data-test="scan-status-infected_contract"]').text()).toContain('已隔离');
-    expect(wrapper.find('[data-test="preview-pending_contract"]').attributes('disabled')).toBeDefined();
-    expect(wrapper.find('[data-test="preview-infected_contract"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.find('[data-test="scan-status-pending_contract"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="scan-status-infected_contract"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('安全扫描');
+    expect(
+      wrapper.find('[data-test="preview-pending_contract"]').attributes('disabled'),
+    ).toBeUndefined();
+    expect(
+      wrapper.find('[data-test="preview-infected_contract"]').attributes('disabled'),
+    ).toBeDefined();
   });
 });
 
@@ -265,7 +270,9 @@ describe('PdfPreview', () => {
     const getContext = vi
       .spyOn(HTMLCanvasElement.prototype, 'getContext')
       .mockImplementation(() => ({}) as CanvasRenderingContext2D);
-    const previewLoader = vi.fn().mockResolvedValue(new Blob(['converted'], { type: 'application/pdf' }));
+    const previewLoader = vi
+      .fn()
+      .mockResolvedValue(new Blob(['converted'], { type: 'application/pdf' }));
     const wrapper = mount(PdfPreview, {
       global: { stubs },
       props: {

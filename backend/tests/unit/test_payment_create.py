@@ -233,6 +233,32 @@ async def test_create_payment_requires_voucher_and_over_budget_confirmation() ->
 
 
 @pytest.mark.asyncio
+async def test_create_payment_rejects_completed_sub_project() -> None:
+    service, repository, _storage, finance, sub_project, _main_project, _notifications = (
+        make_service()
+    )
+    sub_project.status = SubProjectStatus.completed
+
+    with pytest.raises(BusinessException) as blocked:
+        await service.create_payment(
+            actor=finance,
+            sub_project_id=sub_project.id,
+            amount=Decimal("100.00"),
+            payment_date=date(2026, 5, 10),
+            voucher_files=[
+                PaymentVoucherUpload(
+                    file_name="voucher.pdf",
+                    content_type="application/pdf",
+                    content=b"%PDF-1.7\nvoucher",
+                ),
+            ],
+        )
+
+    assert blocked.value.message == "已完成或已结项子项目禁止新增付款"
+    assert repository.payments == []
+
+
+@pytest.mark.asyncio
 async def test_confirmed_over_budget_payment_notifies_manager_and_admin() -> None:
     service, _repository, _storage, finance, sub_project, _main_project, notifications = (
         make_service()

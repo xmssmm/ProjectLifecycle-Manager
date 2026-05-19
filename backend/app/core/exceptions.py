@@ -33,7 +33,7 @@ class AccountLockedError(BusinessException):
 
 
 class PermissionDeniedError(BusinessException):
-    def __init__(self, message: str = "权限不足", data: Any = None) -> None:
+    def __init__(self, message: str = "无权限操作", data: Any = None) -> None:
         super().__init__(code=1003, message=message, status_code=403, data=data)
 
 

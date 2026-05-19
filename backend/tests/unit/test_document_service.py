@@ -228,7 +228,7 @@ async def test_upload_marks_scan_failed_when_enqueue_fails() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pending_document_is_visible_but_download_is_blocked() -> None:
+async def test_pending_document_is_visible_and_downloadable_without_scan_status_blocker() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
     sub_project = make_sub_project(leader)
     phase = make_phase(sub_project)
@@ -250,14 +250,12 @@ async def test_pending_document_is_visible_but_download_is_blocked() -> None:
     )
 
     visible = await service.list_documents(actor=leader, sub_project_id=sub_project.id)
-    with pytest.raises(BusinessException) as exc:
-        await service.download_document(actor=leader, document_id=document.id)
-    with pytest.raises(BusinessException) as preview_exc:
-        await service.preview_document(actor=leader, document_id=document.id)
+    download = await service.download_document(actor=leader, document_id=document.id)
+    preview = await service.preview_document(actor=leader, document_id=document.id)
 
     assert visible == [document]
-    assert exc.value.code == 3030
-    assert preview_exc.value.code == 3030
+    assert download.content == b"%PDF-1.7\nbody"
+    assert preview.content == b"%PDF-1.7\nbody"
 
 
 @pytest.mark.asyncio

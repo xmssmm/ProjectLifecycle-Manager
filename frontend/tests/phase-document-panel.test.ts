@@ -66,8 +66,8 @@ describe('PhaseDocumentPanel', () => {
       subProjectId: 'sub-1',
     });
     expect(wrapper.find('[data-test="missing-doc-contract"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('contract');
-    expect(wrapper.text()).toContain('缺少材料：contract');
+    expect(wrapper.text()).toContain('合同文件');
+    expect(wrapper.text()).toContain('缺少材料：合同文件');
     expect(wrapper.find('[data-test="promote-selected-phase"]').text()).toContain('暂不能推进');
     expect(wrapper.find('[data-test="document-list"]').text()).toContain('1');
 
@@ -102,6 +102,22 @@ describe('PhaseDocumentPanel', () => {
     await flushPromises();
 
     expect(promotePhase).toHaveBeenCalledWith('phase-2');
+  });
+
+  it('locks uploads after a phase is completed', async () => {
+    vi.mocked(getPhase).mockResolvedValue({
+      ...phaseTwoDetail,
+      status: 'completed',
+    });
+
+    const wrapper = mount(PhaseDocumentPanel, {
+      global: { stubs },
+      props: { subProjectId: 'sub-1' },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="upload-contract"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('已完成环节不可继续上传');
   });
 
   it('manages acceptance steps on phase 4 and links uploads to each step', async () => {
@@ -278,6 +294,7 @@ const uploadedDocument: DocumentRead = {
   sub_project_id: 'sub-1',
   updated_at: '2026-05-10T02:00:00Z',
   uploader_id: 'user-1',
+  uploader_name: '张三',
   version: 1,
 };
 

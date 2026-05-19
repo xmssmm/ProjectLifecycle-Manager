@@ -12,8 +12,18 @@ const authStore = useAuthStore();
 const store = useNotificationStore();
 const { loading, notifications, unreadCount } = storeToRefs(store);
 const panelOpen = ref(false);
+const notificationFilter = ref<'all' | 'read' | 'unread'>('all');
 
 const badgeValue = computed(() => (unreadCount.value > 99 ? '99+' : unreadCount.value));
+const filterUnreadValue = computed(() => {
+  if (notificationFilter.value === 'unread') {
+    return true;
+  }
+  if (notificationFilter.value === 'read') {
+    return false;
+  }
+  return undefined;
+});
 
 onMounted(() => {
   void store.fetchUnreadCount();
@@ -27,16 +37,35 @@ onBeforeUnmount(() => {
 async function togglePanel() {
   panelOpen.value = !panelOpen.value;
   if (panelOpen.value) {
-    await store.fetchNotifications({ page: 1, pageSize: 10 });
+    await fetchPanelNotifications();
   }
 }
 
 async function markRead(notification: NotificationRead) {
   await store.markRead(notification.id);
+  if (notificationFilter.value === 'unread') {
+    await fetchPanelNotifications();
+  }
 }
 
 async function markAllRead() {
   await store.markAllRead();
+  if (notificationFilter.value !== 'all') {
+    await fetchPanelNotifications();
+  }
+}
+
+async function setFilter(filter: 'all' | 'read' | 'unread') {
+  notificationFilter.value = filter;
+  await fetchPanelNotifications();
+}
+
+async function fetchPanelNotifications() {
+  await store.fetchNotifications({
+    page: 1,
+    pageSize: 10,
+    ...(filterUnreadValue.value === undefined ? {} : { unread: filterUnreadValue.value }),
+  });
 }
 
 function scenarioLabel(notification: NotificationRead): string {
@@ -183,6 +212,36 @@ function decisionLabel(value: string | null): string | null {
           全部已读
         </el-button>
       </header>
+
+      <div class="notification-center__filters" role="group" aria-label="通知筛选">
+        <button
+          class="notification-center__filter"
+          :class="{ 'notification-center__filter--active': notificationFilter === 'all' }"
+          data-test="notification-filter-all"
+          type="button"
+          @click="setFilter('all')"
+        >
+          全部
+        </button>
+        <button
+          class="notification-center__filter"
+          :class="{ 'notification-center__filter--active': notificationFilter === 'unread' }"
+          data-test="notification-filter-unread"
+          type="button"
+          @click="setFilter('unread')"
+        >
+          未读
+        </button>
+        <button
+          class="notification-center__filter"
+          :class="{ 'notification-center__filter--active': notificationFilter === 'read' }"
+          data-test="notification-filter-read"
+          type="button"
+          @click="setFilter('read')"
+        >
+          已读
+        </button>
+      </div>
 
       <el-empty v-if="!loading && notifications.length === 0" description="暂无通知" />
       <div v-else class="notification-center__list">

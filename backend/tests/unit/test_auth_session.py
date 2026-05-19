@@ -124,7 +124,8 @@ def test_refresh_me_logout_and_blacklisted_access_token_flow() -> None:
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert me_response.status_code == 200
-    assert me_response.json()["data"] == {
+    me_payload = me_response.json()["data"]
+    assert me_payload == {
         "id": str(user.id),
         "username": "admin",
         "email": "admin@example.local",
@@ -132,7 +133,9 @@ def test_refresh_me_logout_and_blacklisted_access_token_flow() -> None:
         "dept_id": None,
         "status": UserStatus.active.value,
         "timezone": "America/Los_Angeles",
+        "permissions": me_payload["permissions"],
     }
+    assert "role_permission.manage" in me_payload["permissions"]
 
     refresh_response = client.post("/api/v1/auth/refresh")
     assert refresh_response.status_code == 200

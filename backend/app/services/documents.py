@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import (
     BusinessException,
@@ -19,8 +20,8 @@ from app.core.exceptions import (
     ValidationFailedError,
 )
 from app.models.documents import Document, DocumentScanStatus
-from app.models.phases import Phase
-from app.models.sub_projects import SubProject, SubProjectMember
+from app.models.phases import Phase, PhaseStatus
+from app.models.sub_projects import SubProject, SubProjectMember, SubProjectStatus
 from app.models.users import User, UserRole
 from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter
 from app.storage.base import StorageBackend, StorageSecurityError
@@ -28,6 +29,9 @@ from app.validators.file_validator import DefaultFileValidator, FileValidationEr
 
 VIEW_ALL_DOCUMENT_ROLES = frozenset(
     {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+)
+LOCKED_SUB_PROJECT_STATUSES = frozenset(
+    {SubProjectStatus.completed, SubProjectStatus.closed, SubProjectStatus.terminated},
 )
 SUPPORTED_OFFICE_PREVIEW_EXTENSIONS = frozenset({".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"})
 
@@ -41,18 +45,15 @@ class DocumentDownload:
 
 
 class OfficeDocumentConverter(Protocol):
-    def convert_to_pdf(self, *, file_name: str, content: bytes) -> bytes:
-        ...
+    def convert_to_pdf(self, *, file_name: str, content: bytes) -> bytes: ...
 
 
 class DocumentScanScheduler(Protocol):
-    def enqueue(self, document_id: UUID) -> None:
-        ...
+    def enqueue(self, document_id: UUID) -> None: ...
 
 
 class DocumentSearchScheduler(Protocol):
-    def enqueue(self, document_id: UUID) -> None:
-        ...
+    def enqueue(self, document_id: UUID) -> None: ...
 
 
 class LibreOfficeDocumentConverter:
@@ -114,17 +115,15 @@ class LibreOfficeDocumentConverter:
 
 
 class DocumentRepository(Protocol):
-    async def get_sub_project(self, sub_project_id: UUID) -> SubProject | None:
-        ...
+    async def get_sub_project(self, sub_project_id: UUID) -> SubProject | None: ...
 
-    async def get_phase(self, phase_id: UUID) -> Phase | None:
-        ...
+    async def get_phase(self, phase_id: UUID) -> Phase | None: ...
 
-    async def get_document(self, document_id: UUID) -> Document | None:
-        ...
+    async def get_document(self, document_id: UUID) -> Document | None: ...
 
-    async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
-        ...
+    async def get_member(
+        self, *, sub_project_id: UUID, user_id: UUID
+    ) -> SubProjectMember | None: ...
 
     async def list_group_documents_for_update(
         self,
@@ -132,8 +131,7 @@ class DocumentRepository(Protocol):
         sub_project_id: UUID,
         phase_id: UUID,
         doc_type: str,
-    ) -> list[Document]:
-        ...
+    ) -> list[Document]: ...
 
     async def lock_document_group(
         self,
@@ -141,8 +139,7 @@ class DocumentRepository(Protocol):
         sub_project_id: UUID,
         phase_id: UUID,
         doc_type: str,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def list_documents(
         self,
@@ -151,20 +148,15 @@ class DocumentRepository(Protocol):
         phase_id: UUID | None = None,
         doc_type: str | None = None,
         include_history: bool = False,
-    ) -> list[Document]:
-        ...
+    ) -> list[Document]: ...
 
-    async def list_latest_phase_documents_for_update(self, phase_id: UUID) -> list[Document]:
-        ...
+    async def list_latest_phase_documents_for_update(self, phase_id: UUID) -> list[Document]: ...
 
-    def add(self, document: Document) -> None:
-        ...
+    def add(self, document: Document) -> None: ...
 
-    async def commit(self) -> None:
-        ...
+    async def commit(self) -> None: ...
 
-    async def refresh(self, document: Document) -> None:
-        ...
+    async def refresh(self, document: Document) -> None: ...
 
 
 class SqlAlchemyDocumentRepository:
@@ -180,7 +172,11 @@ class SqlAlchemyDocumentRepository:
         return phase if isinstance(phase, Phase) else None
 
     async def get_document(self, document_id: UUID) -> Document | None:
-        document = await self._session.get(Document, document_id)
+        document = await self._session.scalar(
+            select(Document)
+            .options(selectinload(Document.uploader))
+            .where(Document.id == document_id),
+        )
         return document if isinstance(document, Document) else None
 
     async def get_member(self, *, sub_project_id: UUID, user_id: UUID) -> SubProjectMember | None:
@@ -242,6 +238,7 @@ class SqlAlchemyDocumentRepository:
 
         result = await self._session.scalars(
             select(Document)
+            .options(selectinload(Document.uploader))
             .where(*conditions)
             .order_by(Document.doc_type.asc(), Document.version.desc(), Document.created_at.desc()),
         )
@@ -347,9 +344,7 @@ class InMemoryDocumentRepository:
             documents = [document for document in documents if document.doc_type == doc_type]
         if not include_history:
             documents = [
-                document
-                for document in documents
-                if document.is_latest and not document.is_deleted
+                document for document in documents if document.is_latest and not document.is_deleted
             ]
         return sorted(documents, key=lambda document: (document.doc_type, -document.version))
 
@@ -414,6 +409,7 @@ class DocumentService:
             sub_project_id=sub_project_id,
             phase_id=phase_id,
         )
+        self._ensure_scope_allows_upload(sub_project=sub_project, phase=phase)
         await self._ensure_visible(actor, sub_project)
         self._validate_file(
             actor=actor,
@@ -479,6 +475,23 @@ class DocumentService:
             await self._enqueue_scan_or_mark_failed(document)
         self._enqueue_search_index(document)
         return document
+
+    @staticmethod
+    def _ensure_scope_allows_upload(*, sub_project: SubProject, phase: Phase) -> None:
+        if sub_project.status in LOCKED_SUB_PROJECT_STATUSES:
+            raise BusinessException(
+                code=3003,
+                message="已完成或已结项子项目禁止上传文件",
+                status_code=409,
+                data={"status": sub_project.status.value},
+            )
+        if phase.status == PhaseStatus.completed:
+            raise BusinessException(
+                code=3003,
+                message="已完成环节禁止上传文件",
+                status_code=409,
+                data={"status": phase.status.value},
+            )
 
     async def _enqueue_scan_or_mark_failed(self, document: Document) -> None:
         if self._scan_scheduler is None:
@@ -687,7 +700,7 @@ class DocumentService:
     @staticmethod
     def _ensure_scan_allows_access(document: Document) -> None:
         status = getattr(document, "scan_status", None) or DocumentScanStatus.clean
-        if status == DocumentScanStatus.clean:
+        if status in {DocumentScanStatus.clean, DocumentScanStatus.pending}:
             return
         if status == DocumentScanStatus.infected:
             raise BusinessException(

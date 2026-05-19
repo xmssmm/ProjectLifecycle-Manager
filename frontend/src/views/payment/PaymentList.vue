@@ -25,6 +25,7 @@ const errorMessage = ref('');
 const overBudgetDialogVisible = ref(false);
 const overBudgetReason = ref('');
 const pendingPaymentPayload = ref<PaymentCreatePayload | null>(null);
+const paymentFileInput = ref<HTMLInputElement | null>(null);
 const reversalDialogVisible = ref(false);
 const reversalReason = ref('');
 const reversalTarget = ref<PaymentRead | null>(null);
@@ -79,6 +80,16 @@ async function submitPayment(): Promise<void> {
   } finally {
     submitting.value = false;
   }
+}
+
+function openCreateDialog(): void {
+  resetCreateForm();
+  createDialogVisible.value = true;
+}
+
+function closeCreateDialog(): void {
+  resetCreateForm();
+  createDialogVisible.value = false;
 }
 
 async function confirmOverBudgetPayment(): Promise<void> {
@@ -178,6 +189,9 @@ function resetCreateForm(): void {
   createForm.paymentDate = '';
   createForm.remark = '';
   selectedFiles.value = [];
+  if (paymentFileInput.value) {
+    paymentFileInput.value.value = '';
+  }
   errorMessage.value = '';
   pendingPaymentPayload.value = null;
   overBudgetReason.value = '';
@@ -227,7 +241,7 @@ function isOverBudgetError(error: unknown): boolean {
         class="desktop-only-action"
         data-test="open-create-payment"
         type="primary"
-        @click="createDialogVisible = true"
+        @click="openCreateDialog"
       >
         新增付款
       </el-button>
@@ -323,7 +337,7 @@ function isOverBudgetError(error: unknown): boolean {
         </el-form-item>
         <el-form-item label="付款凭证">
           <!-- prettier-ignore -->
-          <input data-test="payment-file" type="file" multiple @change="handleFileChange">
+          <input ref="paymentFileInput" data-test="payment-file" type="file" multiple @change="handleFileChange">
           <span class="payment-form__file-name">
             {{ selectedFiles.map((file) => file.name).join(', ') }}
           </span>
@@ -332,7 +346,7 @@ function isOverBudgetError(error: unknown): boolean {
       </el-form>
       <template #footer>
         <div class="project-form-actions">
-          <el-button @click="createDialogVisible = false">取消</el-button>
+          <el-button @click="closeCreateDialog">取消</el-button>
           <el-button
             data-test="submit-payment"
             :loading="submitting"

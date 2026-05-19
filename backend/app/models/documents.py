@@ -135,3 +135,8 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
     sub_project: Mapped[SubProject] = relationship()
     phase: Mapped[Phase] = relationship()
     uploader: Mapped[User] = relationship()
+
+    @property
+    def uploader_name(self) -> str | None:
+        uploader = self.__dict__.get("uploader")
+        return getattr(uploader, "username", None)

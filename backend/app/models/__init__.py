@@ -1,4 +1,5 @@
 """SQLAlchemy models package."""
+
 from app.models.acceptance_steps import AcceptanceStep, AcceptanceStepStatus
 from app.models.ai import AiAuditLog, AiAuditStatus
 from app.models.api_keys import ApiKey
@@ -51,6 +52,7 @@ from app.models.revoke_requests import (
     RevokeRequestStatus,
     RevokeReviewDecision,
 )
+from app.models.role_permissions import RolePermission
 from app.models.search import DocumentSearchEntry, DocumentSearchStatus
 from app.models.sub_projects import (
     SubProject,
@@ -122,6 +124,7 @@ __all__ = [
     "ReportJob",
     "ReportJobStatus",
     "ReportType",
+    "RolePermission",
     "Notification",
     "NotificationDelivery",
     "NotificationDeliveryStatus",

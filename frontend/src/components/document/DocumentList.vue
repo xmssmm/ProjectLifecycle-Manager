@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { CircleCheck, Clock, Collection, Download, View, Warning } from '@element-plus/icons-vue';
+import { Clock, Collection, Download, View } from '@element-plus/icons-vue';
 import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue';
 
 import { previewDocument, previewOfficeDocument } from '@/api/documents';
 import DocumentVersionDiff from '@/components/document/DocumentVersionDiff.vue';
 import type { DocumentRead } from '@/types/documents';
+import { documentLabel } from '@/utils/documentLabels';
 import { formatUserDateTime } from '@/utils/timezone';
 
 const PdfPreview = defineAsyncComponent(() => import('@/components/document/PdfPreview.vue'));
@@ -135,35 +136,8 @@ function formatDate(value: string): string {
   return formatUserDateTime(value, props.timezone);
 }
 
-function scanStatusLabel(document: DocumentRead): string {
-  const labels = {
-    pending: '扫描中',
-    clean: '已通过',
-    infected: '已隔离',
-    failed: '扫描失败',
-  } satisfies Record<DocumentRead['scan_status'], string>;
-  return labels[document.scan_status];
-}
-
-function scanStatusType(document: DocumentRead): 'danger' | 'info' | 'success' | 'warning' {
-  if (document.scan_status === 'clean') {
-    return 'success';
-  }
-  if (document.scan_status === 'infected') {
-    return 'danger';
-  }
-  if (document.scan_status === 'failed') {
-    return 'warning';
-  }
-  return 'info';
-}
-
-function scanStatusIcon(document: DocumentRead): typeof CircleCheck | typeof Warning {
-  return document.scan_status === 'clean' ? CircleCheck : Warning;
-}
-
 function canAccessFile(document: DocumentRead): boolean {
-  return document.scan_status === 'clean';
+  return !['infected', 'failed'].includes(document.scan_status);
 }
 </script>
 
@@ -179,7 +153,7 @@ function canAccessFile(document: DocumentRead): boolean {
     >
       <header class="document-list__header">
         <div>
-          <h3>{{ group.docType }}</h3>
+          <h3>{{ documentLabel(group.docType) }}</h3>
           <span>{{ group.documents.length }} 个版本</span>
         </div>
         <el-tag :type="group.latest.is_deleted ? 'warning' : 'success'">
@@ -203,26 +177,13 @@ function canAccessFile(document: DocumentRead): boolean {
           </div>
           <div>
             <dt>上传人</dt>
-            <dd>{{ selectedDocument(group).uploader_id }}</dd>
+            <dd>
+              {{ selectedDocument(group).uploader_name || selectedDocument(group).uploader_id }}
+            </dd>
           </div>
           <div>
             <dt>上传时间</dt>
             <dd>{{ formatDate(selectedDocument(group).created_at) }}</dd>
-          </div>
-          <div>
-            <dt>安全扫描</dt>
-            <dd>
-              <el-tag
-                :data-test="`scan-status-${group.docType}`"
-                :type="scanStatusType(selectedDocument(group))"
-              >
-                <component
-                  :is="scanStatusIcon(selectedDocument(group))"
-                  class="document-list__scan-icon"
-                />
-                {{ scanStatusLabel(selectedDocument(group)) }}
-              </el-tag>
-            </dd>
           </div>
         </dl>
         <div class="document-list__actions">
@@ -418,13 +379,6 @@ function canAccessFile(document: DocumentRead): boolean {
 .document-list__button-icon {
   width: 15px;
   height: 15px;
-}
-
-.document-list__scan-icon {
-  width: 13px;
-  height: 13px;
-  margin-right: 4px;
-  vertical-align: -2px;
 }
 
 @media (width <= 768px) {

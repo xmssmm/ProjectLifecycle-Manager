@@ -46,15 +46,16 @@ describe('CustomReportBuilder', () => {
     vi.mocked(deleteCustomReport).mockResolvedValue(ownedReport);
   });
 
-  it('loads datasets, renders field metadata, and previews rows', async () => {
+  it('loads project datasets and runs a direct project query', async () => {
     const wrapper = mount(CustomReportBuilder, { global: { stubs } });
     await flushPromises();
 
     expect(listCustomReportDatasets).toHaveBeenCalled();
-    expect(wrapper.text()).toContain('项目概览');
-    expect(wrapper.text()).toContain('项目编号');
+    expect(wrapper.text()).toContain('项目查询');
+    expect(wrapper.text()).not.toContain('设计器');
+    expect(wrapper.text()).not.toContain('已保存报表');
 
-    await wrapper.find('[data-test="preview-report"]').trigger('click');
+    await wrapper.find('[data-test="run-project-query"]').trigger('click');
     await flushPromises();
 
     expect(previewCustomReport).toHaveBeenCalledWith({
@@ -67,50 +68,7 @@ describe('CustomReportBuilder', () => {
     });
     expect(wrapper.text()).toContain('Z-2026-0001');
   });
-
-  it('disables save while a configured filter has no value', async () => {
-    const wrapper = mount(CustomReportBuilder, { global: { stubs } });
-    await flushPromises();
-
-    await wrapper.find('[data-test="report-name"]').setValue('项目概览');
-    await wrapper.find('[data-test="add-filter"]').trigger('click');
-    await flushPromises();
-
-    expect(wrapper.find('[data-test="save-report"]').attributes('disabled')).toBeDefined();
-  });
-
-  it('saves reports and hides delete actions for non owners', async () => {
-    const wrapper = mount(CustomReportBuilder, { global: { stubs } });
-    await flushPromises();
-
-    await wrapper.find('[data-test="report-name"]').setValue('项目概览');
-    await wrapper.find('[data-test="save-report"]').trigger('click');
-    await flushPromises();
-
-    expect(createCustomReport).toHaveBeenCalled();
-    expect(wrapper.findAll('[data-test="delete-report"]')).toHaveLength(1);
-  });
-
-  it('opens and copies saved report definitions into the builder', async () => {
-    const wrapper = mount(CustomReportBuilder, { global: { stubs } });
-    await flushPromises();
-
-    await wrapper.find('[data-test="open-report"]').trigger('click');
-    await flushPromises();
-
-    expect(previewCustomReport).toHaveBeenCalledWith(queryConfig);
-    expect(reportNameInput(wrapper).value).toBe(ownedReport.name);
-
-    await wrapper.find('[data-test="copy-report"]').trigger('click');
-    await flushPromises();
-
-    expect(reportNameInput(wrapper).value).toBe(`${ownedReport.name} 副本`);
-  });
 });
-
-function reportNameInput(wrapper: ReturnType<typeof mount>): HTMLInputElement {
-  return wrapper.find('[data-test="report-name"]').element as HTMLInputElement;
-}
 
 const dataset: ReportDatasetRead = {
   default_scope: 'project',
@@ -190,8 +148,7 @@ const stubs = {
   },
   ElCheckboxGroup: {
     props: ['modelValue'],
-    template:
-      '<div><slot /></div>',
+    template: '<div><slot /></div>',
   },
   ElInput: {
     props: ['modelValue'],
@@ -214,6 +171,7 @@ const stubs = {
   ElTag: { template: '<span><slot /></span>' },
   ReportChartPreview: {
     props: ['rows'],
-    template: '<div><span v-for="row in rows" :key="row.project_no">{{ row.project_no }}</span></div>',
+    template:
+      '<div><span v-for="row in rows" :key="row.project_no">{{ row.project_no }}</span></div>',
   },
 };

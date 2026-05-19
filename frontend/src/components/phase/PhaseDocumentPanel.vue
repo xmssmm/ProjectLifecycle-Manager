@@ -15,9 +15,13 @@ import type {
   PhaseRequiredDocumentRead,
   ProcurementType,
 } from '@/types/phases';
+import { documentLabel } from '@/utils/documentLabels';
 
 const props = defineProps<{
   subProjectId: string;
+}>();
+const emit = defineEmits<{
+  promoted: [];
 }>();
 
 const authStore = useAuthStore();
@@ -47,6 +51,7 @@ const phaseOptions = computed(() =>
     .sort((left, right) => left.phase_no - right.phase_no),
 );
 const missingDocTypes = computed(() => new Set(detail.value?.completion.missing_doc_types ?? []));
+const missingDocLabels = computed(() => [...missingDocTypes.value].map(documentLabel));
 const completionText = computed(() => {
   const completion = detail.value?.completion;
   if (!completion) {
@@ -68,11 +73,12 @@ const promoteBlockerText = computed(() => {
     return '当前环节不在进行中，暂不能推进';
   }
   if (missingDocTypes.value.size > 0) {
-    return `缺少材料：${[...missingDocTypes.value].join('、')}`;
+    return `缺少材料：${missingDocLabels.value.join('、')}`;
   }
   return '';
 });
 const isAcceptancePhase = computed(() => detail.value?.phase_no === 4);
+const isCompletedPhase = computed(() => detail.value?.status === 'completed');
 const acceptanceSteps = computed(() =>
   detail.value ? (acceptanceStepStore.stepsByPhase[detail.value.id] ?? []) : [],
 );
@@ -164,6 +170,7 @@ async function promoteSelectedPhase(): Promise<void> {
   documents.value = [];
   await phaseStore.fetchPhases(props.subProjectId);
   selectDefaultPhase();
+  emit('promoted');
 }
 
 async function handleDownload(documentItem: DocumentRead): Promise<void> {
@@ -256,12 +263,7 @@ function formatOptionalDate(value: string | null): string {
 
     <template v-else-if="detail">
       <div class="phase-document-panel__promote">
-        <el-alert
-          v-if="promoteBlockerText"
-          show-icon
-          :title="promoteBlockerText"
-          type="warning"
-        />
+        <el-alert v-if="promoteBlockerText" show-icon :title="promoteBlockerText" type="warning" />
         <el-button
           data-test="promote-selected-phase"
           :disabled="!canPromoteSelectedPhase"
@@ -306,7 +308,7 @@ function formatOptionalDate(value: string | null): string {
         >
           <div class="phase-document-panel__requirement-header">
             <div>
-              <h4>{{ document.doc_type }}</h4>
+              <h4>{{ documentLabel(document.doc_type) }}</h4>
               <p>数量规则 {{ document.qty_rule }}</p>
             </div>
             <el-tag :type="isMissing(document) ? 'danger' : 'success'">
@@ -314,11 +316,13 @@ function formatOptionalDate(value: string | null): string {
             </el-tag>
           </div>
           <DocumentUploader
+            v-if="!isCompletedPhase"
             :doc-type="document.doc_type"
             :phase-id="detail.id"
             :sub-project-id="props.subProjectId"
             @uploaded="handleUploaded"
           />
+          <p v-else class="phase-document-panel__locked-upload">已完成环节不可继续上传</p>
         </article>
       </div>
 
@@ -399,12 +403,14 @@ function formatOptionalDate(value: string | null): string {
             </div>
             <div class="phase-document-panel__step-actions">
               <DocumentUploader
+                v-if="!isCompletedPhase"
                 :acceptance-step-id="step.id"
                 doc-type="acceptance_report"
                 :phase-id="detail.id"
                 :sub-project-id="props.subProjectId"
                 @uploaded="handleUploaded"
               />
+              <p v-else class="phase-document-panel__locked-upload">已完成环节不可继续上传</p>
               <button
                 class="phase-document-panel__step-complete"
                 :data-test="`complete-acceptance-step-${step.id}`"
@@ -527,6 +533,12 @@ function formatOptionalDate(value: string | null): string {
 .phase-document-panel__step-error {
   color: #dc2626;
   margin: 10px 0 0;
+}
+
+.phase-document-panel__locked-upload {
+  color: #64748b;
+  font-size: 13px;
+  margin: 0;
 }
 
 .phase-document-panel__step-list {

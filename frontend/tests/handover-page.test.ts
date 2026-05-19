@@ -213,7 +213,7 @@ describe('SelfServiceHandover', () => {
       decision: 'confirm',
     });
     expect(wrapper.find('[data-test="approve-handover-request"]').exists()).toBe(false);
-    expect(wrapper.find('[data-test="force-handover-request"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test^="force-handover-request-"]').exists()).toBe(false);
   });
 
   it('lets reviewers approve and admins force requests', async () => {
@@ -231,7 +231,7 @@ describe('SelfServiceHandover', () => {
     expect(wrapper.find('[data-test="submit-self-handover"]').exists()).toBe(false);
 
     await wrapper.find('[data-test="approve-handover-request"]').trigger('click');
-    await wrapper.find('[data-test="force-handover-request"]').trigger('click');
+    await wrapper.find('[data-test="force-handover-request-handover-timeout"]').trigger('click');
     await flushPromises();
 
     expect(reviewHandoverRequest).toHaveBeenCalledWith('handover-review', {

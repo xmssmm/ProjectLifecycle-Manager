@@ -23,6 +23,7 @@ class DocumentRead(BaseModel):
     scan_result: str | None
     scanned_at: datetime | None
     uploader_id: UUID
+    uploader_name: str | None = None
     created_at: datetime
     updated_at: datetime
 

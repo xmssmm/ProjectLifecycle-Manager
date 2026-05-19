@@ -33,6 +33,7 @@ from app.api.v1.project_risk import router as project_risk_router
 from app.api.v1.project_templates import router as project_templates_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.revoke_requests import router as revoke_requests_router
+from app.api.v1.role_permissions import router as role_permissions_router
 from app.api.v1.search import router as search_router
 from app.api.v1.sub_projects import router as sub_projects_router
 from app.api.v1.system import router as system_router
@@ -183,6 +184,7 @@ def create_app(
             {"name": "exports", "description": "Database export job endpoints."},
             {"name": "payments", "description": "Payment creation and reversal endpoints."},
             {"name": "reports", "description": "Report generation and progress endpoints."},
+            {"name": "role-permissions", "description": "Role permission matrix endpoints."},
             {"name": "notifications", "description": "Notification query endpoints."},
             {"name": "oauth", "description": "OAuth2/OIDC SSO endpoints."},
             {"name": "revoke-requests", "description": "Phase revoke request endpoints."},
@@ -248,6 +250,7 @@ def create_app(
     app.include_router(project_templates_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(revoke_requests_router, prefix="/api/v1")
+    app.include_router(role_permissions_router, prefix="/api/v1")
     app.include_router(search_router, prefix="/api/v1")
     app.include_router(sub_projects_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")

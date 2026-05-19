@@ -172,7 +172,10 @@ async function copyReport(report: CustomReportDefinitionRead): Promise<void> {
   ElMessage.success('报表已复制到设计器');
 }
 
-async function applyReport(report: CustomReportDefinitionRead, mode: 'copy' | 'open'): Promise<void> {
+async function applyReport(
+  report: CustomReportDefinitionRead,
+  mode: 'copy' | 'open',
+): Promise<void> {
   selectedDatasetKey.value = report.query_config.dataset;
   await nextTick();
   const primaryMetric = report.query_config.metrics[0];
@@ -189,8 +192,7 @@ async function applyReport(report: CustomReportDefinitionRead, mode: 'copy' | 'o
   scheduleTime.value = normalizeScheduleTime(report.schedule_time);
   scheduleDayOfWeek.value = report.schedule_day_of_week ?? 1;
   scheduleDayOfMonth.value = report.schedule_day_of_month ?? 1;
-  scheduleTimezone.value =
-    report.schedule_timezone ?? authStore.user?.timezone ?? 'Asia/Hong_Kong';
+  scheduleTimezone.value = report.schedule_timezone ?? authStore.user?.timezone ?? 'Asia/Hong_Kong';
   filters.splice(
     0,
     filters.length,
@@ -219,8 +221,7 @@ function buildSchedulePayload(): {
     };
   }
   return {
-    schedule_day_of_month:
-      scheduleFrequency.value === 'monthly' ? scheduleDayOfMonth.value : null,
+    schedule_day_of_month: scheduleFrequency.value === 'monthly' ? scheduleDayOfMonth.value : null,
     schedule_day_of_week: scheduleFrequency.value === 'weekly' ? scheduleDayOfWeek.value : null,
     schedule_frequency: scheduleFrequency.value,
     schedule_time: scheduleTime.value,
@@ -283,8 +284,8 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
   <section class="report-builder">
     <div class="report-builder__header">
       <div>
-        <h2>自定义报表</h2>
-        <p>配置白名单数据集、字段、筛选条件和预览结果。</p>
+        <h2>项目查询</h2>
+        <p>按项目数据集、字段和筛选条件直接查询结果。</p>
       </div>
       <el-button :icon="Refresh" :loading="store.loading" @click="store.fetchMetadata">
         刷新
@@ -292,12 +293,12 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
     </div>
 
     <div class="report-builder__mobile-note">
-      移动端仅支持查看预览和已保存报表，复杂编辑请在桌面端完成。
+      移动端仅支持查看查询结果，复杂条件请在桌面端完成。
     </div>
 
     <div class="report-builder__workspace">
       <section class="report-builder__panel report-builder__panel--builder">
-        <h3>设计器</h3>
+        <h3>查询条件</h3>
         <div class="report-builder__form-grid">
           <label>
             <span>报表名称</span>
@@ -381,11 +382,7 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
         <section class="report-builder__field-section">
           <h4>维度</h4>
           <el-checkbox-group v-model="selectedDimensions">
-            <el-checkbox
-              v-for="field in fields"
-              :key="field.key"
-              :label="field.key"
-            >
+            <el-checkbox v-for="field in fields" :key="field.key" :label="field.key">
               {{ field.label }}
             </el-checkbox>
           </el-checkbox-group>
@@ -434,12 +431,7 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
               />
             </el-select>
             <el-select v-model="filter.op">
-              <el-option
-                v-for="op in filterOps(filter.field)"
-                :key="op"
-                :label="op"
-                :value="op"
-              />
+              <el-option v-for="op in filterOps(filter.field)" :key="op" :label="op" :value="op" />
             </el-select>
             <el-input v-model="filter.value" />
             <el-button :icon="Delete" circle @click="removeFilter(index)" />
@@ -448,12 +440,12 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
 
         <div class="report-builder__actions">
           <el-button
-            data-test="preview-report"
+            data-test="run-project-query"
             :icon="View"
             :loading="store.previewing"
             @click="runPreview"
           >
-            预览
+            查询
           </el-button>
           <el-button
             data-test="save-report"
@@ -470,11 +462,7 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
 
       <section class="report-builder__panel report-builder__panel--preview">
         <h3>预览</h3>
-        <ReportChartPreview
-          :chart-type="chartType"
-          :columns="previewColumns"
-          :rows="previewRows"
-        />
+        <ReportChartPreview :chart-type="chartType" :columns="previewColumns" :rows="previewRows" />
       </section>
     </div>
 
@@ -502,7 +490,7 @@ function aggregateOptions(field: ReportDatasetFieldRead | null | undefined): Dat
     </section>
 
     <section class="report-builder__panel">
-      <h3>已保存报表</h3>
+      <h3>查询方案</h3>
       <DataTable
         :columns="reportColumns"
         :loading="store.loading"

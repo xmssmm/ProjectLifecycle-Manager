@@ -11,6 +11,7 @@ import DepartmentListView from '@/views/admin/DepartmentList.vue';
 import HandoverHistoryView from '@/views/admin/HandoverHistory.vue';
 import ProjectImportView from '@/views/admin/ProjectImport.vue';
 import ProjectTemplateLibraryView from '@/views/admin/ProjectTemplateLibrary.vue';
+import RolePermissionManagementView from '@/views/admin/RolePermissionManagement.vue';
 import UserHandoverView from '@/views/admin/UserHandover.vue';
 import UserListView from '@/views/admin/UserList.vue';
 import WebhookManagementView from '@/views/admin/WebhookManagement.vue';
@@ -66,6 +67,12 @@ const router = createRouter({
       name: 'admin-users',
       component: UserListView,
       meta: { requireRole: ['admin'], requiresAuth: true },
+    },
+    {
+      path: '/admin/roles',
+      name: 'admin-role-permissions',
+      component: RolePermissionManagementView,
+      meta: { permission: 'role_permission.manage', requiresAuth: true },
     },
     {
       path: '/admin/departments',

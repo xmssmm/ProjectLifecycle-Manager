@@ -8,6 +8,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.core.deps import CurrentUserContext, get_auth_token_store, get_current_token_context
 from app.core.exceptions import AuthenticationError
+from app.core.permissions import get_role_permission_service
 from app.core.redis import create_redis_client
 from app.core.responses import success_response
 from app.schemas.auth import AccessTokenRead, CurrentUserRead, LoginRequest, TokenPairRead
@@ -21,6 +22,7 @@ from app.services.auth import (
     login_user,
     validate_token_claims,
 )
+from app.services.role_permissions import RolePermissionService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -99,6 +101,7 @@ async def logout(
 @router.get("/me")
 async def me(
     context: Annotated[CurrentUserContext, Depends(get_current_token_context)],
+    role_permissions: Annotated[RolePermissionService, Depends(get_role_permission_service)],
 ) -> dict[str, object]:
     user = context.user
     return success_response(
@@ -110,5 +113,6 @@ async def me(
             dept_id=user.dept_id,
             status=user.status,
             timezone=user.timezone,
+            permissions=await role_permissions.effective_permissions(user.role),
         ).model_dump(mode="json"),
     )
