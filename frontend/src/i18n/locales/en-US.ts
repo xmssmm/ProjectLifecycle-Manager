@@ -60,6 +60,7 @@ export default {
     roles: 'Role Permissions',
     search: 'Search',
     selfServiceHandover: 'Self-service Handover',
+    subProjects: 'Sub-projects',
     tasks: 'Tasks',
     users: 'Users',
     webhooks: 'Webhooks',

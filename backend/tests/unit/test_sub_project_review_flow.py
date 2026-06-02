@@ -204,7 +204,7 @@ async def test_review_sub_project_approves_and_creates_six_phases() -> None:
         PhaseStatus.waiting,
         PhaseStatus.waiting,
         PhaseStatus.in_progress,
-        PhaseStatus.waiting,
+        PhaseStatus.in_progress,
     ]
     assert repository.reviews[0].decision == ProjectReviewDecision.approve
     assert notification_repository.notifications[0].scenario == "project_review_result"

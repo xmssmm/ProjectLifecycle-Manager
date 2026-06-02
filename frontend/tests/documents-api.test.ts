@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApiClient } from '../src/api/client';
 import {
+  deleteDocument,
   downloadDocument,
   listDocuments,
   previewDocument,
@@ -47,6 +48,12 @@ describe('documents api', () => {
     client.defaults.adapter = recordingAdapter(calls, new Blob(['pdf']));
     await downloadDocument('doc-1', client);
     await previewDocument('doc-1', client);
+    client.defaults.adapter = recordingAdapter(calls, {
+      code: 0,
+      message: 'success',
+      data: { ...sampleDocument, is_deleted: true, is_latest: false },
+    });
+    await deleteDocument('doc-1', client);
 
     expect(calls[0]).toMatchObject({
       method: 'get',
@@ -70,6 +77,7 @@ describe('documents api', () => {
       responseType: 'blob',
       url: '/documents/doc-1/preview',
     });
+    expect(calls[4]).toMatchObject({ method: 'delete', url: '/documents/doc-1' });
   });
 });
 

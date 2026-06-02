@@ -15,6 +15,7 @@ from app.core.exceptions import BusinessException
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.documents import Document
+from app.models.payments import Payment, PaymentType, PaymentVoucher
 from app.models.phases import (
     Phase,
     PhaseDocRequirement,
@@ -161,6 +162,7 @@ def make_document(
     phase: Phase,
     uploader: User,
     doc_type: str,
+    is_deleted: bool = False,
 ) -> Document:
     now = datetime.now(UTC)
     return Document(
@@ -174,9 +176,37 @@ def make_document(
         file_path=f"{sub_project.id}/{phase.id}/{doc_type}.pdf",
         file_size=128,
         version=1,
-        is_latest=True,
-        is_deleted=False,
+        is_latest=not is_deleted,
+        is_deleted=is_deleted,
         uploader_id=uploader.id,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def make_payment(sub_project: SubProject) -> Payment:
+    now = datetime.now(UTC)
+    return Payment(
+        id=uuid4(),
+        payment_no=f"{sub_project.project_no}-PAY-{uuid4().hex[:4]}",
+        sub_project_id=sub_project.id,
+        amount=Decimal("100.00"),
+        payment_date=date(2026, 5, 10),
+        remark=None,
+        payment_type=PaymentType.normal,
+        reverses_payment_id=None,
+        operator_id=sub_project.manager_id,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def make_payment_voucher(payment: Payment, document: Document) -> PaymentVoucher:
+    now = datetime.now(UTC)
+    return PaymentVoucher(
+        id=uuid4(),
+        payment_id=payment.id,
+        document_id=document.id,
         created_at=now,
         updated_at=now,
     )
@@ -198,6 +228,8 @@ def make_service(
     phases: list[Phase],
     templates: list[PhaseDocTemplate],
     documents: list[Document] | None = None,
+    payments: list[Payment] | None = None,
+    payment_vouchers: list[PaymentVoucher] | None = None,
     members: list[SubProjectMember] | None = None,
     workflow_versions: list[WorkflowTemplateVersion] | None = None,
 ) -> tuple[PhaseService, InMemoryPhaseRepository, InMemoryNotificationRepository]:
@@ -205,6 +237,8 @@ def make_service(
         phases=phases,
         phase_doc_templates=templates,
         documents=documents or [],
+        payments=payments or [],
+        payment_vouchers=payment_vouchers or [],
         sub_projects=sub_projects,
         members=members or [],
         workflow_versions=workflow_versions or [],
@@ -307,6 +341,33 @@ async def test_promote_inquiry_procurement_requires_three_supplier_quotes() -> N
     assert exc.value.data["missing_documents"] == [
         {"doc_type": "supplier_quote", "required": ">=3", "actual": 2},
     ]
+
+
+@pytest.mark.asyncio
+async def test_promote_procurement_requires_procurement_type() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase1 = make_phase(sub_project, 1, PhaseStatus.completed)
+    phase2 = make_phase(sub_project, 2, PhaseStatus.in_progress, procurement_type=None)
+    service, _repository, _notifications = make_service(
+        sub_projects=[sub_project],
+        phases=[phase1, phase2],
+        templates=[make_template(2, "oa_screenshot", PhaseDocRequirement.required, "=1")],
+        documents=[
+            make_document(
+                sub_project=sub_project,
+                phase=phase2,
+                uploader=leader,
+                doc_type="oa_screenshot",
+            ),
+        ],
+    )
+
+    with pytest.raises(BusinessException) as exc:
+        await service.promote_phase(actor=leader, phase_id=phase2.id)
+
+    assert exc.value.code == 3002
+    assert exc.value.data == {"missing_fields": ["procurement_type"]}
 
 
 @pytest.mark.asyncio
@@ -497,7 +558,7 @@ async def test_promote_phase_completes_current_activates_next_and_notifies_membe
 
 
 @pytest.mark.asyncio
-async def test_promote_post_review_requires_acceptance_completed() -> None:
+async def test_promote_post_review_does_not_require_acceptance_completed() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
     sub_project = make_sub_project(leader)
     phase4 = make_phase(sub_project, 4, PhaseStatus.in_progress)
@@ -525,11 +586,9 @@ async def test_promote_post_review_requires_acceptance_completed() -> None:
         ],
     )
 
-    with pytest.raises(BusinessException) as exc:
-        await service.promote_phase(actor=leader, phase_id=phase6.id)
+    result = await service.promote_phase(actor=leader, phase_id=phase6.id)
 
-    assert exc.value.code == 3003
-    assert phase6.status == PhaseStatus.in_progress
+    assert result.phase.status == PhaseStatus.completed
 
 
 @pytest.mark.asyncio
@@ -567,6 +626,32 @@ async def test_project_member_can_promote_assigned_phase() -> None:
     assert result.phase.status == PhaseStatus.completed
 
 
+@pytest.mark.parametrize("role", [UserRole.dept_manager, UserRole.finance_manager])
+@pytest.mark.asyncio
+async def test_v4_management_roles_can_promote_phase(role: UserRole) -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    actor = make_user(role, username=role.value)
+    sub_project = make_sub_project(leader)
+    phase1 = make_phase(sub_project, 1, PhaseStatus.in_progress)
+    service, _repository, _notifications = make_service(
+        sub_projects=[sub_project],
+        phases=[phase1],
+        templates=[make_template(1, "meeting_material", PhaseDocRequirement.required, "=1")],
+        documents=[
+            make_document(
+                sub_project=sub_project,
+                phase=phase1,
+                uploader=leader,
+                doc_type="meeting_material",
+            ),
+        ],
+    )
+
+    result = await service.promote_phase(actor=actor, phase_id=phase1.id)
+
+    assert result.phase.status == PhaseStatus.completed
+
+
 @pytest.mark.asyncio
 async def test_payment_phase_can_complete_before_post_review_when_voucher_uploaded() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
@@ -577,26 +662,86 @@ async def test_payment_phase_can_complete_before_post_review_when_voucher_upload
     phase4 = make_phase(sub_project, 4, PhaseStatus.completed)
     phase5 = make_phase(sub_project, 5, PhaseStatus.in_progress)
     phase6 = make_phase(sub_project, 6, PhaseStatus.waiting)
+    payment = make_payment(sub_project)
+    voucher_document = make_document(
+        sub_project=sub_project,
+        phase=phase5,
+        uploader=leader,
+        doc_type="payment_voucher",
+    )
     service, _repository, _notifications = make_service(
         sub_projects=[sub_project],
         phases=[phase1, phase2, phase3, phase4, phase5, phase6],
         templates=[
             make_template(5, "payment_voucher", PhaseDocRequirement.required, "per_payment>=1"),
         ],
-        documents=[
-            make_document(
-                sub_project=sub_project,
-                phase=phase5,
-                uploader=leader,
-                doc_type="payment_voucher",
-            ),
-        ],
+        documents=[voucher_document],
+        payments=[payment],
+        payment_vouchers=[make_payment_voucher(payment, voucher_document)],
     )
 
     result = await service.promote_phase(actor=leader, phase_id=phase5.id)
 
     assert result.phase.status == PhaseStatus.completed
     assert sub_project.status != SubProjectStatus.completed
+
+
+@pytest.mark.asyncio
+async def test_payment_phase_requires_active_voucher_for_each_normal_payment() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phases = [
+        make_phase(sub_project, 1, PhaseStatus.completed),
+        make_phase(sub_project, 2, PhaseStatus.completed),
+        make_phase(sub_project, 3, PhaseStatus.completed),
+        make_phase(sub_project, 4, PhaseStatus.completed),
+        make_phase(sub_project, 5, PhaseStatus.in_progress),
+    ]
+    phase5 = phases[-1]
+    covered_payment = make_payment(sub_project)
+    missing_payment = make_payment(sub_project)
+    active_document = make_document(
+        sub_project=sub_project,
+        phase=phase5,
+        uploader=leader,
+        doc_type="payment_voucher",
+    )
+    deleted_document = make_document(
+        sub_project=sub_project,
+        phase=phase5,
+        uploader=leader,
+        doc_type="payment_voucher",
+        is_deleted=True,
+    )
+    service, _repository, _notifications = make_service(
+        sub_projects=[sub_project],
+        phases=phases,
+        templates=[
+            make_template(5, "payment_voucher", PhaseDocRequirement.required, "per_payment>=1"),
+        ],
+        documents=[active_document, deleted_document],
+        payments=[covered_payment, missing_payment],
+        payment_vouchers=[
+            make_payment_voucher(covered_payment, active_document),
+            make_payment_voucher(missing_payment, deleted_document),
+        ],
+    )
+
+    with pytest.raises(BusinessException) as exc:
+        await service.promote_phase(actor=leader, phase_id=phase5.id)
+
+    assert exc.value.data == {
+        "missing_documents": [
+            {
+                "actual": 1,
+                "doc_type": "payment_voucher",
+                "missing_payment_ids": [str(missing_payment.id)],
+                "payment_count": 2,
+                "required": "per_payment>=1",
+                "voucher_count": 1,
+            },
+        ],
+    }
 
 
 def test_phase_promote_endpoint_returns_current_and_activated_phase() -> None:

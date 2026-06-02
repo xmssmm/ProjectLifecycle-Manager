@@ -45,7 +45,7 @@ def make_user(role: UserRole, *, username: str, dept_id: UUID | None = None) -> 
 
 
 def make_main_project(*, dept_id: UUID, status: MainProjectStatus) -> MainProject:
-    now = datetime.now(UTC)
+    now = datetime(2026, 5, 10, tzinfo=UTC)
     return MainProject(
         id=uuid4(),
         project_no=f"Z-2026-{uuid4().hex[:4]}",
@@ -139,10 +139,10 @@ def make_payment(*, sub_project_id: UUID, amount: Decimal, payment_date: date) -
 
 @pytest.mark.asyncio
 async def test_admin_dept_and_finance_dashboards_cover_role_specific_metrics() -> None:
-    admin = make_user(UserRole.admin, username="admin")
-    dept_manager = make_user(UserRole.dept_manager, username="dept-manager")
-    finance = make_user(UserRole.finance_manager, username="finance")
     dept_id = uuid4()
+    admin = make_user(UserRole.admin, username="admin")
+    dept_manager = make_user(UserRole.dept_manager, username="dept-manager", dept_id=dept_id)
+    finance = make_user(UserRole.finance_manager, username="finance")
     active_main = make_main_project(dept_id=dept_id, status=MainProjectStatus.in_progress)
     completed_main = make_main_project(dept_id=dept_id, status=MainProjectStatus.completed)
     over_budget_sub = make_sub_project(

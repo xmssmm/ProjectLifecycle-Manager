@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from app.api.v1.main_projects import get_main_project_service
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
-from app.core.exceptions import PermissionDeniedError
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.main_projects import MainProject
@@ -98,13 +97,14 @@ async def test_progress_funnel_groups_active_phase_and_drill_sub_projects() -> N
 
 
 @pytest.mark.asyncio
-async def test_progress_funnel_requires_project_view_permission() -> None:
+async def test_progress_funnel_allows_v4_project_member_view_all() -> None:
     actor = cast(User, UserFactory(role=UserRole.proj_member))
     project = cast(MainProject, MainProjectFactory())
     service = MainProjectService(repository=InMemoryMainProjectRepository([project]))
 
-    with pytest.raises(PermissionDeniedError):
-        await service.get_progress_funnel(actor=actor, project_id=project.id)
+    funnel = await service.get_progress_funnel(actor=actor, project_id=project.id)
+
+    assert funnel.main_project_id == project.id
 
 
 def test_progress_funnel_endpoint_returns_standard_payload() -> None:

@@ -28,8 +28,18 @@ from app.storage.base import StorageBackend, StorageSecurityError
 from app.validators.file_validator import DefaultFileValidator, FileValidationError, FileValidator
 
 VIEW_ALL_DOCUMENT_ROLES = frozenset(
+    {
+        UserRole.admin,
+        UserRole.dept_manager,
+        UserRole.finance_manager,
+        UserRole.proj_leader,
+        UserRole.proj_member,
+    },
+)
+DELETE_DOCUMENT_ROLES = frozenset(
     {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
 )
+MULTI_INSTANCE_DOCUMENT_TYPES = frozenset({"payment_voucher", "supplier_quote"})
 LOCKED_SUB_PROJECT_STATUSES = frozenset(
     {SubProjectStatus.completed, SubProjectStatus.closed, SubProjectStatus.terminated},
 )
@@ -432,9 +442,14 @@ class DocumentService:
             doc_type=cleaned_doc_type,
         )
         next_version = max((document.version for document in group_documents), default=0) + 1
-        for document in group_documents:
-            if document.is_latest:
-                document.is_latest = False
+        is_multi_instance = self._is_multi_instance_document(
+            cleaned_doc_type,
+            acceptance_step_id=acceptance_step_id,
+        )
+        if not is_multi_instance:
+            for document in group_documents:
+                if document.is_latest:
+                    document.is_latest = False
 
         storage_key = self._save_content(
             sub_project_id=sub_project.id,
@@ -474,6 +489,52 @@ class DocumentService:
         if self._scan_scheduler is not None:
             await self._enqueue_scan_or_mark_failed(document)
         self._enqueue_search_index(document)
+        return document
+
+    async def delete_document(
+        self,
+        *,
+        actor: User,
+        document_id: UUID,
+    ) -> Document:
+        document = await self._get_authorized_document(actor=actor, document_id=document_id)
+        if document.is_deleted:
+            return document
+        sub_project, phase = await self._get_existing_scope(
+            sub_project_id=document.sub_project_id,
+            phase_id=document.phase_id,
+        )
+        self._ensure_scope_allows_upload(sub_project=sub_project, phase=phase)
+        self._ensure_can_delete(actor=actor, document=document, sub_project=sub_project)
+
+        group_documents = await self._repository.list_group_documents_for_update(
+            sub_project_id=document.sub_project_id,
+            phase_id=document.phase_id,
+            doc_type=document.doc_type,
+        )
+        now = datetime.now(UTC)
+        document.is_deleted = True
+        document.is_latest = False
+        document.updated_at = now
+
+        if not self._is_multi_instance_document(
+            document.doc_type,
+            acceptance_step_id=document.acceptance_step_id,
+        ):
+            replacement = next(
+                (
+                    item
+                    for item in group_documents
+                    if item.id != document.id and not item.is_deleted
+                ),
+                None,
+            )
+            if replacement is not None:
+                replacement.is_latest = True
+                replacement.updated_at = now
+
+        await self._repository.commit()
+        await self._repository.refresh(document)
         return document
 
     @staticmethod
@@ -762,6 +823,16 @@ class DocumentService:
             return
         raise PermissionDeniedError()
 
+    @staticmethod
+    def _ensure_can_delete(*, actor: User, document: Document, sub_project: SubProject) -> None:
+        if actor.role in DELETE_DOCUMENT_ROLES:
+            return
+        if sub_project.manager_id == actor.id:
+            return
+        if document.uploader_id == actor.id:
+            return
+        raise PermissionDeniedError()
+
     def _ensure_file_size_allowed(self, content: bytes) -> None:
         if len(content) > self._max_file_size_bytes:
             raise ValidationFailedError("File exceeds maximum upload size")
@@ -839,6 +910,16 @@ class DocumentService:
                 audit_context=audit_context,
             )
             raise
+
+    @staticmethod
+    def _is_multi_instance_document(
+        doc_type: str,
+        *,
+        acceptance_step_id: UUID | None,
+    ) -> bool:
+        return doc_type in MULTI_INSTANCE_DOCUMENT_TYPES or (
+            doc_type == "acceptance_report" and acceptance_step_id is not None
+        )
 
     @staticmethod
     def _record_upload_rejected(

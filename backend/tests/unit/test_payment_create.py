@@ -233,6 +233,37 @@ async def test_create_payment_requires_voucher_and_over_budget_confirmation() ->
 
 
 @pytest.mark.asyncio
+async def test_create_payment_keeps_multiple_vouchers_for_one_payment() -> None:
+    service, repository, _storage, finance, sub_project, _main_project, _notifications = (
+        make_service()
+    )
+
+    payment = await service.create_payment(
+        actor=finance,
+        sub_project_id=sub_project.id,
+        amount=Decimal("120.50"),
+        payment_date=date(2026, 5, 10),
+        voucher_files=[
+            PaymentVoucherUpload(
+                file_name="contract.pdf",
+                content_type="application/pdf",
+                content=b"%PDF-1.7\ncontract",
+            ),
+            PaymentVoucherUpload(
+                file_name="invoice.pdf",
+                content_type="application/pdf",
+                content=b"%PDF-1.7\ninvoice",
+            ),
+        ],
+    )
+
+    assert len(repository.payment_vouchers) == 2
+    assert {voucher.payment_id for voucher in repository.payment_vouchers} == {payment.id}
+    assert [document.version for document in repository.documents] == [1, 2]
+    assert [document.is_latest for document in repository.documents] == [True, True]
+
+
+@pytest.mark.asyncio
 async def test_create_payment_rejects_completed_sub_project() -> None:
     service, repository, _storage, finance, sub_project, _main_project, _notifications = (
         make_service()

@@ -45,7 +45,13 @@ from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter, to_a
 from app.services.notifications import NotificationService
 
 VIEW_ALL_SUB_PROJECT_ROLES = frozenset(
-    {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+    {
+        UserRole.admin,
+        UserRole.dept_manager,
+        UserRole.finance_manager,
+        UserRole.proj_leader,
+        UserRole.proj_member,
+    },
 )
 OPEN_MAIN_PROJECT_STATUSES = frozenset(
     {MainProjectStatus.not_started, MainProjectStatus.in_progress},
@@ -919,8 +925,6 @@ class SubProjectService:
         ]
 
     async def create_sub_project(self, *, actor: User, payload: SubProjectCreate) -> SubProject:
-        if actor.role != UserRole.proj_leader:
-            raise PermissionDeniedError()
         main_project = await self._get_existing_main_project(payload.main_project_id)
         if main_project.status not in OPEN_MAIN_PROJECT_STATUSES:
             raise self._invalid_status(main_project.status.value, "当前主项目状态不允许创建子项目")
@@ -1337,8 +1341,10 @@ class SubProjectService:
                     phase_no=phase_no,
                     code=code,
                     name=name,
-                    status=PhaseStatus.in_progress if phase_no in {1, 5} else PhaseStatus.waiting,
-                    enter_at=now if phase_no in {1, 5} else None,
+                    status=PhaseStatus.in_progress
+                    if phase_no in {1, 5, 6}
+                    else PhaseStatus.waiting,
+                    enter_at=now if phase_no in {1, 5, 6} else None,
                     finish_at=None,
                     procurement_type=None,
                     created_at=now,
@@ -1376,8 +1382,10 @@ class SubProjectService:
                     phase_no=phase_no,
                     code=str(definition["key"]),
                     name=str(definition["name"]),
-                    status=PhaseStatus.in_progress if phase_no == 1 else PhaseStatus.waiting,
-                    enter_at=now if phase_no == 1 else None,
+                    status=PhaseStatus.in_progress
+                    if phase_no in {1, 5, 6}
+                    else PhaseStatus.waiting,
+                    enter_at=now if phase_no in {1, 5, 6} else None,
                     finish_at=None,
                     procurement_type=None,
                     created_at=now,

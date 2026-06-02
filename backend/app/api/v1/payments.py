@@ -41,7 +41,13 @@ def get_payment_service(
 
 
 def serialize_payment(payment: Payment) -> dict[str, object]:
-    return PaymentRead.model_validate(payment).model_dump(mode="json")
+    payload = PaymentRead.model_validate(payment).model_dump(mode="json")
+    payload["vouchers"] = [
+        voucher
+        for voucher in payload["vouchers"]
+        if not voucher["document"]["is_deleted"]
+    ]
+    return payload
 
 
 @router.get("")

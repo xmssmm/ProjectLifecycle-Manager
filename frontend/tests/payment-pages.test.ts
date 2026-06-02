@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPayment, listPayments, reversePayment } from '@/api/payments';
+import { deleteDocument } from '@/api/documents';
 import { useAuthStore } from '@/stores/useAuthStore';
 import type { PaymentRead } from '@/types/payments';
 import PaymentList from '@/views/payment/PaymentList.vue';
@@ -12,6 +13,11 @@ vi.mock('@/api/payments', () => ({
   getPayment: vi.fn(),
   listPayments: vi.fn(),
   reversePayment: vi.fn(),
+}));
+
+vi.mock('@/api/documents', () => ({
+  deleteDocument: vi.fn(),
+  downloadDocument: vi.fn(),
 }));
 
 describe('PaymentList', () => {
@@ -36,6 +42,26 @@ describe('PaymentList', () => {
     });
     vi.mocked(createPayment).mockResolvedValue(newPayment);
     vi.mocked(reversePayment).mockResolvedValue(reversalPayment);
+    vi.mocked(deleteDocument).mockResolvedValue({
+      acceptance_step_id: null,
+      created_at: '2026-05-10T00:00:00Z',
+      display_name: 'voucher.pdf',
+      doc_no: 'DOC-1',
+      doc_type: 'payment_voucher',
+      file_name: 'voucher.pdf',
+      file_size: 1024,
+      id: 'doc-1',
+      is_deleted: true,
+      is_latest: false,
+      phase_id: 'phase-5',
+      scan_result: null,
+      scan_status: 'clean',
+      scanned_at: null,
+      sub_project_id: 'sub-1',
+      updated_at: '2026-05-10T00:00:00Z',
+      uploader_id: 'finance-1',
+      version: 1,
+    });
   });
 
   it('lists payments, filters by type, and creates a payment with voucher', async () => {
@@ -47,6 +73,7 @@ describe('PaymentList', () => {
 
     expect(listPayments).toHaveBeenCalledWith('sub-1', { page: 1, pageSize: 20 });
     expect(wrapper.text()).toContain('Z-2026-0001-ZX-001-PAY-001');
+    expect(wrapper.text()).toContain('voucher.pdf');
     expect(wrapper.text()).toContain('reversal');
 
     await wrapper.find('[data-test="payment-type-filter"]').setValue('reversal');
@@ -81,6 +108,11 @@ describe('PaymentList', () => {
     expect(wrapper.find('[data-test="open-create-payment"]').classes()).toContain(
       'desktop-only-action',
     );
+
+    await wrapper.find('[data-test="delete-payment-voucher"]').trigger('click');
+    await flushPromises();
+
+    expect(deleteDocument).toHaveBeenCalledWith('doc-1');
   });
 
   it('confirms over-budget create and reverses normal payments with a reason', async () => {
@@ -159,6 +191,27 @@ const samplePayment: PaymentRead = {
   reverses_payment_id: null,
   sub_project_id: 'sub-1',
   updated_at: '2026-05-10T00:00:00Z',
+  vouchers: [
+    {
+      created_at: '2026-05-10T00:00:00Z',
+      document: {
+        created_at: '2026-05-10T00:00:00Z',
+        display_name: 'voucher.pdf',
+        doc_type: 'payment_voucher',
+        file_name: 'voucher.pdf',
+        file_size: 1024,
+        id: 'doc-1',
+        is_deleted: false,
+        updated_at: '2026-05-10T00:00:00Z',
+        uploader_id: 'finance-1',
+        version: 1,
+      },
+      document_id: 'doc-1',
+      id: 'voucher-1',
+      payment_id: 'pay-1',
+      updated_at: '2026-05-10T00:00:00Z',
+    },
+  ],
 };
 
 const reversalPayment: PaymentRead = {

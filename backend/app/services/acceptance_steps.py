@@ -25,7 +25,13 @@ from app.schemas.acceptance_steps import AcceptanceStepCreate, AcceptanceStepUpd
 ACCEPTANCE_PHASE_NO = 4
 ACCEPTANCE_REPORT_DOC_TYPE = "acceptance_report"
 VIEW_ALL_ACCEPTANCE_ROLES = frozenset(
-    {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+    {
+        UserRole.admin,
+        UserRole.dept_manager,
+        UserRole.finance_manager,
+        UserRole.proj_leader,
+        UserRole.proj_member,
+    },
 )
 
 

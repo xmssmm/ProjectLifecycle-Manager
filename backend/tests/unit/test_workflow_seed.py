@@ -95,6 +95,14 @@ def test_procurement_phase_definitions_cover_existing_phase_doc_templates() -> N
     ]
 
     assert len(documents) == len(PHASE_DOC_TEMPLATES)
+    assert [definition["allow_parallel"] for definition in definitions] == [
+        False,
+        False,
+        False,
+        False,
+        True,
+        True,
+    ]
     assert ("meeting_material", "required", None) in documents
     assert ("supplier_quote", "conditional", "inquiry") in documents
     assert ("bid_document", "conditional", "bidding") in documents

@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | KR-01 | BR-REVIEW-01：`dept_manager` 自审被拒 | 创建人本人审核主项目时返回 1010；`admin` 兜底审核会记录 `admin_override=true` | `backend/tests/unit/test_main_project_review_flow.py::test_review_rejects_self_review_and_admin_records_override_diff` |
 | KR-02 | BR-ROLE-01：`dept_manager < 2` 健康告警 | 角色数量不足时 health warning 返回 `dept_manager_minimum_not_met`，补足后告警消失 | `backend/tests/unit/test_system_health_warnings.py::test_health_warnings_report_and_clear_dept_manager_shortage` |
-| KR-03 | BR-PHASE-02：验收未完成前禁止推进后评价 | 环节 6 推进时，如果验收环节未完成则拒绝并返回状态不允许 | `backend/tests/unit/test_phase_promote.py::test_promote_post_review_requires_acceptance_completed` |
+| KR-03 | BR-PHASE-02：V4 后评价可独立推进 | 环节 6 只校验自身必传材料，不再因验收环节未完成而拒绝 | `backend/tests/unit/test_phase_promote.py::test_promote_post_review_does_not_require_acceptance_completed` |
 | KR-04 | BR-PAY-04：多次付款和红冲后 `spent_amount` 准确 | 普通付款累加，红冲付款扣减原付款金额，主/子项目聚合金额同步更新 | `backend/tests/unit/test_payment_create.py::test_create_payment_uploads_voucher_and_updates_spent_amounts` `backend/tests/unit/test_payment_create.py::test_reverse_payment_creates_reversal_and_reduces_spent_amount` |
 | KR-05 | BR-PAY-02：超预算付款二次确认和通知 | 未确认超预算付款被拒；确认后通知 `dept_manager` 和 `admin`，审计标记 `over_budget=true` | `backend/tests/unit/test_payment_create.py::test_create_payment_requires_voucher_and_over_budget_confirmation` `backend/tests/unit/test_payment_create.py::test_confirmed_over_budget_payment_notifies_manager_and_admin` |
 | KR-06 | BR-REVOKE-01：撤销审批通过后的状态恢复 | 审批通过后当前环节恢复 `in_progress`，文档软删，后续环节回滚为 `waiting`，任务保留完成态 | `backend/tests/unit/test_revoke_requests.py::test_approve_revoke_request_restores_phase_soft_deletes_docs_and_limits_notifications` |

@@ -12,7 +12,7 @@ from sqlalchemy import Table, UniqueConstraint
 from app.api.v1.documents import get_document_service
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
-from app.core.exceptions import BusinessException, PermissionDeniedError, ValidationFailedError
+from app.core.exceptions import BusinessException, ValidationFailedError
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.documents import Document
@@ -150,7 +150,7 @@ def make_document(
     )
 
 
-def test_document_model_has_group_version_unique_constraint_and_latest_index() -> None:
+def test_document_model_has_group_version_unique_constraint_without_latest_unique_index() -> None:
     table = Document.__table__
     assert isinstance(table, Table)
 
@@ -174,9 +174,7 @@ def test_document_model_has_group_version_unique_constraint_and_latest_index() -
         and set(constraint.columns.keys()) == {"sub_project_id", "phase_id", "doc_type", "version"}
         for constraint in table.constraints
     )
-    assert any(
-        index.name == "uq_documents_latest_per_group" and index.unique for index in table.indexes
-    )
+    assert not any(index.name == "uq_documents_latest_per_group" for index in table.indexes)
 
 
 def test_document_read_exposes_display_name_and_uploader_name() -> None:
@@ -282,6 +280,81 @@ async def test_upload_document_persists_display_name() -> None:
 
 
 @pytest.mark.asyncio
+async def test_upload_multi_instance_documents_keeps_each_file_latest() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase = make_phase(sub_project)
+    repository = InMemoryDocumentRepository(sub_projects=[sub_project], phases=[phase])
+    service = DocumentService(
+        repository=repository,
+        storage=RecordingStorage(),
+        max_file_size_bytes=1024,
+    )
+
+    first = await service.upload_document(
+        actor=leader,
+        sub_project_id=sub_project.id,
+        phase_id=phase.id,
+        doc_type="supplier_quote",
+        file_name="quote-1.pdf",
+        content_type="application/pdf",
+        content=b"%PDF-1.7\nquote-1",
+    )
+    second = await service.upload_document(
+        actor=leader,
+        sub_project_id=sub_project.id,
+        phase_id=phase.id,
+        doc_type="supplier_quote",
+        file_name="quote-2.pdf",
+        content_type="application/pdf",
+        content=b"%PDF-1.7\nquote-2",
+    )
+
+    assert first.version == 1
+    assert second.version == 2
+    assert first.is_latest is True
+    assert second.is_latest is True
+    latest = await service.list_documents(
+        actor=leader,
+        sub_project_id=sub_project.id,
+        phase_id=phase.id,
+        doc_type="supplier_quote",
+    )
+    assert {document.id for document in latest} == {first.id, second.id}
+
+
+@pytest.mark.asyncio
+async def test_delete_document_soft_deletes_and_restores_previous_version() -> None:
+    leader = make_user(UserRole.proj_leader, username="leader")
+    sub_project = make_sub_project(leader)
+    phase = make_phase(sub_project)
+    first = make_document(sub_project=sub_project, phase=phase, uploader=leader, is_latest=False)
+    second = make_document(
+        sub_project=sub_project,
+        phase=phase,
+        uploader=leader,
+        version=2,
+        is_latest=True,
+    )
+    repository = InMemoryDocumentRepository(
+        documents=[first, second],
+        phases=[phase],
+        sub_projects=[sub_project],
+    )
+    service = DocumentService(
+        repository=repository,
+        storage=RecordingStorage(),
+        max_file_size_bytes=1024,
+    )
+
+    deleted = await service.delete_document(actor=leader, document_id=second.id)
+
+    assert deleted.is_deleted is True
+    assert deleted.is_latest is False
+    assert first.is_latest is True
+
+
+@pytest.mark.asyncio
 async def test_upload_document_rejects_completed_sub_project_and_completed_phase() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
     sub_project = make_sub_project(leader)
@@ -323,9 +396,9 @@ async def test_upload_document_rejects_completed_sub_project_and_completed_phase
 
 
 @pytest.mark.asyncio
-async def test_document_service_rejects_outsider_oversize_and_unsafe_filename() -> None:
+async def test_document_service_allows_project_member_view_all_and_rejects_invalid_files() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
-    outsider = make_user(UserRole.proj_member, username="outsider")
+    project_member = make_user(UserRole.proj_member, username="project-member")
     sub_project = make_sub_project(leader)
     phase = make_phase(sub_project)
     storage = RecordingStorage()
@@ -336,16 +409,17 @@ async def test_document_service_rejects_outsider_oversize_and_unsafe_filename() 
         max_file_size_bytes=4,
     )
 
-    with pytest.raises(PermissionDeniedError):
-        await service.upload_document(
-            actor=outsider,
-            sub_project_id=sub_project.id,
-            phase_id=phase.id,
-            doc_type="meeting_material",
-            file_name="meeting.pdf",
-            content_type="application/pdf",
-            content=b"ok",
-        )
+    uploaded = await service.upload_document(
+        actor=project_member,
+        sub_project_id=sub_project.id,
+        phase_id=phase.id,
+        doc_type="meeting_material",
+        file_name="meeting.pdf",
+        content_type="application/pdf",
+        content=b"%PDF",
+    )
+
+    assert uploaded.uploader_id == project_member.id
 
     with pytest.raises(ValidationFailedError):
         await service.upload_document(
@@ -369,8 +443,8 @@ async def test_document_service_rejects_outsider_oversize_and_unsafe_filename() 
             content=b"%PDF-1.7\nok",
         )
 
-    assert repository.documents == []
-    assert storage.saved == []
+    assert repository.documents == [uploaded]
+    assert len(storage.saved) == 1
 
 
 @pytest.mark.asyncio
@@ -449,6 +523,12 @@ def test_document_upload_and_list_endpoints_return_doc_id_and_version() -> None:
             assert include_history is True
             return [document]
 
+        async def delete_document(self, *, actor: User, document_id: UUID) -> Document:
+            assert actor.id == member.id
+            assert document_id == document.id
+            document.is_deleted = True
+            return document
+
     async def fake_db_session() -> AsyncIterator[object]:
         yield object()
 
@@ -482,6 +562,7 @@ def test_document_upload_and_list_endpoints_return_doc_id_and_version() -> None:
             "include_history": "true",
         },
     )
+    delete_response = client.delete(f"/api/v1/documents/{document.id}")
 
     assert upload_response.status_code == 200
     upload_payload = upload_response.json()["data"]
@@ -494,3 +575,5 @@ def test_document_upload_and_list_endpoints_return_doc_id_and_version() -> None:
     assert list_payload["items"][0]["id"] == str(document.id)
     assert list_payload["items"][0]["version"] == 1
     assert "file_path" not in list_payload["items"][0]
+    assert delete_response.status_code == 200
+    assert delete_response.json()["data"]["is_deleted"] is True

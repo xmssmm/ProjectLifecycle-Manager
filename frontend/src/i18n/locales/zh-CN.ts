@@ -60,6 +60,7 @@ export default {
     roles: '角色权限',
     search: '搜索',
     selfServiceHandover: '自助转交',
+    subProjects: '子项目',
     tasks: '任务',
     users: '用户',
     webhooks: 'Webhook',

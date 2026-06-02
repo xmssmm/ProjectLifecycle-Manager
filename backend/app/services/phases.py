@@ -6,12 +6,13 @@ from datetime import UTC, date, datetime
 from typing import Protocol, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessException, PermissionDeniedError, ResourceNotFoundError
 from app.models.acceptance_steps import AcceptanceStep, AcceptanceStepStatus
 from app.models.documents import Document
+from app.models.payments import Payment, PaymentType, PaymentVoucher
 from app.models.phases import (
     Phase,
     PhaseDocRequirement,
@@ -26,7 +27,13 @@ from app.models.workflows import WorkflowTemplateVersion
 from app.services.notifications import NotificationService
 
 VIEW_ALL_PHASE_ROLES = frozenset(
-    {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+    {
+        UserRole.admin,
+        UserRole.dept_manager,
+        UserRole.finance_manager,
+        UserRole.proj_leader,
+        UserRole.proj_member,
+    },
 )
 
 
@@ -35,6 +42,18 @@ class PhaseCompletion:
     required_total: int
     uploaded_total: int
     missing_doc_types: list[str]
+
+
+@dataclass(frozen=True)
+class PaymentVoucherCoverage:
+    payment_count: int
+    covered_payment_count: int
+    voucher_count: int
+    missing_payment_ids: list[UUID]
+
+    @property
+    def is_satisfied(self) -> bool:
+        return self.payment_count > 0 and not self.missing_payment_ids
 
 
 @dataclass(frozen=True)
@@ -51,12 +70,19 @@ class PhaseDetail:
         phase: Phase,
         required_documents: list[PhaseDocTemplate],
         uploaded_documents: list[Document],
+        payment_voucher_coverage: PaymentVoucherCoverage | None = None,
     ) -> PhaseDetail:
-        uploaded_doc_types = {document.doc_type for document in uploaded_documents}
+        uploaded_counts: dict[str, int] = {}
+        for document in uploaded_documents:
+            uploaded_counts[document.doc_type] = uploaded_counts.get(document.doc_type, 0) + 1
         missing_doc_types = [
             document.doc_type
             for document in required_documents
-            if document.doc_type not in uploaded_doc_types
+            if not required_document_is_satisfied(
+                document=document,
+                actual=uploaded_counts.get(document.doc_type, 0),
+                payment_voucher_coverage=payment_voucher_coverage,
+            )
         ]
         return cls(
             phase=phase,
@@ -87,6 +113,36 @@ class PhaseDetail:
 class PhasePromotionResult:
     phase: Phase
     activated_phase: Phase | None
+
+
+def matches_qty_rule(*, qty_rule: str, actual: int) -> bool:
+    normalized = qty_rule.strip().lower()
+    if normalized.startswith(">="):
+        return actual >= int(normalized.removeprefix(">=").strip())
+    if normalized.startswith("="):
+        return actual >= int(normalized.removeprefix("=").strip())
+    if normalized.startswith("per_payment"):
+        return actual >= 1
+    return actual >= 1
+
+
+def is_per_payment_rule(qty_rule: str) -> bool:
+    return qty_rule.strip().lower().startswith("per_payment")
+
+
+def required_document_is_satisfied(
+    *,
+    document: PhaseDocTemplate,
+    actual: int,
+    payment_voucher_coverage: PaymentVoucherCoverage | None = None,
+) -> bool:
+    if (
+        document.doc_type == "payment_voucher"
+        and is_per_payment_rule(document.qty_rule)
+        and payment_voucher_coverage is not None
+    ):
+        return payment_voucher_coverage.is_satisfied
+    return matches_qty_rule(qty_rule=document.qty_rule, actual=actual)
 
 
 class PhaseRepository(Protocol):
@@ -126,6 +182,9 @@ class PhaseRepository(Protocol):
         ...
 
     async def list_acceptance_steps(self, phase_id: UUID) -> list[AcceptanceStep]:
+        ...
+
+    async def get_payment_voucher_coverage(self, sub_project_id: UUID) -> PaymentVoucherCoverage:
         ...
 
     def add_history(self, history: PhaseHistory) -> None:
@@ -235,6 +294,35 @@ class SqlAlchemyPhaseRepository:
         )
         return list(result.all())
 
+    async def get_payment_voucher_coverage(self, sub_project_id: UUID) -> PaymentVoucherCoverage:
+        result = await self._session.execute(
+            select(Payment.id, func.count(Document.id))
+            .outerjoin(PaymentVoucher, PaymentVoucher.payment_id == Payment.id)
+            .outerjoin(
+                Document,
+                and_(
+                    Document.id == PaymentVoucher.document_id,
+                    Document.is_deleted.is_(False),
+                ),
+            )
+            .where(
+                Payment.sub_project_id == sub_project_id,
+                Payment.payment_type == PaymentType.normal,
+            )
+            .group_by(Payment.id),
+        )
+        rows = [(payment_id, int(voucher_count)) for payment_id, voucher_count in result.all()]
+        return PaymentVoucherCoverage(
+            payment_count=len(rows),
+            covered_payment_count=sum(
+                1 for _payment_id, voucher_count in rows if voucher_count > 0
+            ),
+            voucher_count=sum(voucher_count for _payment_id, voucher_count in rows),
+            missing_payment_ids=[
+                payment_id for payment_id, voucher_count in rows if voucher_count < 1
+            ],
+        )
+
     def add_history(self, history: PhaseHistory) -> None:
         self._session.add(history)
 
@@ -256,6 +344,8 @@ class InMemoryPhaseRepository:
         phase_doc_templates: list[PhaseDocTemplate] | None = None,
         documents: list[Document] | None = None,
         acceptance_steps: list[AcceptanceStep] | None = None,
+        payments: list[Payment] | None = None,
+        payment_vouchers: list[PaymentVoucher] | None = None,
         sub_projects: list[SubProject] | None = None,
         members: list[SubProjectMember] | None = None,
         histories: list[PhaseHistory] | None = None,
@@ -265,6 +355,8 @@ class InMemoryPhaseRepository:
         self.phase_doc_templates = list(phase_doc_templates or [])
         self.documents = list(documents or [])
         self.acceptance_steps = list(acceptance_steps or [])
+        self.payments = list(payments or [])
+        self.payment_vouchers = list(payment_vouchers or [])
         self.sub_projects = list(sub_projects or [])
         self.members = list(members or [])
         self.histories = list(histories or [])
@@ -342,6 +434,27 @@ class InMemoryPhaseRepository:
         steps = [step for step in self.acceptance_steps if step.phase_id == phase_id]
         return sorted(steps, key=lambda step: step.step_no)
 
+    async def get_payment_voucher_coverage(self, sub_project_id: UUID) -> PaymentVoucherCoverage:
+        payment_ids = [
+            payment.id
+            for payment in self.payments
+            if payment.sub_project_id == sub_project_id
+            and payment.payment_type == PaymentType.normal
+        ]
+        counts = dict.fromkeys(payment_ids, 0)
+        active_document_ids = {
+            document.id for document in self.documents if not document.is_deleted
+        }
+        for voucher in self.payment_vouchers:
+            if voucher.payment_id in counts and voucher.document_id in active_document_ids:
+                counts[voucher.payment_id] += 1
+        return PaymentVoucherCoverage(
+            payment_count=len(payment_ids),
+            covered_payment_count=sum(1 for count in counts.values() if count > 0),
+            voucher_count=sum(counts.values()),
+            missing_payment_ids=[payment_id for payment_id, count in counts.items() if count < 1],
+        )
+
     def add_history(self, history: PhaseHistory) -> None:
         self.histories.append(history)
 
@@ -378,10 +491,12 @@ class PhaseService:
         await self._ensure_visible(actor, sub_project)
         required_documents = await self._required_documents_for_phase(phase)
         uploaded_documents = await self._repository.list_latest_documents(phase.id)
+        payment_voucher_coverage = await self._payment_voucher_coverage_for_phase(phase)
         return PhaseDetail.from_documents(
             phase=phase,
             required_documents=required_documents,
             uploaded_documents=uploaded_documents,
+            payment_voucher_coverage=payment_voucher_coverage,
         )
 
     async def update_procurement_type(
@@ -425,8 +540,10 @@ class PhaseService:
             )
 
         phases = await self._repository.list_phases_for_update(sub_project.id)
+        self._ensure_procurement_type_selected(phase)
         required_documents = await self._required_documents_for_phase(phase)
         uploaded_documents = await self._repository.list_latest_documents(phase.id)
+        payment_voucher_coverage = await self._payment_voucher_coverage_for_phase(phase)
         self._ensure_phase_dependencies_completed(phase, phases)
         acceptance_steps = await self._repository.list_acceptance_steps(phase.id)
         if self._ensure_acceptance_steps_completed(phase, acceptance_steps):
@@ -435,7 +552,11 @@ class PhaseService:
                 for document in required_documents
                 if document.doc_type != "acceptance_report"
             ]
-        self._ensure_required_documents_uploaded(required_documents, uploaded_documents)
+        self._ensure_required_documents_uploaded(
+            required_documents,
+            uploaded_documents,
+            payment_voucher_coverage=payment_voucher_coverage,
+        )
 
         now = datetime.now(UTC)
         from_status = phase.status
@@ -498,6 +619,14 @@ class PhaseService:
             phase_no=phase.phase_no,
             procurement_type=phase.procurement_type,
         )
+
+    async def _payment_voucher_coverage_for_phase(
+        self,
+        phase: Phase,
+    ) -> PaymentVoucherCoverage | None:
+        if phase.phase_no != 5:
+            return None
+        return await self._repository.get_payment_voucher_coverage(phase.sub_project_id)
 
     @staticmethod
     def _required_documents_from_workflow_version(
@@ -563,7 +692,7 @@ class PhaseService:
         raise PermissionDeniedError()
 
     async def _ensure_can_operate_phase(self, actor: User, sub_project: SubProject) -> None:
-        if actor.role == UserRole.admin:
+        if actor.role in {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager}:
             return
         if actor.role == UserRole.proj_leader and sub_project.manager_id == actor.id:
             return
@@ -594,19 +723,14 @@ class PhaseService:
                     "Previous phases must be completed first",
                     data={"incomplete_phase_nos": incomplete},
                 )
-        if phase.phase_no == 6:
-            acceptance = phases_by_no.get(4)
-            if acceptance is None or acceptance.status != PhaseStatus.completed:
-                raise self._invalid_status(
-                    phase.status.value,
-                    "Acceptance phase must be completed before post review",
-                    data={"required_phase_no": 4},
-                )
+        return
 
     def _ensure_required_documents_uploaded(
         self,
         required_documents: Sequence[PhaseDocTemplate],
         uploaded_documents: Sequence[Document],
+        *,
+        payment_voucher_coverage: PaymentVoucherCoverage | None = None,
     ) -> None:
         uploaded_counts: dict[str, int] = {}
         for document in uploaded_documents:
@@ -616,12 +740,21 @@ class PhaseService:
             {
                 "doc_type": template.doc_type,
                 "required": template.qty_rule,
-                "actual": uploaded_counts.get(template.doc_type, 0),
+                "actual": self._actual_document_count(
+                    template=template,
+                    uploaded_counts=uploaded_counts,
+                    payment_voucher_coverage=payment_voucher_coverage,
+                ),
+                **self._missing_document_extra(
+                    template=template,
+                    payment_voucher_coverage=payment_voucher_coverage,
+                ),
             }
             for template in required_documents
-            if not self._matches_qty_rule(
-                qty_rule=template.qty_rule,
+            if not required_document_is_satisfied(
+                document=template,
                 actual=uploaded_counts.get(template.doc_type, 0),
+                payment_voucher_coverage=payment_voucher_coverage,
             )
         ]
         if missing:
@@ -631,6 +764,41 @@ class PhaseService:
                 status_code=409,
                 data={"missing_documents": missing},
             )
+
+    @staticmethod
+    def _actual_document_count(
+        *,
+        template: PhaseDocTemplate,
+        uploaded_counts: dict[str, int],
+        payment_voucher_coverage: PaymentVoucherCoverage | None,
+    ) -> int:
+        if (
+            template.doc_type == "payment_voucher"
+            and is_per_payment_rule(template.qty_rule)
+            and payment_voucher_coverage is not None
+        ):
+            return payment_voucher_coverage.covered_payment_count
+        return uploaded_counts.get(template.doc_type, 0)
+
+    @staticmethod
+    def _missing_document_extra(
+        *,
+        template: PhaseDocTemplate,
+        payment_voucher_coverage: PaymentVoucherCoverage | None,
+    ) -> dict[str, object]:
+        if (
+            template.doc_type == "payment_voucher"
+            and is_per_payment_rule(template.qty_rule)
+            and payment_voucher_coverage is not None
+        ):
+            return {
+                "payment_count": payment_voucher_coverage.payment_count,
+                "voucher_count": payment_voucher_coverage.voucher_count,
+                "missing_payment_ids": [
+                    str(payment_id) for payment_id in payment_voucher_coverage.missing_payment_ids
+                ],
+            }
+        return {}
 
     @staticmethod
     def _ensure_acceptance_steps_completed(
@@ -654,15 +822,15 @@ class PhaseService:
         return True
 
     @staticmethod
-    def _matches_qty_rule(*, qty_rule: str, actual: int) -> bool:
-        normalized = qty_rule.strip().lower()
-        if normalized.startswith(">="):
-            return actual >= int(normalized.removeprefix(">=").strip())
-        if normalized.startswith("="):
-            return actual >= int(normalized.removeprefix("=").strip())
-        if normalized.startswith("per_payment"):
-            return actual >= 1
-        return actual >= 1
+    def _ensure_procurement_type_selected(phase: Phase) -> None:
+        if phase.phase_no != 2 or phase.procurement_type is not None:
+            return
+        raise BusinessException(
+            code=3002,
+            message="Procurement type is required before promoting procurement phase",
+            status_code=409,
+            data={"missing_fields": ["procurement_type"]},
+        )
 
     @staticmethod
     def _activate_next_phase(
@@ -672,8 +840,6 @@ class PhaseService:
     ) -> Phase | None:
         if phase.phase_no in {1, 2, 3}:
             next_phase_no = phase.phase_no + 1
-        elif phase.phase_no == 4:
-            next_phase_no = 6
         else:
             return None
 

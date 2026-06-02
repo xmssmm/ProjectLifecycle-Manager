@@ -2,6 +2,7 @@
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
+import { deleteDocument, downloadDocument } from '@/api/documents';
 import { MobileReadOnlyNotice } from '@/components/common';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { usePaymentStore } from '@/stores/usePaymentStore';
@@ -12,6 +13,7 @@ import {
   type PaymentListQuery,
   type PaymentRead,
   type PaymentType,
+  type PaymentVoucherRead,
 } from '@/types/payments';
 
 const props = defineProps<{
@@ -31,6 +33,7 @@ const reversalReason = ref('');
 const reversalTarget = ref<PaymentRead | null>(null);
 const selectedFiles = ref<File[]>([]);
 const submitting = ref(false);
+const voucherDeletingId = ref('');
 const filterState = reactive({
   paymentType: '',
 });
@@ -145,6 +148,27 @@ async function submitReversal(): Promise<void> {
   }
 }
 
+async function downloadVoucher(voucher: PaymentVoucherRead): Promise<void> {
+  const blob = await downloadDocument(voucher.document.id);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = voucher.document.file_name;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function deleteVoucher(voucher: PaymentVoucherRead): Promise<void> {
+  voucherDeletingId.value = voucher.id;
+  try {
+    await deleteDocument(voucher.document.id);
+    ElMessage.success('凭证已删除');
+    await loadPayments(buildQuery());
+  } finally {
+    voucherDeletingId.value = '';
+  }
+}
+
 async function afterPaymentMutation(): Promise<void> {
   resetCreateForm();
   createDialogVisible.value = false;
@@ -221,7 +245,18 @@ function paymentTypeTag(type: PaymentType): 'danger' | 'success' {
 }
 
 function canReverse(payment: PaymentRead): boolean {
-  return authStore.user?.role === 'finance_manager' && payment.payment_type === 'normal';
+  return (
+    ['admin', 'finance_manager'].includes(authStore.user?.role ?? '') &&
+    payment.payment_type === 'normal'
+  );
+}
+
+function canDeleteVoucher(): boolean {
+  return ['admin', 'finance_manager'].includes(authStore.user?.role ?? '');
+}
+
+function voucherTitle(voucher: PaymentVoucherRead): string {
+  return voucher.document.display_name || voucher.document.file_name;
 }
 
 function isOverBudgetError(error: unknown): boolean {
@@ -282,6 +317,7 @@ function isOverBudgetError(error: unknown): boolean {
             <th>金额</th>
             <th>付款日期</th>
             <th>红冲来源</th>
+            <th>付款凭证</th>
             <th>备注</th>
             <th>操作</th>
           </tr>
@@ -302,6 +338,40 @@ function isOverBudgetError(error: unknown): boolean {
             </td>
             <td>{{ formatDate(payment.payment_date) }}</td>
             <td>{{ payment.reverses_payment_id ?? '-' }}</td>
+            <td>
+              <div
+                v-if="payment.vouchers.length > 0"
+                class="payment-table__vouchers"
+                :data-test="`payment-vouchers-${payment.id}`"
+              >
+                <div
+                  v-for="voucher in payment.vouchers"
+                  :key="voucher.id"
+                  class="payment-table__voucher"
+                >
+                  <span>{{ voucherTitle(voucher) }}</span>
+                  <small>v{{ voucher.document.version }}</small>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="downloadVoucher(voucher)"
+                  >
+                    下载
+                  </el-button>
+                  <el-button
+                    v-if="canDeleteVoucher()"
+                    data-test="delete-payment-voucher"
+                    :loading="voucherDeletingId === voucher.id"
+                    size="small"
+                    type="danger"
+                    @click="deleteVoucher(voucher)"
+                  >
+                    删除
+                  </el-button>
+                </div>
+              </div>
+              <span v-else>无凭证</span>
+            </td>
             <td>{{ payment.remark || '-' }}</td>
             <td>
               <el-button

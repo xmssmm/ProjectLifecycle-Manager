@@ -24,10 +24,26 @@ DEFAULT_PERMISSION_MATRIX: dict[str, frozenset[UserRole]] = {
     "main_project.review": frozenset({UserRole.admin, UserRole.dept_manager}),
     "main_project.close": frozenset({UserRole.admin, UserRole.dept_manager}),
     "project.import": frozenset({UserRole.admin}),
-    "sub_project.create": frozenset({UserRole.admin, UserRole.proj_leader}),
+    "sub_project.create": frozenset(
+        {
+            UserRole.admin,
+            UserRole.dept_manager,
+            UserRole.finance_manager,
+            UserRole.proj_leader,
+            UserRole.proj_member,
+        },
+    ),
     "sub_project.review": frozenset({UserRole.admin, UserRole.dept_manager}),
     "sub_project.terminate": frozenset({UserRole.admin, UserRole.dept_manager}),
-    "phase.promote": frozenset({UserRole.admin, UserRole.proj_leader, UserRole.proj_member}),
+    "phase.promote": frozenset(
+        {
+            UserRole.admin,
+            UserRole.dept_manager,
+            UserRole.finance_manager,
+            UserRole.proj_leader,
+            UserRole.proj_member,
+        },
+    ),
     "acceptance_step.create": frozenset({UserRole.admin, UserRole.proj_leader}),
     "acceptance_step.complete": frozenset(
         {
@@ -38,8 +54,8 @@ DEFAULT_PERMISSION_MATRIX: dict[str, frozenset[UserRole]] = {
             UserRole.proj_member,
         },
     ),
-    "payment.create": frozenset({UserRole.finance_manager}),
-    "payment.reverse": frozenset({UserRole.finance_manager}),
+    "payment.create": frozenset({UserRole.admin, UserRole.finance_manager}),
+    "payment.reverse": frozenset({UserRole.admin, UserRole.finance_manager}),
     "document.upload": frozenset(
         {
             UserRole.admin,
@@ -74,7 +90,13 @@ DEFAULT_PERMISSION_MATRIX: dict[str, frozenset[UserRole]] = {
         {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
     ),
     "project.view_all": frozenset(
-        {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+        {
+            UserRole.admin,
+            UserRole.dept_manager,
+            UserRole.finance_manager,
+            UserRole.proj_leader,
+            UserRole.proj_member,
+        },
     ),
     "project.view_own": frozenset({UserRole.proj_leader, UserRole.proj_member}),
 }

@@ -65,14 +65,6 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
             "version",
             postgresql_where=text("is_latest IS true AND is_deleted IS false"),
         ),
-        Index(
-            "uq_documents_latest_per_group",
-            "sub_project_id",
-            "phase_id",
-            "doc_type",
-            unique=True,
-            postgresql_where=text("is_latest IS true"),
-        ),
     )
 
     def __init__(self, **kwargs: Any) -> None:

@@ -36,7 +36,13 @@ from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter, to_a
 from app.services.notifications import NotificationService
 
 VIEW_ALL_PROJECT_ROLES = frozenset(
-    {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+    {
+        UserRole.admin,
+        UserRole.dept_manager,
+        UserRole.finance_manager,
+        UserRole.proj_leader,
+        UserRole.proj_member,
+    },
 )
 PHASE_DEFINITIONS = (
     (1, "initiation", "立项"),

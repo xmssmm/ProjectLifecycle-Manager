@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import (
     BusinessException,
@@ -31,7 +32,13 @@ PAYMENT_PHASE_NO = 5
 PAYMENT_VOUCHER_DOC_TYPE = "payment_voucher"
 TWO_PLACES = Decimal("0.01")
 VIEW_ALL_PAYMENT_ROLES = frozenset(
-    {UserRole.admin, UserRole.dept_manager, UserRole.finance_manager},
+    {
+        UserRole.admin,
+        UserRole.dept_manager,
+        UserRole.finance_manager,
+        UserRole.proj_leader,
+        UserRole.proj_member,
+    },
 )
 LOCKED_PAYMENT_SUB_PROJECT_STATUSES = frozenset(
     {SubProjectStatus.completed, SubProjectStatus.closed, SubProjectStatus.terminated},
@@ -159,17 +166,25 @@ class SqlAlchemyPaymentRepository:
 
     async def get_payment_for_update(self, payment_id: UUID) -> Payment | None:
         payment = await self._session.scalar(
-            select(Payment).where(Payment.id == payment_id).with_for_update(),
+            select(Payment)
+            .options(selectinload(Payment.vouchers).selectinload(PaymentVoucher.document))
+            .where(Payment.id == payment_id)
+            .with_for_update(),
         )
         return payment if isinstance(payment, Payment) else None
 
     async def get_payment(self, payment_id: UUID) -> Payment | None:
-        payment = await self._session.get(Payment, payment_id)
+        payment = await self._session.scalar(
+            select(Payment)
+            .options(selectinload(Payment.vouchers).selectinload(PaymentVoucher.document))
+            .where(Payment.id == payment_id),
+        )
         return payment if isinstance(payment, Payment) else None
 
     async def get_reversal_for_payment(self, payment_id: UUID) -> Payment | None:
         payment = await self._session.scalar(
             select(Payment)
+            .options(selectinload(Payment.vouchers).selectinload(PaymentVoucher.document))
             .where(
                 Payment.reverses_payment_id == payment_id,
                 Payment.payment_type == PaymentType.reversal,
@@ -194,6 +209,7 @@ class SqlAlchemyPaymentRepository:
         )
         result = await self._session.scalars(
             select(Payment)
+            .options(selectinload(Payment.vouchers).selectinload(PaymentVoucher.document))
             .where(*conditions)
             .order_by(
                 Payment.payment_date.desc(),
@@ -603,7 +619,7 @@ class PaymentService:
             main_project=main_project,
             over_budget=over_budget,
         )
-        return payment
+        return await self._repository.get_payment(payment.id) or payment
 
     @staticmethod
     def _ensure_sub_project_allows_payment(sub_project: SubProject) -> None:
@@ -675,7 +691,7 @@ class PaymentService:
             raise
 
         await self._repository.refresh_payment(payment)
-        return payment
+        return await self._repository.get_payment(payment.id) or payment
 
     async def list_payments(
         self,
@@ -712,7 +728,7 @@ class PaymentService:
 
     @staticmethod
     def _ensure_can_create(actor: User) -> None:
-        if actor.role != UserRole.finance_manager:
+        if actor.role not in {UserRole.admin, UserRole.finance_manager}:
             raise PermissionDeniedError()
 
     async def _get_sub_project_for_update(self, sub_project_id: UUID) -> SubProject:
@@ -898,10 +914,6 @@ class PaymentService:
 
         for upload in uploads:
             latest_version += 1
-            for document in group_documents:
-                if document.is_latest:
-                    document.is_latest = False
-                    document.updated_at = now
 
             storage_key = self._save_content(
                 sub_project_id=sub_project.id,

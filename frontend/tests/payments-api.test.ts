@@ -81,6 +81,7 @@ const samplePayment = {
   reverses_payment_id: null,
   sub_project_id: 'sub-1',
   updated_at: '2026-05-10T00:00:00Z',
+  vouchers: [],
 };
 
 function recordingAdapter(calls: AxiosRequestConfig[], data: unknown): AxiosAdapter {

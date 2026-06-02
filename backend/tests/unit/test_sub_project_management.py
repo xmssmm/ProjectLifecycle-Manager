@@ -290,14 +290,10 @@ async def test_create_sub_project_selects_latest_published_workflow_version() ->
 
 
 @pytest.mark.asyncio
-async def test_create_sub_project_requires_proj_leader_and_open_main_project() -> None:
-    member = make_user(UserRole.proj_member, username="member")
+async def test_create_sub_project_requires_open_main_project() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
     closed_main_project = make_main_project(status=MainProjectStatus.closed)
     service, _repository = make_service(main_projects=[closed_main_project])
-
-    with pytest.raises(PermissionDeniedError):
-        await service.create_sub_project(actor=member, payload=make_payload(closed_main_project))
 
     with pytest.raises(BusinessException) as invalid_main_status:
         await service.create_sub_project(actor=leader, payload=make_payload(closed_main_project))
@@ -338,7 +334,7 @@ async def test_update_sub_project_rejects_status_changes_and_pending_review_edit
 
 
 @pytest.mark.asyncio
-async def test_list_sub_projects_filters_by_role() -> None:
+async def test_list_sub_projects_uses_v4_view_all_roles() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
     other_leader = make_user(UserRole.proj_leader, username="other")
     finance = make_user(UserRole.finance_manager, username="finance")
@@ -353,10 +349,17 @@ async def test_list_sub_projects_filters_by_role() -> None:
     repository.next_sequences[main_project.id] = 3
 
     mine_items, mine_total = await service.list_sub_projects(actor=leader, page=1, page_size=20)
+    member_items, member_total = await service.list_sub_projects(
+        actor=make_user(UserRole.proj_member, username="member"),
+        page=1,
+        page_size=20,
+    )
     all_items, all_total = await service.list_sub_projects(actor=finance, page=1, page_size=20)
 
-    assert mine_items == [mine]
-    assert mine_total == 1
+    assert set(mine_items) == {mine, other}
+    assert mine_total == 2
+    assert set(member_items) == {mine, other}
+    assert member_total == 2
     assert set(all_items) == {mine, other}
     assert all_total == 2
 

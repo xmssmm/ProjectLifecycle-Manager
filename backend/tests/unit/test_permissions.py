@@ -47,7 +47,6 @@ async def test_require_role_rejects_unlisted_role() -> None:
 @pytest.mark.parametrize(
     ("role", "permission"),
     [
-        (UserRole.admin, "payment.create"),
         (UserRole.dept_manager, "user.manage"),
         (UserRole.finance_manager, "main_project.create"),
         (UserRole.proj_leader, "payment.create"),
@@ -62,8 +61,15 @@ def test_permission_matrix_rejects_key_denied_paths(role: UserRole, permission: 
     ("role", "permission"),
     [
         (UserRole.admin, "user.manage"),
+        (UserRole.admin, "payment.create"),
         (UserRole.dept_manager, "main_project.create"),
         (UserRole.finance_manager, "payment.create"),
+        (UserRole.finance_manager, "sub_project.create"),
+        (UserRole.dept_manager, "phase.promote"),
+        (UserRole.finance_manager, "phase.promote"),
+        (UserRole.proj_leader, "project.view_all"),
+        (UserRole.proj_member, "project.view_all"),
+        (UserRole.proj_member, "sub_project.create"),
         (UserRole.proj_leader, "phase.promote"),
         (UserRole.proj_member, "phase.promote"),
         (UserRole.proj_member, "document.upload"),

@@ -130,6 +130,16 @@ async def download_document(
     )
 
 
+@router.delete("/{document_id}")
+async def delete_document(
+    document_id: UUID,
+    service: Annotated[DocumentService, Depends(get_document_service)],
+    current_user: Annotated[User, Depends(require_permission("document.upload"))],
+) -> dict[str, object]:
+    document = await service.delete_document(actor=current_user, document_id=document_id)
+    return success_response(serialize_document(document))
+
+
 @router.get("/{document_id}/preview")
 async def preview_document(
     document_id: UUID,

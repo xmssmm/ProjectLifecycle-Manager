@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 from app.api.v1.documents import get_document_service
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
-from app.core.exceptions import PermissionDeniedError
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.documents import Document
@@ -156,7 +155,7 @@ def make_member(sub_project: SubProject, user: User) -> SubProjectMember:
 
 
 @pytest.mark.asyncio
-async def test_document_service_download_checks_project_visibility_and_reads_storage() -> None:
+async def test_document_download_allows_v4_member_view_all() -> None:
     leader = make_user(UserRole.proj_leader, username="leader")
     outsider = make_user(UserRole.proj_member, username="outsider")
     sub_project = make_sub_project(leader)
@@ -186,8 +185,10 @@ async def test_document_service_download_checks_project_visibility_and_reads_sto
     assert download.document.id == document.id
     assert download.content == b"download-bytes"
 
-    with pytest.raises(PermissionDeniedError):
-        await service.download_document(actor=outsider, document_id=document.id)
+    outsider_download = await service.download_document(actor=outsider, document_id=document.id)
+
+    assert outsider_download.document.id == document.id
+    assert outsider_download.content == b"download-bytes"
 
 
 @pytest.mark.asyncio

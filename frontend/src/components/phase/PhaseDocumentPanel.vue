@@ -2,13 +2,16 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { downloadDocument, listDocuments } from '@/api/documents';
+import { listPayments } from '@/api/payments';
 import DocumentList from '@/components/document/DocumentList.vue';
 import DocumentUploader from '@/components/document/DocumentUploader.vue';
 import { useAcceptanceStepStore } from '@/stores/useAcceptanceStepStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { usePhaseStore } from '@/stores/usePhaseStore';
+import { useSubProjectStore } from '@/stores/useSubProjectStore';
 import { ACCEPTANCE_STEP_STATUS_LABELS, type AcceptanceStepRead } from '@/types/acceptanceSteps';
 import type { DocumentRead } from '@/types/documents';
+import { PAYMENT_TYPE_LABELS, type PaymentRead } from '@/types/payments';
 import type {
   PhaseDetailRead,
   PhaseRead,
@@ -26,10 +29,12 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore();
 const phaseStore = usePhaseStore();
+const subProjectStore = useSubProjectStore();
 const acceptanceStepStore = useAcceptanceStepStore();
 const documents = ref<DocumentRead[]>([]);
 const documentsLoading = ref(false);
 const detail = ref<PhaseDetailRead | null>(null);
+const paymentRows = ref<PaymentRead[]>([]);
 const selectedPhaseId = ref('');
 const stepError = ref('');
 const stepForm = reactive({
@@ -63,7 +68,11 @@ const canPromoteSelectedPhase = computed(
   () =>
     Boolean(detail.value) &&
     detail.value?.status === 'in_progress' &&
+    !isProcurementTypeMissing.value &&
     missingDocTypes.value.size === 0,
+);
+const isProcurementTypeMissing = computed(
+  () => detail.value?.phase_no === 2 && !detail.value.procurement_type,
 );
 const promoteBlockerText = computed(() => {
   if (!detail.value) {
@@ -71,6 +80,9 @@ const promoteBlockerText = computed(() => {
   }
   if (detail.value.status !== 'in_progress') {
     return '当前环节不在进行中，暂不能推进';
+  }
+  if (isProcurementTypeMissing.value) {
+    return '请选择采购类型';
   }
   if (missingDocTypes.value.size > 0) {
     return `缺少材料：${missingDocLabels.value.join('、')}`;
@@ -82,6 +94,7 @@ const isCompletedPhase = computed(() => detail.value?.status === 'completed');
 const acceptanceSteps = computed(() =>
   detail.value ? (acceptanceStepStore.stepsByPhase[detail.value.id] ?? []) : [],
 );
+const memberOptions = computed(() => subProjectStore.members);
 
 onMounted(initialize);
 
@@ -91,6 +104,7 @@ watch(
     selectedPhaseId.value = '';
     detail.value = null;
     documents.value = [];
+    paymentRows.value = [];
     await initialize();
   },
 );
@@ -141,6 +155,10 @@ async function loadSelectedPhase(): Promise<void> {
     ]);
     detail.value = phaseDetail;
     documents.value = documentList.items;
+    paymentRows.value =
+      phaseDetail.phase_no === 5
+        ? (await listPayments(props.subProjectId, { page: 1, pageSize: 100 })).items
+        : [];
     if (phaseDetail.phase_no === 4) {
       await acceptanceStepStore.fetchSteps(phaseId);
     }
@@ -233,6 +251,20 @@ function stepStatusLabel(step: AcceptanceStepRead): string {
 
 function formatOptionalDate(value: string | null): string {
   return value || '-';
+}
+
+function formatMoney(value: string): string {
+  const amount = Number(value);
+  return Number.isFinite(amount)
+    ? amount.toLocaleString('zh-CN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+    : value;
+}
+
+function paymentVoucherTitle(payment: PaymentRead): string {
+  const titles = payment.vouchers.map(
+    (voucher) => voucher.document.display_name || voucher.document.file_name,
+  );
+  return titles.length > 0 ? titles.join('、') : '无凭证';
 }
 </script>
 
@@ -355,7 +387,26 @@ function formatOptionalDate(value: string | null): string {
           <label>
             <span>责任人</span>
             <!-- prettier-ignore -->
-            <input v-model="stepForm.responsibleId" data-test="acceptance-step-responsible" type="text">
+            <select
+              v-if="memberOptions.length > 0"
+              v-model="stepForm.responsibleId"
+              data-test="acceptance-step-responsible"
+            >
+              <option value="">请选择责任人</option>
+              <option
+                v-for="member in memberOptions"
+                :key="member.id"
+                :value="member.user_id"
+              >
+                {{ member.user_id }}
+              </option>
+            </select>
+            <input
+              v-else
+              v-model="stepForm.responsibleId"
+              data-test="acceptance-step-responsible"
+              type="text"
+            >
           </label>
           <label>
             <span>计划日期</span>
@@ -428,6 +479,41 @@ function formatOptionalDate(value: string | null): string {
         <el-empty v-else description="暂无验收步骤" />
       </section>
 
+      <section
+        v-if="detail.phase_no === 5"
+        class="phase-document-panel__payments"
+        data-test="phase-payment-records"
+      >
+        <div class="phase-document-panel__acceptance-header">
+          <div>
+            <h4>付款记录与凭证</h4>
+            <p>每笔付款显示其对应凭证。</p>
+          </div>
+          <el-tag>{{ paymentRows.length }} 笔</el-tag>
+        </div>
+        <table v-if="paymentRows.length > 0" class="phase-document-panel__payment-table">
+          <thead>
+            <tr>
+              <th>付款编号</th>
+              <th>类型</th>
+              <th>金额</th>
+              <th>日期</th>
+              <th>对应凭证</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="payment in paymentRows" :key="payment.id">
+              <td>{{ payment.payment_no }}</td>
+              <td>{{ PAYMENT_TYPE_LABELS[payment.payment_type] }}</td>
+              <td>{{ formatMoney(payment.amount) }}</td>
+              <td>{{ formatOptionalDate(payment.payment_date) }}</td>
+              <td>{{ paymentVoucherTitle(payment) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <el-empty v-else description="暂无付款记录" />
+      </section>
+
       <DocumentList
         :documents="documents"
         :loading="documentsLoading"
@@ -441,7 +527,8 @@ function formatOptionalDate(value: string | null): string {
 </template>
 
 <style scoped>
-.phase-document-panel__acceptance {
+.phase-document-panel__acceptance,
+.phase-document-panel__payments {
   border: 1px solid #d8dee8;
   border-radius: 8px;
   margin-bottom: 20px;
@@ -498,6 +585,7 @@ function formatOptionalDate(value: string | null): string {
 }
 
 .phase-document-panel__step-form input,
+.phase-document-panel__step-form select,
 .phase-document-panel__step-form textarea {
   border: 1px solid #cbd5e1;
   border-radius: 6px;
@@ -545,6 +633,19 @@ function formatOptionalDate(value: string | null): string {
   display: grid;
   gap: 12px;
   margin-top: 16px;
+}
+
+.phase-document-panel__payment-table {
+  border-collapse: collapse;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.phase-document-panel__payment-table th,
+.phase-document-panel__payment-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px;
+  text-align: left;
 }
 
 .phase-document-panel__step-card {

@@ -99,6 +99,7 @@ describe('frontend permissions', () => {
 
     expect(menuLabels).toContain('工作台');
     expect(menuLabels).toContain('项目');
+    expect(menuLabels).toContain('子项目');
     expect(menuLabels).not.toContain('组件');
     expect(menuLabels).not.toContain('管理');
   });
@@ -115,6 +116,7 @@ describe('frontend permissions', () => {
 
     const menuLabels = wrapper.findAll('a').map((item) => item.text());
 
+    expect(menuLabels).toContain('子项目');
     expect(menuLabels).toContain('组件');
     expect(menuLabels).toContain('管理');
   });

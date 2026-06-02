@@ -92,6 +92,7 @@ def test_payment_models_serialize_from_orm_instances() -> None:
     assert payment_payload["sub_project_id"] == sub_project_id
     assert payment_payload["amount"] == Decimal("1200.50")
     assert payment_payload["payment_type"] == PaymentType.normal
+    assert payment_payload["vouchers"] == []
     assert voucher_payload["payment_id"] == payment_id
     assert voucher_payload["document_id"] == document_id
 

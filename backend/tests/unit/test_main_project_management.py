@@ -181,7 +181,7 @@ async def test_update_rejects_status_changes_and_pending_review_edits() -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_and_get_main_projects_require_view_all_role() -> None:
+async def test_list_and_get_main_projects_allow_v4_view_all_roles() -> None:
     dept_manager = make_user(UserRole.dept_manager, username="dept")
     member = make_user(UserRole.proj_member, username="member")
     service, _repository = make_service()
@@ -192,8 +192,10 @@ async def test_list_and_get_main_projects_require_view_all_role() -> None:
     assert total == 1
     assert await service.get_project(actor=dept_manager, project_id=project.id) == project
 
-    with pytest.raises(PermissionDeniedError):
-        await service.list_projects(actor=member, page=1, page_size=20)
+    member_items, member_total = await service.list_projects(actor=member, page=1, page_size=20)
+    assert member_items == [project]
+    assert member_total == 1
+    assert await service.get_project(actor=member, project_id=project.id) == project
 
 
 def test_main_project_endpoints_return_standard_payloads() -> None:

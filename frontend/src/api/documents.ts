@@ -69,6 +69,14 @@ export async function downloadDocument(
   return response.data;
 }
 
+export async function deleteDocument(
+  documentId: string,
+  client: AxiosInstance = apiClient,
+): Promise<DocumentRead> {
+  const response = await client.delete<ApiResponse<DocumentRead>>(`/documents/${documentId}`);
+  return response.data.data;
+}
+
 export async function previewDocument(
   documentId: string,
   client: AxiosInstance = apiClient,

@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.payments import PaymentType
 
@@ -17,6 +17,25 @@ class PaymentVoucherRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PaymentVoucherDocumentRead(BaseModel):
+    id: UUID
+    doc_type: str
+    file_name: str
+    display_name: str
+    file_size: int
+    version: int
+    is_deleted: bool
+    uploader_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaymentVoucherWithDocumentRead(PaymentVoucherRead):
+    document: PaymentVoucherDocumentRead
+
+
 class PaymentRead(BaseModel):
     id: UUID
     payment_no: str
@@ -27,6 +46,7 @@ class PaymentRead(BaseModel):
     payment_type: PaymentType
     reverses_payment_id: UUID | None
     operator_id: UUID | None
+    vouchers: list[PaymentVoucherWithDocumentRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

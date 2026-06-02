@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 from app.api.v1.phases import get_phase_service
 from app.core.db import get_db_session
 from app.core.deps import get_current_user
-from app.core.exceptions import PermissionDeniedError
 from app.core.middleware import InMemoryRateLimitStore
 from app.main import create_app
 from app.models.phases import (
@@ -145,8 +144,8 @@ async def test_phase_service_lists_visible_phases_and_dynamic_required_documents
     assert detail.completion.uploaded_total == 0
     assert detail.completion.missing_doc_types == ["bid_document", "oa_screenshot"]
 
-    with pytest.raises(PermissionDeniedError):
-        await service.list_phases(actor=outsider, sub_project_id=sub_project.id)
+    outsider_phases = await service.list_phases(actor=outsider, sub_project_id=sub_project.id)
+    assert [phase.id for phase in outsider_phases] == [initiation.id, procurement.id]
 
 
 def test_phase_query_endpoints_return_required_documents() -> None:

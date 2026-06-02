@@ -169,7 +169,7 @@ def build_procurement_phase_definitions() -> list[dict[str, object]]:
                 "name": phase_name,
                 "order": phase_no,
                 "required_documents": required_documents,
-                "allow_parallel": False,
+                "allow_parallel": phase_no in {5, 6},
                 "entry_rules": {},
             },
         )

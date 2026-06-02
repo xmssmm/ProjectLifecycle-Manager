@@ -9,6 +9,7 @@ import {
 } from '@/api/acceptanceSteps';
 import { listDocuments } from '@/api/documents';
 import { getPhase, listPhases, promotePhase } from '@/api/phases';
+import { listPayments } from '@/api/payments';
 import type { AcceptanceStepRead } from '@/types/acceptanceSteps';
 import type { DocumentRead } from '@/types/documents';
 import type { PhaseDetailRead, PhaseRead } from '@/types/phases';
@@ -33,6 +34,10 @@ vi.mock('@/api/phases', () => ({
   updateProcurementType: vi.fn(),
 }));
 
+vi.mock('@/api/payments', () => ({
+  listPayments: vi.fn(),
+}));
+
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {},
   getDocument: vi.fn(),
@@ -47,6 +52,7 @@ describe('PhaseDocumentPanel', () => {
     vi.mocked(listPhases).mockResolvedValue({ items: [phaseOne, phaseTwo], total: 2 });
     vi.mocked(getPhase).mockResolvedValue(phaseTwoDetail);
     vi.mocked(listDocuments).mockResolvedValue({ items: [uploadedDocument], total: 1 });
+    vi.mocked(listPayments).mockResolvedValue({ items: [], page: 1, page_size: 100, total: 0 });
     vi.mocked(listAcceptanceSteps).mockResolvedValue({ items: [], total: 0 });
     vi.mocked(createAcceptanceStep).mockResolvedValue(createdAcceptanceStep);
     vi.mocked(updateAcceptanceStep).mockResolvedValue(completedAcceptanceStep);
@@ -192,6 +198,7 @@ const phaseTwo: PhaseRead = {
   id: 'phase-2',
   name: '合同签订',
   phase_no: 2,
+  procurement_type: 'bidding',
   status: 'in_progress',
 };
 

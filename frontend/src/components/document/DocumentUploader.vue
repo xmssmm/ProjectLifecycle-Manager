@@ -69,18 +69,12 @@ const hasSuggestion = computed(() =>
 async function handleDrop(event: DragEvent): Promise<void> {
   isDragging.value = false;
   const files = event.dataTransfer?.files;
-  const file = files?.item?.(0) ?? files?.[0];
-  if (file) {
-    await startUpload(file);
-  }
+  await startUploadFiles(Array.from(files ?? []));
 }
 
 async function handleFileChange(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
-  const file = input.files?.item(0);
-  if (file) {
-    await startUpload(file);
-  }
+  await startUploadFiles(Array.from(input.files ?? []));
   input.value = '';
 }
 
@@ -112,6 +106,12 @@ async function startUpload(file: File): Promise<void> {
   }
 
   await uploadFile(file, props.docType);
+}
+
+async function startUploadFiles(files: File[]): Promise<void> {
+  for (const file of files) {
+    await startUpload(file);
+  }
 }
 
 async function loadSuggestion(file: File): Promise<DocumentTypeSuggestion | null> {
@@ -241,7 +241,7 @@ function fileExtension(fileName: string): string {
       @drop.prevent="handleDrop"
     >
       <!-- prettier-ignore -->
-      <input class="sr-only" :accept="acceptedFileTypes" data-test="document-file-input" type="file" @change="handleFileChange">
+      <input class="sr-only" :accept="acceptedFileTypes" data-test="document-file-input" multiple type="file" @change="handleFileChange">
       <UploadFilled class="document-uploader__icon" />
       <span class="document-uploader__title">{{ documentLabel(docType) }}</span>
       <span v-if="suggesting" class="document-uploader__meta">正在识别文档类型...</span>

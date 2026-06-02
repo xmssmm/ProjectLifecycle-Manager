@@ -1,5 +1,27 @@
 export type PaymentType = 'normal' | 'reversal';
 
+export interface PaymentVoucherDocumentRead {
+  created_at: string;
+  display_name: string;
+  doc_type: string;
+  file_name: string;
+  file_size: number;
+  id: string;
+  is_deleted: boolean;
+  updated_at: string;
+  uploader_id: string;
+  version: number;
+}
+
+export interface PaymentVoucherRead {
+  created_at: string;
+  document: PaymentVoucherDocumentRead;
+  document_id: string;
+  id: string;
+  payment_id: string;
+  updated_at: string;
+}
+
 export interface PaymentRead {
   amount: string;
   created_at: string;
@@ -12,6 +34,7 @@ export interface PaymentRead {
   reverses_payment_id: string | null;
   sub_project_id: string;
   updated_at: string;
+  vouchers: PaymentVoucherRead[];
 }
 
 export interface PaymentListRead {
