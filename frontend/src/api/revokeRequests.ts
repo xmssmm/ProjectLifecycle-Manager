@@ -30,6 +30,7 @@ export async function submitRevokeRequest(
   client: AxiosInstance = apiClient,
 ): Promise<RevokeRequestRead> {
   const response = await client.post<ApiResponse<RevokeRequestRead>>('/revoke-requests', {
+    keep_documents: payload.keepDocuments,
     phase_id: payload.phaseId,
     reason: payload.reason,
   });

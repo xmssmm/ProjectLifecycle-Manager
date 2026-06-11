@@ -157,6 +157,7 @@ def make_request(
         sub_project_id=sub_project.id,
         requester_id=requester.id,
         reason="wrong document uploaded",
+        keep_documents=False,
         status=status,
         reviewer_id=None,
         review_comment=None,
@@ -232,6 +233,7 @@ def test_revoke_request_model_and_schema_match_requirements() -> None:
         "sub_project_id",
         "requester_id",
         "reason",
+        "keep_documents",
         "status",
         "reviewer_id",
         "review_comment",
@@ -255,6 +257,11 @@ def test_revoke_request_model_and_schema_match_requirements() -> None:
     )
     payload = RevokeRequestRead.model_validate(request).model_dump()
     assert payload["status"] == RevokeRequestStatus.pending
+    assert payload["keep_documents"] is False
+    assert (
+        RevokeRequestCreate(phase_id=phase.id, reason="rollback without delete").keep_documents
+        is True
+    )
 
 
 @pytest.mark.asyncio
@@ -276,10 +283,15 @@ async def test_submit_revoke_request_requires_completed_phase_and_project_leader
 
     request = await service.submit_request(
         actor=leader,
-        payload=RevokeRequestCreate(phase_id=target.id, reason="wrong document uploaded"),
+        payload=RevokeRequestCreate(
+            keep_documents=True,
+            phase_id=target.id,
+            reason="wrong document uploaded",
+        ),
     )
 
     assert request.status == RevokeRequestStatus.pending
+    assert request.keep_documents is True
     assert request.sub_project_id == target.sub_project_id
     assert repository.revoke_requests == [request]
 
@@ -298,6 +310,16 @@ async def test_submit_revoke_request_requires_completed_phase_and_project_leader
             actor=outsider,
             payload=RevokeRequestCreate(phase_id=target.id, reason="not manager"),
         )
+
+    sub_project = await repository.get_sub_project(target.sub_project_id)
+    assert sub_project is not None
+    sub_project.status = SubProjectStatus.completed
+    with pytest.raises(BusinessException) as completed_project:
+        await service.submit_request(
+            actor=leader,
+            payload=RevokeRequestCreate(phase_id=target.id, reason="project completed"),
+        )
+    assert completed_project.value.code == 3003
 
 
 @pytest.mark.asyncio
@@ -344,7 +366,7 @@ async def test_submit_revoke_request_notifies_admin_and_same_dept_manager_only()
 
 
 @pytest.mark.asyncio
-async def test_approve_revoke_request_restores_phase_soft_deletes_docs_and_limits_notifications(
+async def test_approve_revoke_request_restores_phase_deletes_docs_and_keeps_later_phases(
 ) -> None:
     (
         service,
@@ -379,15 +401,12 @@ async def test_approve_revoke_request_restores_phase_soft_deletes_docs_and_limit
     assert reviewed.reviewer_id == admin.id
     assert target_phase.status == PhaseStatus.in_progress
     assert target_phase.finish_at is None
-    assert next_phase.status == PhaseStatus.waiting
-    assert next_phase.enter_at is None
+    assert next_phase.status == PhaseStatus.in_progress
+    assert next_phase.enter_at is not None
     assert document.is_deleted is True
     assert task.status == TaskStatus.completed
-    assert [history.to_status for history in repository.histories] == [
-        PhaseStatus.in_progress,
-        PhaseStatus.waiting,
-    ]
-    assert [history.note for history in repository.histories] == ["revoked", "revoke rollback"]
+    assert [history.to_status for history in repository.histories] == [PhaseStatus.in_progress]
+    assert [history.note for history in repository.histories] == ["revoked"]
 
     receiver_ids = {
         notification.receiver_id for notification in notification_repository.notifications
@@ -398,7 +417,47 @@ async def test_approve_revoke_request_restores_phase_soft_deletes_docs_and_limit
         "revoke_result",
     }
     assert audit_writer.entries[0].action == "revoke_request.review"
+    assert audit_writer.entries[0].extra["keep_documents"] is False
     assert audit_writer.entries[0].extra["tasks_preserved"] is True
+
+
+@pytest.mark.asyncio
+async def test_approve_revoke_request_can_keep_uploaded_documents() -> None:
+    (
+        service,
+        repository,
+        _notifications,
+        leader,
+        _uploader,
+        _other_member,
+        admin,
+        sub_project,
+        target_phase,
+        _next_phase,
+        document,
+        _task,
+    ) = make_service()
+    request = make_request(phase=target_phase, sub_project=sub_project, requester=leader)
+    request.keep_documents = True
+    repository.revoke_requests.append(request)
+    audit_writer = InMemoryAuditLogWriter()
+
+    reviewed = await service.review_request(
+        actor=admin,
+        audit_context=AuditContext(actor_id=admin.id, request_id="req-1"),
+        audit_writer=audit_writer,
+        payload=RevokeRequestReview(
+            decision=RevokeReviewDecision.approve,
+            review_comment="keep files",
+        ),
+        request_id=request.id,
+    )
+
+    assert reviewed.status == RevokeRequestStatus.approved
+    assert target_phase.status == PhaseStatus.in_progress
+    assert document.is_deleted is False
+    assert audit_writer.entries[0].extra["keep_documents"] is True
+    assert audit_writer.entries[0].extra["document_ids_soft_deleted"] == []
 
 
 @pytest.mark.asyncio
@@ -446,6 +505,7 @@ def test_revoke_request_endpoints_submit_list_and_review() -> None:
         sub_project_id=uuid4(),
         requester_id=leader.id,
         reason="wrong file",
+        keep_documents=False,
         status=RevokeRequestStatus.pending,
         reviewer_id=None,
         review_comment=None,
@@ -473,6 +533,8 @@ def test_revoke_request_endpoints_submit_list_and_review() -> None:
         ) -> RevokeRequest:
             assert actor.id == leader.id
             assert payload.phase_id == phase_id
+            assert payload.keep_documents is True
+            request.keep_documents = payload.keep_documents
             return request
 
         async def review_request(
@@ -484,13 +546,13 @@ def test_revoke_request_endpoints_submit_list_and_review() -> None:
             audit_writer: object | None = None,
             audit_context: object | None = None,
         ) -> RevokeRequest:
-                assert actor.id == admin.id
-                assert request_id == request.id
-                assert payload.decision == RevokeReviewDecision.approve
-                assert audit_writer is not None
-                assert audit_context is not None
-                request.status = RevokeRequestStatus.approved
-                return request
+            assert actor.id == admin.id
+            assert request_id == request.id
+            assert payload.decision == RevokeReviewDecision.approve
+            assert audit_writer is not None
+            assert audit_context is not None
+            request.status = RevokeRequestStatus.approved
+            return request
 
     async def fake_db_session() -> AsyncIterator[object]:
         yield object()
@@ -510,7 +572,7 @@ def test_revoke_request_endpoints_submit_list_and_review() -> None:
     list_response = client.get("/api/v1/revoke-requests")
     create_response = client.post(
         "/api/v1/revoke-requests",
-        json={"phase_id": str(phase_id), "reason": "wrong file"},
+        json={"keep_documents": True, "phase_id": str(phase_id), "reason": "wrong file"},
     )
     current_user = admin
     review_response = client.post(
@@ -522,5 +584,6 @@ def test_revoke_request_endpoints_submit_list_and_review() -> None:
     assert list_response.json()["data"]["items"][0]["id"] == str(request.id)
     assert create_response.status_code == 200
     assert create_response.json()["data"]["phase_id"] == str(phase_id)
+    assert create_response.json()["data"]["keep_documents"] is True
     assert review_response.status_code == 200
     assert review_response.json()["data"]["status"] == "approved"

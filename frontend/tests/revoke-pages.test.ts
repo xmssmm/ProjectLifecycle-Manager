@@ -60,12 +60,13 @@ describe('revoke pages', () => {
     await flushPromises();
 
     expect(submitRevokeRequest).toHaveBeenCalledWith({
+      keepDocuments: true,
       phaseId: 'phase-2',
       reason: 'wrong document',
     });
   });
 
-  it('lets reviewers approve or reject pending revoke requests', async () => {
+  it('lets reviewers approve pending revoke requests', async () => {
     const authStore = useAuthStore();
     authStore.setAccessToken('admin-token');
     authStore.setUser({
@@ -90,7 +91,30 @@ describe('revoke pages', () => {
       decision: 'approve',
       reviewComment: 'ok',
     });
+  });
 
+  it('lets reviewers query all revoke requests and reject pending requests', async () => {
+    vi.mocked(reviewRevokeRequest).mockResolvedValue(rejectedRequest);
+    const authStore = useAuthStore();
+    authStore.setAccessToken('admin-token');
+    authStore.setUser({
+      deptId: null,
+      email: null,
+      id: 'admin-1',
+      role: 'admin',
+      status: 'active',
+      username: 'admin',
+    });
+    const wrapper = mount(RevokeReview, { global: { stubs } });
+    await flushPromises();
+
+    await wrapper.find('[data-test="revoke-status-filter"]').setValue('');
+    await wrapper.find('[data-test="search-revoke-requests"]').trigger('click');
+    await flushPromises();
+
+    expect(listRevokeRequests).toHaveBeenLastCalledWith({});
+
+    await wrapper.find('[data-test="revoke-review-comment"]').setValue('ok');
     await wrapper.find('[data-test="reject-revoke-request"]').trigger('click');
     await flushPromises();
 
@@ -127,6 +151,7 @@ const activePhase: PhaseRead = {
 const pendingRequest: RevokeRequestRead = {
   created_at: '2026-05-10T00:00:00Z',
   id: 'revoke-1',
+  keep_documents: false,
   phase_id: 'phase-2',
   reason: 'wrong document',
   requester_id: 'leader-1',
@@ -144,6 +169,11 @@ const approvedRequest: RevokeRequestRead = {
   reviewed_at: '2026-05-11T00:00:00Z',
   reviewer_id: 'admin-1',
   status: 'approved',
+};
+
+const rejectedRequest: RevokeRequestRead = {
+  ...approvedRequest,
+  status: 'rejected',
 };
 
 const stubs = {

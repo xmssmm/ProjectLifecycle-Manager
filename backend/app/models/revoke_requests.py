@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text, text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,6 +61,12 @@ class RevokeRequest(UuidPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    keep_documents: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
     status: Mapped[RevokeRequestStatus] = mapped_column(
         Enum(RevokeRequestStatus, name="revoke_request_status", values_callable=enum_values),
         nullable=False,

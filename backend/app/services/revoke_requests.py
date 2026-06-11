@@ -23,7 +23,7 @@ from app.models.revoke_requests import (
     RevokeRequestStatus,
     RevokeReviewDecision,
 )
-from app.models.sub_projects import SubProject, SubProjectMember
+from app.models.sub_projects import SubProject, SubProjectMember, SubProjectStatus
 from app.models.tasks import Task
 from app.models.users import User, UserRole, UserStatus
 from app.schemas.revoke_requests import RevokeRequestCreate, RevokeRequestReview
@@ -31,6 +31,9 @@ from app.services.audit import AuditContext, AuditLogEntry, AuditLogWriter
 from app.services.notifications import NotificationService
 
 VIEW_ALL_REVOKE_ROLES = frozenset({UserRole.admin, UserRole.dept_manager})
+LOCKED_REVOKE_SUB_PROJECT_STATUSES = frozenset(
+    {SubProjectStatus.completed, SubProjectStatus.closed, SubProjectStatus.terminated},
+)
 
 
 class RevokeRequestRepository(Protocol):
@@ -380,7 +383,7 @@ class RevokeRequestService:
         phase = await self._get_existing_phase(payload.phase_id)
         sub_project = await self._get_existing_sub_project(phase.sub_project_id)
         self._ensure_can_submit(actor, sub_project)
-        self._ensure_phase_can_be_revoked(phase)
+        self._ensure_phase_can_be_revoked(phase=phase, sub_project=sub_project)
         existing = await self._repository.get_pending_request_by_phase(phase.id)
         if existing is not None:
             raise ResourceConflictError("Pending revoke request already exists")
@@ -392,6 +395,7 @@ class RevokeRequestService:
             sub_project_id=sub_project.id,
             requester_id=actor.id,
             reason=reason,
+            keep_documents=payload.keep_documents,
             status=RevokeRequestStatus.pending,
             reviewer_id=None,
             review_comment=None,
@@ -442,14 +446,13 @@ class RevokeRequestService:
         if payload.decision == RevokeReviewDecision.reject:
             request.status = RevokeRequestStatus.rejected
         else:
-            self._ensure_phase_can_be_revoked(phase)
+            self._ensure_phase_can_be_revoked(phase=phase, sub_project=sub_project)
             request.status = RevokeRequestStatus.approved
-            phases = await self._repository.list_phases_for_update(sub_project.id)
             self._apply_approval(
                 actor=actor,
                 documents=documents,
+                keep_documents=request.keep_documents,
                 phase=phase,
-                phases=phases,
                 now=now,
             )
 
@@ -550,8 +553,8 @@ class RevokeRequestService:
         *,
         actor: User,
         documents: Sequence[Document],
+        keep_documents: bool,
         phase: Phase,
-        phases: Sequence[Phase],
         now: datetime,
     ) -> None:
         from_status = phase.status
@@ -573,34 +576,10 @@ class RevokeRequestService:
             ),
         )
 
-        for next_phase in phases:
-            if (
-                next_phase.phase_no <= phase.phase_no
-                or next_phase.status != PhaseStatus.in_progress
-            ):
-                continue
-            next_from_status = next_phase.status
-            next_phase.status = PhaseStatus.waiting
-            next_phase.enter_at = None
-            next_phase.finish_at = None
-            next_phase.updated_at = now
-            self._repository.add_history(
-                PhaseHistory(
-                    id=uuid4(),
-                    phase_id=next_phase.id,
-                    from_status=next_from_status,
-                    to_status=PhaseStatus.waiting,
-                    changed_by_id=actor.id,
-                    changed_at=now,
-                    note="revoke rollback",
-                    created_at=now,
-                    updated_at=now,
-                ),
-            )
-
-        for document in documents:
-            document.is_deleted = True
-            document.updated_at = now
+        if not keep_documents:
+            for document in documents:
+                document.is_deleted = True
+                document.updated_at = now
 
     @staticmethod
     def _ensure_can_submit(actor: User, sub_project: SubProject) -> None:
@@ -615,7 +594,14 @@ class RevokeRequestService:
         raise PermissionDeniedError()
 
     @staticmethod
-    def _ensure_phase_can_be_revoked(phase: Phase) -> None:
+    def _ensure_phase_can_be_revoked(*, phase: Phase, sub_project: SubProject) -> None:
+        if sub_project.status in LOCKED_REVOKE_SUB_PROJECT_STATUSES:
+            raise BusinessException(
+                code=3003,
+                message="Completed or closed sub project cannot be rolled back",
+                status_code=409,
+                data={"status": sub_project.status.value},
+            )
         if phase.status == PhaseStatus.completed:
             return
         raise BusinessException(
@@ -674,7 +660,10 @@ class RevokeRequestService:
                 ip_address=context.ip_address,
                 user_agent=context.user_agent,
                 extra={
-                    "document_ids_soft_deleted": [str(document.id) for document in documents],
+                    "document_ids_soft_deleted": [
+                        str(document.id) for document in documents if not request.keep_documents
+                    ],
+                    "keep_documents": request.keep_documents,
                     "tasks_preserved": True,
                     "preserved_task_ids": [str(task.id) for task in tasks],
                 },

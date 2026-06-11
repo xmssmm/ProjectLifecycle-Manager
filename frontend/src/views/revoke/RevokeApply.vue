@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { computed, onMounted, ref, watch } from 'vue';
 
 import { usePhaseStore } from '@/stores/usePhaseStore';
@@ -13,6 +13,7 @@ const props = defineProps<{
 const phaseStore = usePhaseStore();
 const revokeStore = useRevokeRequestStore();
 const errorMessage = ref('');
+const keepDocuments = ref(true);
 const reason = ref('');
 const selectedPhaseId = ref('');
 
@@ -43,15 +44,32 @@ async function loadPage(): Promise<void> {
 async function submitRequest(): Promise<void> {
   errorMessage.value = '';
   if (!selectedPhaseId.value || !reason.value.trim()) {
-    errorMessage.value = '请选择环节并填写撤销原因';
+    errorMessage.value = '请选择环节并填写回退原因';
     return;
   }
+  if (!keepDocuments.value) {
+    try {
+      await ElMessageBox.confirm(
+        '删除将删除该环节原始文件且无法恢复，请谨慎选择。',
+        '确认删除原始文件',
+        {
+          cancelButtonText: '取消',
+          confirmButtonText: '删除并提交',
+          type: 'warning',
+        },
+      );
+    } catch {
+      return;
+    }
+  }
   await revokeStore.submitRequest({
+    keepDocuments: keepDocuments.value,
     phaseId: selectedPhaseId.value,
     reason: reason.value.trim(),
   });
   reason.value = '';
-  ElMessage.success('撤销申请已提交');
+  keepDocuments.value = true;
+  ElMessage.success('回退申请已提交');
   await revokeStore.fetchRequests({});
 }
 
@@ -84,8 +102,8 @@ function formatDate(value: string | null): string {
   <section class="admin-page project-page revoke-page">
     <div class="admin-page__header">
       <div>
-        <h2>撤销申请</h2>
-        <p>{{ props.subProjectId ?? '我的撤销申请' }}</p>
+        <h2>环节回退申请</h2>
+        <p>{{ props.subProjectId ?? '我的回退申请' }}</p>
       </div>
       <router-link
         v-if="props.subProjectId"
@@ -97,8 +115,8 @@ function formatDate(value: string | null): string {
 
     <section v-if="props.subProjectId" class="project-detail-band revoke-apply-band">
       <div class="project-detail-band__header">
-        <h3>发起撤销</h3>
-        <span>{{ completedPhases.length }} 个可撤销环节</span>
+        <h3>发起回退</h3>
+        <span>{{ completedPhases.length }} 个可回退环节</span>
       </div>
       <el-form label-position="top" @submit.prevent>
         <el-form-item label="已完成环节">
@@ -111,9 +129,23 @@ function formatDate(value: string | null): string {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="撤销原因">
+        <el-form-item label="回退原因">
           <el-input v-model="reason" data-test="revoke-reason" />
         </el-form-item>
+        <label class="revoke-keep-documents">
+          <input
+            v-model="keepDocuments"
+            data-test="revoke-keep-documents"
+            type="checkbox"
+          >
+          <span>保留原本上传文件</span>
+        </label>
+        <el-alert
+          v-if="!keepDocuments"
+          :closable="false"
+          title="选择不保留时，审核通过后将删除该环节原始文件且无法恢复。"
+          type="warning"
+        />
         <el-alert v-if="errorMessage" :closable="false" :title="errorMessage" type="error" />
         <el-button
           data-test="submit-revoke-request"
@@ -129,7 +161,7 @@ function formatDate(value: string | null): string {
 
     <section class="project-detail-band">
       <div class="project-detail-band__header">
-        <h3>我的撤销申请</h3>
+        <h3>我的回退申请</h3>
         <span>{{ revokeStore.total }} 项</span>
       </div>
       <table class="revoke-table">
@@ -160,7 +192,7 @@ function formatDate(value: string | null): string {
       </table>
       <el-empty
         v-if="!revokeStore.loading && revokeStore.requests.length === 0"
-        description="暂无撤销申请"
+        description="暂无回退申请"
       />
     </section>
   </section>
@@ -181,5 +213,12 @@ function formatDate(value: string | null): string {
   border-bottom: 1px solid #e2e8f0;
   padding: 10px;
   text-align: left;
+}
+
+.revoke-keep-documents {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
 }
 </style>

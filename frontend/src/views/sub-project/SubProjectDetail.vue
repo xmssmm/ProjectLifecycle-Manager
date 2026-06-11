@@ -205,7 +205,7 @@ function formatDate(value: unknown): string {
         v-if="subProject && canRequestRevoke"
         :to="{ name: 'revoke-apply', params: { id: subProject.id } }"
       >
-        <el-button data-test="open-revoke-apply">撤销申请</el-button>
+        <el-button data-test="open-revoke-apply">回退申请</el-button>
       </router-link>
       <router-link
         v-if="subProject && canEditRejected"

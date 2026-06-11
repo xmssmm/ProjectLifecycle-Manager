@@ -24,11 +24,12 @@ describe('revoke request store', () => {
     const store = useRevokeRequestStore();
 
     await store.fetchRequests({ status: 'pending' });
-    await store.submitRequest({ phaseId: 'phase-3', reason: 'wrong phase' });
+    await store.submitRequest({ keepDocuments: true, phaseId: 'phase-3', reason: 'wrong phase' });
     await store.reviewRequest('revoke-1', { decision: 'approve', reviewComment: 'ok' });
 
     expect(listRevokeRequests).toHaveBeenCalledWith({ status: 'pending' });
     expect(submitRevokeRequest).toHaveBeenCalledWith({
+      keepDocuments: true,
       phaseId: 'phase-3',
       reason: 'wrong phase',
     });
@@ -45,6 +46,7 @@ describe('revoke request store', () => {
 const sampleRequest: RevokeRequestRead = {
   created_at: '2026-05-10T00:00:00Z',
   id: 'revoke-1',
+  keep_documents: false,
   phase_id: 'phase-2',
   reason: 'wrong document',
   requester_id: 'leader-1',

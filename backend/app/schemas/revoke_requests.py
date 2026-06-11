@@ -9,6 +9,7 @@ from app.models.revoke_requests import RevokeRequestStatus, RevokeReviewDecision
 class RevokeRequestCreate(BaseModel):
     phase_id: UUID
     reason: str
+    keep_documents: bool = True
 
 
 class RevokeRequestReview(BaseModel):
@@ -22,6 +23,7 @@ class RevokeRequestRead(BaseModel):
     sub_project_id: UUID
     requester_id: UUID
     reason: str
+    keep_documents: bool
     status: RevokeRequestStatus
     reviewer_id: UUID | None
     review_comment: str | None

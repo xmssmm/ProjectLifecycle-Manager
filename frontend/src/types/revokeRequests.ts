@@ -4,6 +4,7 @@ export type RevokeReviewDecision = 'approve' | 'reject';
 export interface RevokeRequestRead {
   created_at: string;
   id: string;
+  keep_documents: boolean;
   phase_id: string;
   reason: string;
   requester_id: string;
@@ -25,6 +26,7 @@ export interface RevokeRequestListQuery {
 }
 
 export interface RevokeRequestCreatePayload {
+  keepDocuments: boolean;
   phaseId: string;
   reason: string;
 }

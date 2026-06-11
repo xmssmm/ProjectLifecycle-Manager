@@ -27,6 +27,7 @@ describe('revoke requests api', () => {
     });
     await submitRevokeRequest(
       {
+        keepDocuments: false,
         phaseId: 'phase-2',
         reason: 'wrong document',
       },
@@ -51,6 +52,7 @@ describe('revoke requests api', () => {
       url: '/revoke-requests',
     });
     expect(requestData(calls[1])).toMatchObject({
+      keep_documents: false,
       phase_id: 'phase-2',
       reason: 'wrong document',
     });
@@ -68,6 +70,7 @@ describe('revoke requests api', () => {
 const sampleRequest = {
   created_at: '2026-05-10T00:00:00Z',
   id: 'revoke-1',
+  keep_documents: false,
   phase_id: 'phase-2',
   reason: 'wrong document',
   requester_id: 'leader-1',

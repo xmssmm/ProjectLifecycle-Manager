@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { downloadDocument, listDocuments } from '@/api/documents';
 import { listPayments } from '@/api/payments';
+import { submitRevokeRequest } from '@/api/revokeRequests';
 import DocumentList from '@/components/document/DocumentList.vue';
 import DocumentUploader from '@/components/document/DocumentUploader.vue';
+import { usePermission } from '@/composables/usePermission';
 import { useAcceptanceStepStore } from '@/stores/useAcceptanceStepStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { usePhaseStore } from '@/stores/usePhaseStore';
@@ -28,6 +31,7 @@ const emit = defineEmits<{
 }>();
 
 const authStore = useAuthStore();
+const { can } = usePermission();
 const phaseStore = usePhaseStore();
 const subProjectStore = useSubProjectStore();
 const acceptanceStepStore = useAcceptanceStepStore();
@@ -36,6 +40,11 @@ const documentsLoading = ref(false);
 const detail = ref<PhaseDetailRead | null>(null);
 const paymentRows = ref<PaymentRead[]>([]);
 const selectedPhaseId = ref('');
+const rollbackDialogVisible = ref(false);
+const rollbackKeepDocuments = ref(true);
+const rollbackReason = ref('');
+const rollbackSubmitting = ref(false);
+const rollbackTarget = ref<PhaseDetailRead | null>(null);
 const stepError = ref('');
 const stepForm = reactive({
   description: '',
@@ -91,6 +100,18 @@ const promoteBlockerText = computed(() => {
 });
 const isAcceptancePhase = computed(() => detail.value?.phase_no === 4);
 const isCompletedPhase = computed(() => detail.value?.status === 'completed');
+const canRequestRollback = computed(() => {
+  const currentSubProject = subProjectStore.currentSubProject;
+  return Boolean(
+    detail.value &&
+      detail.value.status === 'completed' &&
+      can('revoke_request.submit') &&
+      currentSubProject &&
+      currentSubProject.id === props.subProjectId &&
+      currentSubProject.manager_id === authStore.user?.id &&
+      !['completed', 'closed', 'terminated'].includes(currentSubProject.status),
+  );
+});
 const acceptanceSteps = computed(() =>
   detail.value ? (acceptanceStepStore.stepsByPhase[detail.value.id] ?? []) : [],
 );
@@ -189,6 +210,53 @@ async function promoteSelectedPhase(): Promise<void> {
   await phaseStore.fetchPhases(props.subProjectId);
   selectDefaultPhase();
   emit('promoted');
+}
+
+function openRollbackDialog(): void {
+  if (!detail.value || !canRequestRollback.value) {
+    return;
+  }
+  rollbackTarget.value = detail.value;
+  rollbackReason.value = '';
+  rollbackKeepDocuments.value = true;
+  rollbackDialogVisible.value = true;
+}
+
+async function submitRollbackRequest(): Promise<void> {
+  const target = rollbackTarget.value;
+  const reason = rollbackReason.value.trim();
+  if (!target || !reason) {
+    ElMessage.warning('请填写回退原因');
+    return;
+  }
+  if (!rollbackKeepDocuments.value) {
+    try {
+      await ElMessageBox.confirm(
+        '删除将删除该环节原始文件且无法恢复，请谨慎选择。',
+        '确认删除原始文件',
+        {
+          cancelButtonText: '取消',
+          confirmButtonText: '删除并提交',
+          type: 'warning',
+        },
+      );
+    } catch {
+      return;
+    }
+  }
+  rollbackSubmitting.value = true;
+  try {
+    await submitRevokeRequest({
+      keepDocuments: rollbackKeepDocuments.value,
+      phaseId: target.id,
+      reason,
+    });
+    ElMessage.success('回退申请已提交');
+    rollbackDialogVisible.value = false;
+    rollbackTarget.value = null;
+  } finally {
+    rollbackSubmitting.value = false;
+  }
 }
 
 async function handleDownload(documentItem: DocumentRead): Promise<void> {
@@ -296,15 +364,25 @@ function paymentVoucherTitle(payment: PaymentRead): string {
     <template v-else-if="detail">
       <div class="phase-document-panel__promote">
         <el-alert v-if="promoteBlockerText" show-icon :title="promoteBlockerText" type="warning" />
-        <el-button
-          data-test="promote-selected-phase"
-          :disabled="!canPromoteSelectedPhase"
-          :loading="phaseStore.promotingId === detail.id"
-          type="primary"
-          @click="promoteSelectedPhase"
-        >
-          {{ canPromoteSelectedPhase ? '推进环节' : '暂不能推进' }}
-        </el-button>
+        <div class="phase-document-panel__actions">
+          <el-button
+            data-test="promote-selected-phase"
+            :disabled="!canPromoteSelectedPhase"
+            :loading="phaseStore.promotingId === detail.id"
+            type="primary"
+            @click="promoteSelectedPhase"
+          >
+            {{ canPromoteSelectedPhase ? '推进环节' : '暂不能推进' }}
+          </el-button>
+          <el-button
+            v-if="canRequestRollback"
+            data-test="open-phase-rollback"
+            type="warning"
+            @click="openRollbackDialog"
+          >
+            申请回退
+          </el-button>
+        </div>
       </div>
 
       <el-form v-if="detail.phase_no === 2" class="phase-document-panel__procurement">
@@ -523,6 +601,46 @@ function paymentVoucherTitle(payment: PaymentRead): string {
     </template>
 
     <el-empty v-else-if="!phaseStore.loading" description="暂无环节文档" />
+
+    <el-dialog v-model="rollbackDialogVisible" title="申请环节回退" width="520px">
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item label="回退环节">
+          <span>
+            {{ rollbackTarget ? `${rollbackTarget.phase_no}. ${rollbackTarget.name}` : '-' }}
+          </span>
+        </el-form-item>
+        <el-form-item label="回退原因">
+          <el-input v-model="rollbackReason" data-test="phase-rollback-reason" />
+        </el-form-item>
+        <label class="phase-document-panel__keep-documents">
+          <input
+            v-model="rollbackKeepDocuments"
+            data-test="phase-rollback-keep-documents"
+            type="checkbox"
+          >
+          <span>保留原本上传文件</span>
+        </label>
+        <el-alert
+          v-if="!rollbackKeepDocuments"
+          :closable="false"
+          title="选择不保留时，审核通过后将删除该环节原始文件且无法恢复。"
+          type="warning"
+        />
+      </el-form>
+      <template #footer>
+        <div class="phase-document-panel__dialog-actions">
+          <el-button @click="rollbackDialogVisible = false">取消</el-button>
+          <el-button
+            data-test="submit-phase-rollback"
+            :loading="rollbackSubmitting"
+            type="primary"
+            @click="submitRollbackRequest"
+          >
+            提交审核
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
@@ -543,6 +661,19 @@ function paymentVoucherTitle(payment: PaymentRead): string {
   display: grid;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.phase-document-panel__actions,
+.phase-document-panel__dialog-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.phase-document-panel__keep-documents {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
 }
 
 .phase-document-panel__acceptance-header,

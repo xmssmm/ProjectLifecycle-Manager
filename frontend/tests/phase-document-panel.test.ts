@@ -10,9 +10,13 @@ import {
 import { listDocuments } from '@/api/documents';
 import { getPhase, listPhases, promotePhase } from '@/api/phases';
 import { listPayments } from '@/api/payments';
+import { submitRevokeRequest } from '@/api/revokeRequests';
+import { useAuthStore } from '@/stores/useAuthStore';
+import { useSubProjectStore } from '@/stores/useSubProjectStore';
 import type { AcceptanceStepRead } from '@/types/acceptanceSteps';
 import type { DocumentRead } from '@/types/documents';
 import type { PhaseDetailRead, PhaseRead } from '@/types/phases';
+import type { SubProjectRead } from '@/types/projects';
 import PhaseDocumentPanel from '@/components/phase/PhaseDocumentPanel.vue';
 
 vi.mock('@/api/acceptanceSteps', () => ({
@@ -38,6 +42,10 @@ vi.mock('@/api/payments', () => ({
   listPayments: vi.fn(),
 }));
 
+vi.mock('@/api/revokeRequests', () => ({
+  submitRevokeRequest: vi.fn(),
+}));
+
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {},
   getDocument: vi.fn(),
@@ -53,6 +61,7 @@ describe('PhaseDocumentPanel', () => {
     vi.mocked(getPhase).mockResolvedValue(phaseTwoDetail);
     vi.mocked(listDocuments).mockResolvedValue({ items: [uploadedDocument], total: 1 });
     vi.mocked(listPayments).mockResolvedValue({ items: [], page: 1, page_size: 100, total: 0 });
+    vi.mocked(submitRevokeRequest).mockResolvedValue(pendingRevokeRequest);
     vi.mocked(listAcceptanceSteps).mockResolvedValue({ items: [], total: 0 });
     vi.mocked(createAcceptanceStep).mockResolvedValue(createdAcceptanceStep);
     vi.mocked(updateAcceptanceStep).mockResolvedValue(completedAcceptanceStep);
@@ -124,6 +133,47 @@ describe('PhaseDocumentPanel', () => {
 
     expect(wrapper.find('[data-test="upload-contract"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('已完成环节不可继续上传');
+  });
+
+  it('submits a rollback request for a completed phase', async () => {
+    const authStore = useAuthStore();
+    authStore.setAccessToken('leader-token');
+    authStore.setUser({
+      deptId: 'dept-a',
+      email: null,
+      id: 'leader-1',
+      role: 'proj_leader',
+      status: 'active',
+      username: 'leader',
+    });
+    const subProjectStore = useSubProjectStore();
+    subProjectStore.currentSubProject = sampleSubProject;
+    vi.mocked(getPhase).mockResolvedValue({
+      ...phaseTwoDetail,
+      completion: {
+        missing_doc_types: [],
+        required_total: 1,
+        uploaded_total: 1,
+      },
+      status: 'completed',
+    });
+
+    const wrapper = mount(PhaseDocumentPanel, {
+      global: { stubs },
+      props: { subProjectId: 'sub-1' },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-test="open-phase-rollback"]').trigger('click');
+    await wrapper.find('[data-test="phase-rollback-reason"]').setValue('资料需调整');
+    await wrapper.find('[data-test="submit-phase-rollback"]').trigger('click');
+    await flushPromises();
+
+    expect(submitRevokeRequest).toHaveBeenCalledWith({
+      keepDocuments: true,
+      phaseId: 'phase-2',
+      reason: '资料需调整',
+    });
   });
 
   it('manages acceptance steps on phase 4 and links uploads to each step', async () => {
@@ -305,6 +355,39 @@ const uploadedDocument: DocumentRead = {
   version: 1,
 };
 
+const sampleSubProject: SubProjectRead = {
+  actual_end_date: null,
+  budget: '100000.00',
+  created_at: '2026-05-10T00:00:00Z',
+  creator_id: 'leader-1',
+  dept_id: 'dept-a',
+  id: 'sub-1',
+  main_project_id: 'main-1',
+  manager_id: 'leader-1',
+  name: '子项目',
+  plan_end_date: '2026-12-31',
+  project_no: 'Z-2026-0001-ZX-001',
+  remark: null,
+  spent_amount: '0.00',
+  status: 'in_progress',
+  updated_at: '2026-05-10T00:00:00Z',
+};
+
+const pendingRevokeRequest = {
+  created_at: '2026-05-10T00:00:00Z',
+  id: 'revoke-1',
+  keep_documents: true,
+  phase_id: 'phase-2',
+  reason: '资料需调整',
+  requester_id: 'leader-1',
+  review_comment: null,
+  reviewed_at: null,
+  reviewer_id: null,
+  status: 'pending' as const,
+  sub_project_id: 'sub-1',
+  updated_at: '2026-05-10T00:00:00Z',
+};
+
 const stubs = {
   DocumentList: {
     props: ['documents'],
@@ -322,9 +405,18 @@ const stubs = {
       '<button type="button" :disabled="disabled || loading" @click="$emit(\'click\')"><slot /></button>',
   },
   ElAlert: { props: ['title'], template: '<section>{{ title }}</section>' },
+  ElDialog: {
+    props: ['modelValue'],
+    template: '<section v-if="modelValue"><slot /><slot name="footer" /></section>',
+  },
   ElEmpty: { props: ['description'], template: '<section>{{ description }}</section>' },
   ElForm: { template: '<form><slot /></form>' },
   ElFormItem: { props: ['label'], template: '<label>{{ label }}<slot /></label>' },
+  ElInput: {
+    props: ['modelValue'],
+    template:
+      '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+  },
   ElOption: { props: ['label'], template: '<span>{{ label }}</span>' },
   ElSelect: { template: '<div><slot /></div>' },
   ElSkeleton: { template: '<section />' },
